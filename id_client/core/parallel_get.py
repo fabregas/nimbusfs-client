@@ -86,6 +86,8 @@ class GetWorker(threading.Thread):
 
                 try:
                     data = self.fabnet_gateway.get(key, replica_count)
+                    if not data:
+                        raise Exception('No data found...')
                 except Exception, err:
                     logger.error('Cant get data block for key %s. Details: %s'%(key, err))
                     logger.error('Wait %s seconds and try again...'%(FG_ERROR_TIMEOUT,))

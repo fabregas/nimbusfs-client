@@ -15,7 +15,7 @@ import hashlib
 from datetime import datetime
 import threading
 
-from client.constants import DEFAULT_REPLICA_COUNT
+from id_client.core.constants import DEFAULT_REPLICA_COUNT
 
 class BadMetadata(Exception):
     def __init__(self, msg):
