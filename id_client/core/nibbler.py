@@ -42,6 +42,7 @@ class Nibbler:
         self.security_provider = security_provider
         self.fabnet_gateway = FabnetGateway(fabnet_host, security_provider)
         self.metadata = None
+        self.__not_sync_files = {}
         self.put_manager = PutDataManager(self.fabnet_gateway, self.__finish_file_put, parallel_put)
         self.get_manager = GetDataManager(self.fabnet_gateway, parallel_get)
 
@@ -51,18 +52,24 @@ class Nibbler:
         self.put_manager.start()
         self.get_manager.start()
 
+    def on_error(self, error_msg):
+        pass
+
     def stop(self):
         self.put_manager.stop()
         self.get_manager.stop()
+
+    def get_inprocess_uploads(self):
+        return self.__not_sync_files.keys()
 
 
     def __get_metadata(self, reload_force=False, metadata_key=None):
         if self.metadata and not reload_force:
             return self.metadata
 
+        self.metadata = None
         if not metadata_key:
             metadata_key = self.metadata_key
-
 
         metadata = self.fabnet_gateway.get(metadata_key)
         if metadata is None:
@@ -200,30 +207,48 @@ class Nibbler:
 
         file_md.parent_dir = dir_obj
 
-        empty = (file_size == 0)
-        if not empty:
+        if file_size > 0:
+            self.__not_sync_files[file_md.name] = file_md
             logger.info('Saving file %s to fabnet'%file_md.name)
             self.put_manager.put_file(file_md, file_path)
 
-    @synchronized(lock)
     def __finish_file_put(self, file_md):
-        dir_obj = file_md.parent_dir
-        dir_obj.append(file_md)
+        lock.acquire()
+        try:
+            dir_obj = file_md.parent_dir
+            dir_obj.append(file_md)
 
-        self.__save_metadata()
+            is_error = False
+            try:
+                self.__save_metadata()
+            except Exception, err:
+                logger.error('Save metadata error: %s'%err)
+                logger.info('Trying rollback file %s'%file_md.name)
+                #TODO: remove file should be implemented!
+                is_error = True
+            finally:
+                del self.__not_sync_files[file_md.name]
+        finally:
+            lock.release()
 
-    @synchronized(lock)
+        if is_error:
+            self.on_error('File %s was not uploaded to service!'%file_md.name)
+
     def load_file(self, file_path):
-        if isinstance(file_path, FileMD):
-            file_obj = file_path
-        else:
-            mdf = self.__get_metadata()
-            if not mdf.exists(file_path):
-                raise Exception('File %s does not found!'%file_path)
-            file_obj = mdf.find(file_path)
+        lock.acquire()
+        try:
+            if isinstance(file_path, FileMD):
+                file_obj = file_path
+            else:
+                mdf = self.__get_metadata()
+                if not mdf.exists(file_path):
+                    raise Exception('File %s does not found!'%file_path)
+                file_obj = mdf.find(file_path)
 
-        if not file_obj.is_file():
-            raise Exception('%s is not a file!'%file_path)
+            if not file_obj.is_file():
+                raise Exception('%s is not a file!'%file_path)
+        finally:
+            lock.release()
 
         streem = self.get_manager.get_file(file_obj)
         streem.wait_get()

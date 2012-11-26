@@ -44,6 +44,7 @@ class MockedFabnetGateway:
 
     def get(self, primary_key, replica_count=2):
         logger.info('MockedFabnetGateway.get: key=%s replica_count=%s'%(primary_key, replica_count))
+        raise Exception('somebody failed')
 
         return self.data_map.get(primary_key, None)
 
@@ -51,7 +52,7 @@ class TestDHTInitProcedure(unittest.TestCase):
     NIBBLER_INST = None
 
     def test01_dht_init(self):
-        security_manager = init_security_manager(CLIENT_KS_PATH, PASSWD)
+        security_manager = init_security_manager(constants.SPT_FILE_BASED, CLIENT_KS_PATH, PASSWD)
         nibbler = Nibbler('127.0.0.1', security_manager)
         mocked = MockedFabnetGateway()
         nibbler.fabnet_gateway.put = mocked.put

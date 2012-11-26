@@ -17,6 +17,7 @@ import struct
 from datetime import datetime
 from base64 import b64encode, b64decode
 
+from id_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 
 from M2Crypto import X509
 from Crypto.Cipher import AES
@@ -126,6 +127,11 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         storage.close()
 
 
-def init_security_manager(ks_path, passwd):
-    return FileBasedSecurityManager(ks_path, passwd)
+def init_security_manager(sm_type, ks_path, passwd):
+    if sm_type == SPT_TOKEN_BASED:
+        raise Exception('not implemented') #FIXME: token based security manager should be returned
+    elif SPT_FILE_BASED:
+        return FileBasedSecurityManager(ks_path, passwd)
+    else:
+        raise Exception('Unexpected security provider type: "%s"'%sm_type)
 

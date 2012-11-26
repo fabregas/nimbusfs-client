@@ -15,6 +15,7 @@ import shutil
 import time
 import signal
 import sys
+import threading
 
 from wsgidav.version import __version__
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
@@ -22,18 +23,19 @@ from wsgidav.fs_dav_provider import FilesystemProvider
 from cherrypy import wsgiserver, __version__ as cp_version
 
 from fabnet_dav_provider import FabnetProvider
-from core.logger import logger
+from id_client.core.logger import logger
 
 
-class WebDavServer:
+class WebDavServer(threading.Thread):
     def __init__(self, host, port, nibbler):
+        threading.Thread.__init__(self)
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.nibbler = nibbler
 
         self.server = None
 
-    def start(self):
+    def run(self):
         provider = FabnetProvider(self.nibbler)
 
         config = DEFAULT_CONFIG.copy()
@@ -63,9 +65,10 @@ class WebDavServer:
 
     def stop(self):
         try:
-            self.server.stop()
-            self.server.provider.stop()
+            logger.info('Stopping webdav server...')
+            if self.server:
+                self.server.stop()
         except Exception, err:
-            logger.error('Stopping client error: %s'%err)
+            logger.error('Stopping webdav server error: %s'%err)
 
 

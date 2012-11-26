@@ -21,11 +21,11 @@ import shutil
 import stat
 import tempfile
 
-from core.metadata import DirectoryMD, FileMD
+from id_client.core.metadata import DirectoryMD, FileMD
 
 __docformat__ = "reStructuredText"
 
-_logger = util.getModuleLogger(__name__)
+#_logger = util.getModuleLogger(__name__)
 
 BUFFER_SIZE = 8192
 

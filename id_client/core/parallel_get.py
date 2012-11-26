@@ -37,13 +37,15 @@ class FileStreem:
             self.downloaded_blocks += 1
             fobj = None
             try:
+                if not data:
+                    raise Exception('No data found')
+
                 fobj = open(self.file_obj.name, 'r+b')
                 fobj.seek(seek)
                 fobj.write(data)
                 logger.debug('Saved %s %s %s'%(self.file_name, seek, len(data)))
             except Exception, err:
                 self.is_error = True
-                raise err
             finally:
                 if fobj:
                     fobj.close()
@@ -62,7 +64,7 @@ class FileStreem:
 
         if self.is_error:
             self.file_obj.close()
-            raise Exception('Saving downloaded file %s failed!'%self.file_name)
+            raise Exception('File %s does not downloaded!'%self.file_name)
 
     def get_file_obj(self):
         return self.file_obj
@@ -77,31 +79,24 @@ class GetWorker(threading.Thread):
 
     def run(self):
         while True:
+            out_streem = data = None
             job = GetWorker.QUEUE.get()
             try:
                 if job == QUIT_JOB:
                     break
 
                 out_streem, key, replica_count, seek, checksum = job
-
-                try:
-                    data = self.fabnet_gateway.get(key, replica_count)
-                    if not data:
-                        raise Exception('No data found...')
-                except Exception, err:
-                    logger.error('Cant get data block for key %s. Details: %s'%(key, err))
-                    logger.error('Wait %s seconds and try again...'%(FG_ERROR_TIMEOUT,))
-                    time.sleep(FG_ERROR_TIMEOUT)
-                    GetWorker.QUEUE.put(job)
-                    continue
+                data = self.fabnet_gateway.get(key, replica_count)
+                if not data:
+                    raise Exception('No data found...')
 
                 if checksum != hashlib.sha1(data).hexdigest():
                     raise Exception('Data block for key %s has invalid checksum!'%key)
-
-                out_streem.save_block(seek, data)
             except Exception, err:
                 logger.error('[GetWorker][%s] %s'%(job, err))
             finally:
+                if out_streem:
+                    out_streem.save_block(seek, data)
                 GetWorker.QUEUE.task_done()
 
 

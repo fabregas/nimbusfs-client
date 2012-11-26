@@ -33,9 +33,9 @@ def init_logger():
     hdlr.setFormatter(formatter)
     logger.addHandler(hdlr)
 
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    logger.addHandler(console)
+    #console = logging.StreamHandler()
+    #console.setFormatter(formatter)
+    #logger.addHandler(console)
 
     return logger
 
