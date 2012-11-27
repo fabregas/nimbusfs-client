@@ -17,7 +17,7 @@ import struct
 from datetime import datetime
 from base64 import b64encode, b64decode
 
-from id_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
+from nimbus_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 
 from M2Crypto import X509
 from Crypto.Cipher import AES

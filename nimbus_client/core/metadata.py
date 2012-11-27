@@ -11,25 +11,21 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of user metadata classes.
 """
 import json
+import uuid
 import hashlib
 from datetime import datetime
 import threading
 
-from id_client.core.constants import DEFAULT_REPLICA_COUNT
-
-class BadMetadata(Exception):
-    def __init__(self, msg):
-        Exception.__init__(self, 'Bad metadata. %s'%msg)
-
-class PathException(Exception):
-    pass
+from nimbus_client.core.constants import DEFAULT_REPLICA_COUNT
+from nimbus_client.core.exceptions import *
 
 class ChunkMD:
-    def __init__(self, key=None, checksum=None, seek=None, size=None):
-        self.checksum = checksum
-        self.key = key
-        self.seek = seek
-        self.size = size
+    def __init__(self, **chunk_params):
+        self.checksum = None
+        self.key = None
+        self.seek = None
+        self.size = None
+        self.load(chunk_params)
 
     def load(self, chunk_obj):
         self.checksum = chunk_obj.get('checksum', None)
@@ -54,15 +50,16 @@ class ChunkMD:
 
 
 class FileMD:
-    def __init__(self, name=None, size=0, replica_count=DEFAULT_REPLICA_COUNT, parent_dir=None):
+    def __init__(self, name=None, size=0, replica_count=DEFAULT_REPLICA_COUNT):
+        self.id = uuid.uuid4().hex
         self.name = name
         self.size = size
         self.replica_count = replica_count
         self.chunks = []
         self.create_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        self.parent_dir_id = None
 
         self.__lock = threading.Lock()
-        self.parent_dir = parent_dir
 
     @classmethod
     def is_dir(cls):
@@ -72,37 +69,39 @@ class FileMD:
     def is_file(cls):
         return True
 
+    def __safe_load(self, obj, attr):
+        val = obj.get(attr, None)
+        if val is None:
+            raise BadMetadata('File %s does not found!'%val)
+        return val
+
     def load(self, file_obj):
-        self.name = file_obj.get('name', None)
-        self.size = file_obj.get('size', None)
+        self.parent_dir_id = self.__safe_load(file_obj, 'parent_id')
+        self.name = self.__safe_load(file_obj, 'name')
+        self.size = self.__safe_load(file_obj, 'size')
         chunks = file_obj.get('chunks', [])
         for chunk in chunks:
-            chunk_obj = ChunkMD()
-            chunk_obj.load(chunk)
+            chunk_obj = ChunkMD(**chunk)
             self.chunks.append(chunk_obj)
         self.replica_count = file_obj.get('replica_count', DEFAULT_REPLICA_COUNT)
         create_date = file_obj.get('create_date', None)
         if create_date:
             self.create_date = create_date
 
-        if self.name is None:
-            raise BadMetadata('File name does not found!')
-        if self.size is None:
-            raise BadMetadata('File size does not found!')
-        if self.replica_count is None:
-            raise BadMetadata('File replica count does not found!')
+        return self
 
     def dump(self):
         return {'name': self.name,
                 'size': self.size,
                 'chunks': [c.dump() for c in self.chunks],
                 'replica_count': self.replica_count,
-                'create_date': self.create_date}
+                'create_date': self.create_date,
+                'parent_id': self.parent_dir_id}
 
     def append_chunk(self, key, checksum, seek, size):
         self.__lock.acquire()
         try:
-            chunk_obj = ChunkMD(key, checksum, seek, size)
+            chunk_obj = ChunkMD(**{'key':key, 'checksum': checksum, 'seek': seek, 'size':size})
             self.chunks.append(chunk_obj)
         finally:
             self.__lock.release()
@@ -122,11 +121,15 @@ class FileMD:
 
 
 class DirectoryMD:
-    def __init__(self, name=''):
+    def __init__(self, name='', dir_id=None):
         self.name = name
         self.content = []
         self.create_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         self.last_modify_date = self.create_date
+        self.parent_dir_id = None
+        if dir_id is None:
+            dir_id = uuid.uuid4().hex
+        self.dir_id = dir_id
 
     @classmethod
     def is_dir(cls):
@@ -136,15 +139,16 @@ class DirectoryMD:
     def is_file(cls):
         return False
 
+    def __safe_load(self, obj, attr):
+        val = obj.get(attr, None)
+        if val is None:
+            raise BadMetadata('Directory %s does not found'%attr)
+        return val
+
     def load(self, dir_obj):
-        self.name = dir_obj.get('name', None)
-        if self.name is None:
-            raise BadMetadata('Directory name does not found!')
-
-        content = dir_obj.get('content', None)
-        if content is None:
-            raise BadMetadata('Directory content does not found!')
-
+        self.dir_id = self.__safe_load(dir_obj, 'id')
+        self.parent_dir_id = self.__safe_load(dir_obj, 'parent_id')
+        self.name = self.__safe_load(dir_obj, 'name')
         create_date = dir_obj.get('create_date', None)
         if create_date:
             self.create_date = create_date
@@ -152,26 +156,19 @@ class DirectoryMD:
         if last_mod_date:
             self.last_modify_date = last_mod_date
 
-        for item in content:
-            if item.has_key('content'):
-                item_md = DirectoryMD()
-            else:
-                item_md = FileMD()
-            item_md.load(item)
-            self.content.append(item_md)
+        return self
 
     def dump(self):
-        return {'name': self.name,
-                'content': [c.dump() for c in self.content],
+        #TODO: attr validation should be implemented
+        return {'id': self.dir_id,
+                'name': self.name,
+                'parent_id': self.parent_dir_id,
+                'is_dir': True,
                 'create_date': self.create_date,
                 'last_modify_date': self.last_modify_date}
 
     def items(self):
-        ret_items = []
-        for item in self.content:
-            ret_items.append((item.name, item.is_file()))
-
-        return ret_items
+        return self.content
 
     def get(self, item_name):
         for item in self.content:
@@ -184,9 +181,15 @@ class DirectoryMD:
         if not isinstance(item_md, DirectoryMD) and not isinstance(item_md, FileMD):
             raise Exception('Item cant be appended to directory, bcs it type is equal to "%s"'%item_md)
 
-        if item_md.is_file():
-            self.remove(item_md.name)
+        try:
+            ex_item = self.get(item_md.name)
+            if ex_item.is_dir() == item_md.is_dir():
+                raise AlreadyExistsException('Item %s is already exists in directory %s'%\
+                                                (item_md.name, self.name))
+        except PathException:
+            pass
 
+        item_md.parent_dir_id = self.dir_id
         self.content.append(item_md)
         self.last_modify_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -203,22 +206,62 @@ class DirectoryMD:
 
 
 
+class MDVersion:
+    def __init__(self):
+        self.__ver_datetime = None
+        self.__app_items = []
+        self.__rm_items = []
+
+    def empty(self):
+        return (not self.__app_items) and (not self.__rm_items)
+
+    def append(self, item):
+        self.__app_items.append(item)
+
+    def remove(self, item):
+        self.__rm_items.append(item)
+
+    def dump(self):
+        ret_lst = []
+        for item in self.__app_items:
+            ret_lst.append((item.dump(), False))
+        for item in self.__rm_items:
+            ret_lst.append((item.dump(), True))
+
+        ver_datetime = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        return (ver_datetime, ret_lst)
+
+
 class MetadataFile:
     def __init__(self):
         self.versions = []
-        self.root_dir = None
+        self.root_dir = DirectoryMD('/', dir_id='')
+        self.unsaved_ver = MDVersion()
 
     def load(self, md_str):
         md_obj = json.loads(md_str)
         self.versions = md_obj.get('versions', [])
-        root_dir = md_obj.get('root_dir', DirectoryMD().dump())
+        for ver_dt, md_ver in self.versions:
+            print 'VERSION: %s'%ver_dt
+            for item, is_removed in md_ver:
+                if item.get('is_dir', False):
+                    item_md = DirectoryMD()
+                else:
+                    item_md = FileMD()
 
-        self.root_dir = DirectoryMD()
-        self.root_dir.load(root_dir)
+                item_md.load(item)
+                parent = self.find_by_id(item_md.parent_dir_id)
+                if is_removed:
+                    parent.remove(item_md.name)
+                else:
+                    parent.append(item_md)
 
-    def dump(self):
-        d_obj = {'versions': self.versions,
-                 'root_dir': self.root_dir.dump()}
+    def save(self):
+        if not self.unsaved_ver.empty():
+            self.versions.append(self.unsaved_ver.dump())
+            self.unsaved_ver = MDVersion()
+
+        d_obj = {'versions': self.versions}
 
         return json.dumps(d_obj)
 
@@ -236,6 +279,22 @@ class MetadataFile:
 
         return cur_item
 
+    def find_by_id(self, dir_id, start_dir=None):
+        if not dir_id:
+            return self.root_dir
+
+        if not start_dir:
+            start_dir = self.root_dir
+
+        if start_dir.dir_id == dir_id:
+            return start_dir
+
+        for item_md in start_dir.items():
+            if item_md.is_dir():
+                found_id = self.find_by_id(dir_id, item_md)
+                if found_id:
+                    return found_id
+
     def exists(self, path):
         try:
             self.find(path)
@@ -244,6 +303,24 @@ class MetadataFile:
 
         return True
 
+
+    def append(self, dest_dir, item_md):
+        dest_dir_md = self.find(dest_dir)
+        dest_dir_md.append(item_md)
+
+        self.unsaved_ver.append(item_md)
+
+    def remove(self, rm_path):
+        rm_item_md = self.find(rm_path)
+        if rm_item_md.is_dir() and rm_item_md.items():
+            raise NotEmptyException('Directory %s is not empty!'%rm_path)
+
+        base_dir = self.find_by_id(rm_item_md.parent_dir_id)
+        base_dir.remove(rm_item_md.name)
+        self.unsaved_ver.remove(rm_item_md)
+
+
+    '''
     def make_new_version(self, user_id):
         cdt = datetime.now().isoformat()
         new_version_key = hashlib.sha1(user_id+cdt).hexdigest()
@@ -261,4 +338,28 @@ class MetadataFile:
 
         if for_del is not None:
             del self.versions[for_del]
+    '''
+
+if __name__ == '__main__':
+    md = MetadataFile()
+    dirmd = DirectoryMD('test_dir')
+    md.append('/', dirmd)
+
+    filemd = FileMD('new_file')
+    filemd.append_chunk('tttttttt', 'ewwerwerewrwrwr', 0, 123131)
+    md.append('/test_dir', filemd)
+    md_dump = md.save()
+
+    assert md.exists('/test_dir') == True
+    assert md.exists('/test_dir/new_file') == True
+    assert md.exists('/test_dir/fake_file') == False
+    dirmd = md.find('/test_dir')
+
+    del md
+    md = MetadataFile()
+    md.load(md_dump)
+    md.remove('/test_dir/new_file')
+    md.remove('/test_dir')
+    print 'metadata size: %s'%len(md.save())
+    print md.save()
 

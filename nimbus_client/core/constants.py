@@ -32,7 +32,8 @@ SPT_FILE_BASED = 'file'
 UTE_TOKEN_INSERTED = 1
 UTE_TOKEN_REMOVED = 0
 
-#client statuses
-CS_FAILED = 'failed'
-CS_STARTED = 'started'
-CS_STOPPED = 'stopped'
+#async operation types
+OT_SAVE = 'save'
+OT_LOAD = 'load'
+
+ASYNC_WAIT_TIMEOUT = 0.1

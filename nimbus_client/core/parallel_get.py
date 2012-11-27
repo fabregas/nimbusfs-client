@@ -23,13 +23,20 @@ from logger import logger
 QUIT_JOB = None
 
 class FileStreem:
-    def __init__(self, file_name, blocks_count):
+    def __init__(self, streem_id, file_name, blocks_count, file_to_save, callback_func):
         self.__lock = threading.Lock()
+        self.streem_id = streem_id
         self.file_name = file_name
         self.blocks_count = blocks_count
         self.downloaded_blocks = 0
-        self.file_obj = tempfile.NamedTemporaryFile(prefix='nibbler-download-%s-'%file_name)
-        self.is_error = False
+        self.out_file = file_to_save#tempfile.NamedTemporaryFile(prefix='nibbler-download-%s-'%file_name)
+        self.callback = callback_func
+        self.error = None
+
+        try:
+            open(self.out_file, 'w').close()
+        except IOError, err:
+            raise LocalPathException("Can't open for write file %s"%self.out_file)
 
     def save_block(self, seek, data):
         self.__lock.acquire()
@@ -40,34 +47,22 @@ class FileStreem:
                 if not data:
                     raise Exception('No data found')
 
-                fobj = open(self.file_obj.name, 'r+b')
+                fobj = open(self.out_file, 'r+b')
                 fobj.seek(seek)
                 fobj.write(data)
                 logger.debug('Saved %s %s %s'%(self.file_name, seek, len(data)))
             except Exception, err:
-                self.is_error = True
+                self.error = "Can't save data block %s:%s. Details: %s"%\
+                                (self.file_name, seek, err)
             finally:
                 if fobj:
                     fobj.close()
 
+            if self.downloaded_blocks >= self.blocks_count:
+                self.callback(self.streem_id, self.error)
         finally:
             self.__lock.release()
 
-    def wait_get(self):
-        while True:
-            self.__lock.acquire()
-            try:
-                if self.downloaded_blocks >= self.blocks_count:
-                    break
-            finally:
-                self.__lock.release()
-
-        if self.is_error:
-            self.file_obj.close()
-            raise Exception('File %s does not downloaded!'%self.file_name)
-
-    def get_file_obj(self):
-        return self.file_obj
 
 
 class GetWorker(threading.Thread):
@@ -96,14 +91,19 @@ class GetWorker(threading.Thread):
                 logger.error('[GetWorker][%s] %s'%(job, err))
             finally:
                 if out_streem:
-                    out_streem.save_block(seek, data)
+                    try:
+                        out_streem.save_block(seek, data)
+                    except Exception, err:
+                        logger.error('[GetWorker][%s][save_block] %s'%(job, err))
+
                 GetWorker.QUEUE.task_done()
 
 
 class GetDataManager:
-    def __init__(self, fabnet_gateway, workers_count):
+    def __init__(self, fabnet_gateway, workers_count, callback_func):
         self.workers = []
         self.fabnet_gateway = fabnet_gateway
+        self.get_data_callback = callback_func
 
         for i in xrange(workers_count):
             worker = GetWorker(fabnet_gateway)
@@ -122,10 +122,11 @@ class GetDataManager:
             if worker.is_alive():
                 worker.join()
 
-    def get_file(self, file_md):
-        file_streem = FileStreem(file_md.name, len(file_md.chunks))
+    def get_file(self, file_md, file_to_save):
+        file_streem = FileStreem(file_md.id, file_md.name, len(file_md.chunks), \
+                                    file_to_save, self.get_data_callback)
 
         for chunk in file_md.chunks:
-            GetWorker.QUEUE.put((file_streem, chunk.key, file_md.replica_count, chunk.seek, chunk.checksum))
+            GetWorker.QUEUE.put((file_streem, chunk.key, file_md.replica_count, \
+                                    chunk.seek, chunk.checksum))
 
-        return file_streem
