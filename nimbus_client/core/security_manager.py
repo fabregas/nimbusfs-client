@@ -127,11 +127,3 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         storage.close()
 
 
-def init_security_manager(sm_type, ks_path, passwd):
-    if sm_type == SPT_TOKEN_BASED:
-        raise Exception('not implemented') #FIXME: token based security manager should be returned
-    elif SPT_FILE_BASED:
-        return FileBasedSecurityManager(ks_path, passwd)
-    else:
-        raise Exception('Unexpected security provider type: "%s"'%sm_type)
-

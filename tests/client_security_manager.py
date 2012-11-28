@@ -12,7 +12,7 @@ import string
 import hashlib
 
 
-from id_client.core.security_manager import init_security_manager
+from nimbus_client.core.security_manager import FileBasedSecurityManager
 
 CLIENT_KS_PATH = './tests/cert/test_client_ks.zip'
 PASSWD = 'qwerty123'
@@ -24,7 +24,7 @@ class TestSecManager(unittest.TestCase):
 
     def iter_encr(self):
         data = ''.join(random.choice(string.letters) for i in xrange(1024))
-        ks = init_security_manager(CLIENT_KS_PATH, PASSWD)
+        ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
 
         print 'Data block len: %s'%len(data)
 

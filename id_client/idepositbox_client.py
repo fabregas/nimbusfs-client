@@ -12,7 +12,7 @@ This module contains the implementation of IdepositboxClient class
 """
 import time
 
-from nimbus_client.core.security_manager import init_security_manager
+from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.logger import logger
 
@@ -33,8 +33,12 @@ class IdepositboxClient:
     def start(self, ks_passwd):
         config = self.config
         try:
-            security_provider = init_security_manager(config.security_provider_type, \
-                                        config.key_storage_path, ks_passwd)
+            if config.security_provider_type == SPT_TOKEN_BASED:
+                raise Exception('not implemented') #FIXME: token based security manager should be returned
+            elif SPT_FILE_BASED:
+                security_provider = FileBasedSecurityManager(config.key_storage_path, ks_passwd)
+            else:
+                raise Exception('Unexpected security provider type: "%s"'%config.security_provider_type)
 
             self.nibbler = Nibbler(config.fabnet_hostname, security_provider, \
                                 config.parallel_put_count, config.parallel_get_count)

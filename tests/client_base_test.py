@@ -18,7 +18,7 @@ from nimbus_client.core import constants
 constants.CHUNK_SIZE = 100000
 
 from nimbus_client.core.nibbler import Nibbler
-from nimbus_client.core.security_manager import init_security_manager
+from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core.exceptions import *
 
 DEBUG=False
@@ -57,7 +57,7 @@ class TestDHTInitProcedure(unittest.TestCase):
     NIBBLER_INST = None
 
     def test01_dht_init(self):
-        security_manager = init_security_manager(constants.SPT_FILE_BASED, CLIENT_KS_PATH, PASSWD)
+        security_manager = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
         nibbler = Nibbler('127.0.0.1', security_manager)
         mocked = MockedFabnetGateway()
         nibbler.fabnet_gateway.put = mocked.put
