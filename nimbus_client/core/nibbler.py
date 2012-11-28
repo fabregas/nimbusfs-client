@@ -40,10 +40,18 @@ def synchronized(lock):
 
 
 class FSItem:
-    def __init__(self, item_name, is_dir):
+    def __init__(self, item_name, is_dir, create_dt=None, modify_dt=None, size=0):
         self.name = item_name
         self.is_dir = is_dir
         self.is_file = not is_dir
+        self.size = size
+
+        if create_dt is None:
+            create_dt = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        if modify_dt is None:
+            modify_dt = create_dt
+        self.create_dt = create_dt
+        self.modify_dt = modify_dt
 
 class RunnedOperation:
     def __init__(self, op_type, file_name):
@@ -73,9 +81,6 @@ class Nibbler:
         self.put_manager.stop()
         self.get_manager.stop()
 
-    def get_inprocess_uploads(self):
-        return self.__not_sync_files.keys()
-
 
     def __get_metadata(self, reload_force=False):
         if self.metadata and not reload_force:
@@ -99,6 +104,13 @@ class Nibbler:
             self.__get_metadata(reload_force=True)
             raise err
 
+    def __make_item_fs(self, item_md):
+        create_dt = getattr(item_md, 'create_date', None)
+        modify_dt = getattr(item_md, 'last_modify_date', None)
+        size = getattr(item_md, 'size', 0)
+
+        return FSItem(item_md.name, item_md.is_dir(), create_dt, modify_dt, size)
+
     def register_user(self):
         if self.metadata:
             logger.warning('Trying register user in fabnet, but it is already registered!')
@@ -120,11 +132,11 @@ class Nibbler:
         mdf = self.__get_metadata()
         try:
             path_obj = mdf.find(path)
-            return FSItem(path_obj.name, path_obj.is_dir())
+
+            return self.__make_item_fs(path_obj)
         except PathException, err:
             #logger.debug('[get_resource] %s'%str(err))
             return None
-
 
     @synchronized(lock)
     def listdir(self, path='/'):
@@ -133,7 +145,7 @@ class Nibbler:
         if not dir_obj.is_dir():
             raise NotDirectoryException('%s is a file!'%path)
 
-        return [FSItem(i.name, i.is_dir()) for i in dir_obj.items()]
+        return [self.__make_item_fs(i) for i in dir_obj.items()]
 
     @synchronized(lock)
     def mkdir(self, path, recursive=False):

@@ -21,11 +21,11 @@ import shutil
 import stat
 import tempfile
 
-from id_client.core.metadata import DirectoryMD, FileMD
+from nimbus_client.core.nibbler import FSItem, PathException
 
 __docformat__ = "reStructuredText"
 
-#_logger = util.getModuleLogger(__name__)
+logger = util.getModuleLogger(__name__)
 
 BUFFER_SIZE = 8192
 
@@ -60,7 +60,7 @@ class FileResource(DAVNonCollection):
         return float(datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ').strftime("%s"))
 
     def getCreationDate(self):
-        return self._to_unix_time(self.file_obj.create_date)
+        return self._to_unix_time(self.file_obj.create_dt)
 
     def getDisplayName(self):
         return self.name
@@ -69,7 +69,7 @@ class FileResource(DAVNonCollection):
         return util.getETag(self.file_obj.name)
 
     def getLastModified(self):
-        return self._to_unix_time(self.file_obj.create_date)
+        return self._to_unix_time(self.file_obj.create_dt)
 
     def supportEtag(self):
         return True
@@ -82,7 +82,10 @@ class FileResource(DAVNonCollection):
 
         See DAVResource.getContent()
         """
-        return self.nibbler.load_file(self.file_obj)
+        out_file = tempfile.NamedTemporaryFile(prefix='nibbler-download-%s-'%self.file_obj.name)
+        op_id = self.nibbler.load_file(self.path, out_file.name)
+        self.nibbler.wait_async_operation(op_id)
+        return out_file
 
     def beginWrite(self, contentType=None):
         """Open content as a stream for writing.
@@ -102,13 +105,17 @@ class FileResource(DAVNonCollection):
 
         This is only a notification. that MAY be handled.
         """
-        if not withErrors:
-            self.nibbler.save_file(self._filePath, self.file_obj, \
-                        os.path.dirname(self.path).decode('utf8'))
+        def callback(error):
+            if self._filePath:
+                os.unlink(self._filePath)
+                self.provider.clearCirtualResource(self.path)
+                self._filePath = None
 
-        if self._filePath:
-            os.unlink(self._filePath)
-            self._filePath = None
+        if not withErrors:
+            self.nibbler.save_file(self._filePath, self.file_obj.name, \
+                        os.path.dirname(self.path).decode('utf8'), callback)
+        else:
+            callback(None)
 
 
     def delete(self):
@@ -167,7 +174,8 @@ class FolderResource(DAVCollection):
         self.dir_obj = dir_obj
 
         # Setting the name from the file path should fix the case on Windows
-        self.name = os.path.basename(self.dir_obj.name)
+        self.path = os.path.normpath(path)
+        self.name = os.path.basename(self.path)
         self.name = self.name.encode("utf8")
 
 
@@ -177,7 +185,7 @@ class FolderResource(DAVCollection):
         return float(datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ').strftime("%s"))
 
     def getCreationDate(self):
-        return self._to_unix_time(self.dir_obj.create_date)
+        return self._to_unix_time(self.dir_obj.create_dt)
 
     def getDisplayName(self):
         return self.name
@@ -189,7 +197,7 @@ class FolderResource(DAVCollection):
         return None
 
     def getLastModified(self):
-        return self._to_unix_time(self.dir_obj.last_modify_date)
+        return self._to_unix_time(self.dir_obj.modify_dt)
 
     def getMemberNames(self):
         """Return list of direct collection member names (utf-8 encoded).
@@ -205,8 +213,8 @@ class FolderResource(DAVCollection):
 
         nameList = []
 
-        for name, is_file in self.dir_obj.items():
-            name = name.encode("utf8")
+        for item in self.nibbler.listdir(self.path):
+            name = item.name.encode('utf8')
             nameList.append(name)
 
         return nameList
@@ -216,10 +224,10 @@ class FolderResource(DAVCollection):
 
         See DAVCollection.getMember()
         """
-        r_obj = self.dir_obj.get(name.decode("utf8"))
-
         path = util.joinUri(self.path, name)
-        if r_obj.is_dir():
+        r_obj = self.nibbler.find(path)
+
+        if r_obj.is_dir:
             res = FolderResource(self.nibbler, path, self.environ, r_obj)
         else:
             res = FileResource(self.nibbler, path, self.environ, r_obj)
@@ -241,9 +249,7 @@ class FolderResource(DAVCollection):
             raise DAVError(HTTP_FORBIDDEN)
 
         path = util.joinUri(self.path, name)
-        file_md = FileMD(name.decode('utf8'))
-        self.dir_obj.append(file_md)
-
+        file_info = self.provider.createVirtualResource(path)
         return self.provider.getResourceInst(path, self.environ)
 
 
@@ -255,8 +261,8 @@ class FolderResource(DAVCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        dir_md = DirectoryMD(name.decode('utf8'))
-        self.dir_obj.append(dir_md)
+        path = util.joinUri(self.path, name)
+        self.nibbler.mkdir(path)
 
 
     def delete(self):
@@ -309,6 +315,8 @@ class FabnetProvider(DAVProvider):
         super(FabnetProvider, self).__init__()
         self.nibbler = nibbler
         self.readonly = False
+        self.__virtual_resources = {} #TODO: safe this variable, use threading.Lock
+        logger.info('FabnetProvider is initialized...')
 
     def getResourceInst(self, path, environ):
         """Return info dictionary for path.
@@ -317,12 +325,25 @@ class FabnetProvider(DAVProvider):
         """
         self._count_getResourceInst += 1
         fp = util.toUnicode(path.rstrip("/"))
-        r_obj = self.nibbler.get_resource(fp)
+
+        r_obj = self.nibbler.find(fp)
+
+        if r_obj is None:
+            r_obj = self.__virtual_resources.get(fp, None)
 
         if r_obj is None:
             return None
 
-        if r_obj.is_dir():
+        if r_obj.is_dir:
             return FolderResource(self.nibbler, path, environ, r_obj)
 
         return FileResource(self.nibbler, path, environ, r_obj)
+
+    def createVirtualResource(self, path):
+        item = FSItem(os.path.basename(path), False)
+        self.__virtual_resources[path] = item
+        return item
+
+    def clearCirtualResource(self, path):
+        if self.__virtual_resources.has_key(path):
+            del self.__virtual_resources[path]
