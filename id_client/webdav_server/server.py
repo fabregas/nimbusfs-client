@@ -47,7 +47,7 @@ class WebDavServer(threading.Thread):
         config.update({
             "provider_mapping": {"/": provider},
             "user_mapping": {},
-            "verbose": 2,
+            "verbose": 1,
             "enable_loggers": [],
             "propsmanager": True,      # True: use property_manager.PropertyManager                    
             "locksmanager": True,      # True: use lock_manager.LockManager                   

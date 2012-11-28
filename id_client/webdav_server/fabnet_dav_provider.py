@@ -10,22 +10,21 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the implementation of fabner DAV provider
 """
-from wsgidav.dav_error import DAVError, HTTP_FORBIDDEN
-from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
-
 from datetime import datetime
 import wsgidav.util as util
 import os
-import mimetypes
-import shutil
-import stat
 import tempfile
+import threading
+
+from wsgidav.dav_error import DAVError, HTTP_FORBIDDEN
+from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
+
 
 from nimbus_client.core.nibbler import FSItem, PathException
 
 __docformat__ = "reStructuredText"
 
-logger = util.getModuleLogger(__name__)
+#logger = util.getModuleLogger(__name__)
 
 BUFFER_SIZE = 8192
 
@@ -108,7 +107,7 @@ class FileResource(DAVNonCollection):
         def callback(error):
             if self._filePath:
                 os.unlink(self._filePath)
-                self.provider.clearCirtualResource(self.path)
+                self.provider.clearVirtualResource(self.path)
                 self._filePath = None
 
         if not withErrors:
@@ -315,8 +314,8 @@ class FabnetProvider(DAVProvider):
         super(FabnetProvider, self).__init__()
         self.nibbler = nibbler
         self.readonly = False
-        self.__virtual_resources = {} #TODO: safe this variable, use threading.Lock
-        logger.info('FabnetProvider is initialized...')
+        self.__lock = threading.Lock()
+        self.__virtual_resources = {}
 
     def getResourceInst(self, path, environ):
         """Return info dictionary for path.
@@ -329,7 +328,11 @@ class FabnetProvider(DAVProvider):
         r_obj = self.nibbler.find(fp)
 
         if r_obj is None:
-            r_obj = self.__virtual_resources.get(fp, None)
+            self.__lock.acquire()
+            try:
+                r_obj = self.__virtual_resources.get(fp, None)
+            finally:
+                self.__lock.release()
 
         if r_obj is None:
             return None
@@ -341,9 +344,18 @@ class FabnetProvider(DAVProvider):
 
     def createVirtualResource(self, path):
         item = FSItem(os.path.basename(path), False)
-        self.__virtual_resources[path] = item
+        self.__lock.acquire()
+        try:
+            self.__virtual_resources[path] = item
+        finally:
+            self.__lock.release()
+
         return item
 
-    def clearCirtualResource(self, path):
-        if self.__virtual_resources.has_key(path):
-            del self.__virtual_resources[path]
+    def clearVirtualResource(self, path):
+        self.__lock.acquire()
+        try:
+            if self.__virtual_resources.has_key(path):
+                del self.__virtual_resources[path]
+        finally:
+            self.__lock.release()
