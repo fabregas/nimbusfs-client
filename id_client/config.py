@@ -44,6 +44,7 @@ class Config:
         return os.path.join(os.getenv('HOME'), '.idepositbox_client.conf')
 
     def create_defaults(self):
+        self.log_level = 'INFO'
         self.fabnet_hostname = 'idepositbox.com'
         self.parallel_put_count = '3'
         self.parallel_get_count = '3'
