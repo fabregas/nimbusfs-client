@@ -21,6 +21,7 @@ from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
 
 
 from nimbus_client.core.nibbler import FSItem, PathException
+from cache_fs import CacheFS
 
 __docformat__ = "reStructuredText"
 
@@ -81,10 +82,14 @@ class FileResource(DAVNonCollection):
 
         See DAVResource.getContent()
         """
-        out_file = tempfile.NamedTemporaryFile(prefix='nibbler-download-%s-'%self.file_obj.name)
-        op_id = self.nibbler.load_file(self.path, out_file.name)
+        cached_file = self.provider.cache_fs.get(self.path)
+        if cached_file:
+            return open(cached_file, 'rb')
+
+        out_file = self.provider.cache_fs.make_cache_file(self.path)
+        op_id = self.nibbler.load_file(self.path, out_file)
         self.nibbler.wait_async_operation(op_id)
-        return out_file
+        return open(out_file, 'rb')
 
     def beginWrite(self, contentType=None):
         """Open content as a stream for writing.
@@ -94,9 +99,8 @@ class FileResource(DAVNonCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        f_idx, tmpfl = tempfile.mkstemp(prefix='nibbler-upload')
-        f_obj = os.fdopen(f_idx, "wb")
-        self._filePath = tmpfl
+        self._filePath = self.provider.cache_fs.make_cache_file(self.path)
+        f_obj = open(self._filePath, "wb")
         return f_obj
 
     def endWrite(self, withErrors):
@@ -106,18 +110,16 @@ class FileResource(DAVNonCollection):
         """
         def callback(error):
             if self._filePath:
-                os.unlink(self._filePath)
-                self.provider.clearVirtualResource(self.path)
+                self.provider.cache_fs.remove(self.path)
                 self._filePath = None
 
         if not withErrors:
-            if os.path.getsize(self._filePath) == 0:
-                os.unlink(self._filePath)
+            f_size =  os.path.getsize(self._filePath)
+            if f_size == 0 or self.file_obj.name.startswith('.'):
                 return
 
-            id = self.nibbler.save_file(self._filePath, self.file_obj.name, \
+            self.nibbler.save_file(self._filePath, self.file_obj.name, \
                         os.path.dirname(self.path), callback)
-            #self.nibbler.wait_async_operation(id)
         else:
             callback(None)
 
@@ -130,9 +132,8 @@ class FileResource(DAVNonCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        if self.provider.getVirtualResource(self.path):
-            self.provider.clearVirtualResource(self.path)
-        else:
+        self.provider.cache_fs.remove(self.path)
+        if self.nibbler.find(self.path):
             self.nibbler.remove_file(self.path)
 
         self.removeAllProperties(True)
@@ -224,6 +225,10 @@ class FolderResource(DAVCollection):
             name = item.name.encode('utf8')
             nameList.append(name)
 
+        for item in self.provider.cache_fs.get_dir_content(self.path):
+            if item not in nameList:
+                nameList.append(item)
+
         return nameList
 
     def getMember(self, name):
@@ -232,17 +237,7 @@ class FolderResource(DAVCollection):
         See DAVCollection.getMember()
         """
         path = util.joinUri(self.path, name)
-        r_obj = self.nibbler.find(path)
-        if r_obj is None:
-            raise Exception('Member "%s" does not found in %s'%(name, self.path))
-
-        if r_obj.is_dir:
-            res = FolderResource(self.nibbler, path, self.environ, r_obj)
-        else:
-            res = FileResource(self.nibbler, path, self.environ, r_obj)
-
-        return res
-
+        return self.provider.getResourceInst(path, self.environ)
 
 
     # --- Read / write ---------------------------------------------------------
@@ -254,11 +249,11 @@ class FolderResource(DAVCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        if name.startswith('.'):
-            raise DAVError(HTTP_FORBIDDEN)
+        #if name.startswith('.'):
+        #    raise DAVError(HTTP_FORBIDDEN)
 
         path = util.joinUri(self.path, name)
-        file_info = self.provider.createVirtualResource(path)
+        self.provider.cache_fs.make_cache_file(path)
         return self.provider.getResourceInst(path, self.environ)
 
 
@@ -323,6 +318,7 @@ class FabnetProvider(DAVProvider):
     def __init__(self, nibbler):
         super(FabnetProvider, self).__init__()
         self.nibbler = nibbler
+        self.cache_fs = CacheFS('/tmp')
         self.readonly = False
         self.__lock = threading.Lock()
         self.__virtual_resources = {}
@@ -335,40 +331,20 @@ class FabnetProvider(DAVProvider):
         self._count_getResourceInst += 1
         #fp = util.toUnicode(path.rstrip("/"))
 
-        r_obj = self.nibbler.find(path)
+        name = os.path.basename(path)
 
-        if r_obj is None:
-            r_obj = self.getVirtualResource(path)
-
-        if r_obj is None:
-            return None
+        f_path = self.cache_fs.get(path)
+        if f_path:
+            f_size =  os.path.getsize(f_path)
+            r_obj = FSItem(name, False, size=f_size)
+        else:
+            r_obj = self.nibbler.find(path)
+            if r_obj is None:
+                return None
+                #raise Exception('Member "%s" does not found in %s'%(name, path))
 
         if r_obj.is_dir:
             return FolderResource(self.nibbler, path, environ, r_obj)
 
         return FileResource(self.nibbler, path, environ, r_obj)
 
-    def createVirtualResource(self, path):
-        item = FSItem(os.path.basename(path), False)
-        self.__lock.acquire()
-        try:
-            self.__virtual_resources[path] = item
-        finally:
-            self.__lock.release()
-
-        return item
-
-    def getVirtualResource(self, path):
-        self.__lock.acquire()
-        try:
-            return self.__virtual_resources.get(path, None)
-        finally:
-            self.__lock.release()
-
-    def clearVirtualResource(self, path):
-        self.__lock.acquire()
-        try:
-            if self.__virtual_resources.has_key(path):
-                del self.__virtual_resources[path]
-        finally:
-            self.__lock.release()

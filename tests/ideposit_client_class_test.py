@@ -93,8 +93,9 @@ class TestIdepositbox(unittest.TestCase):
 
     def test04_get(self):
         client = WebDAVClient("127.0.0.1", 8080)
-        with self.assertRaises(HTTPServerError):
-            response = client.get('/foo')
+
+        response = client.get('/foo')
+        self.assertEqual(response.statusline, 'HTTP/1.1 200 OK')
 
         response = client.get('/foo/test.out')
         self.assertEqual(response.statusline, 'HTTP/1.1 200 OK')
