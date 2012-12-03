@@ -129,6 +129,7 @@ class Nibbler:
 
     @synchronized(lock)
     def find(self, path):
+        path = path.decode('utf8')
         mdf = self.__get_metadata()
         try:
             path_obj = mdf.find(path)
@@ -140,6 +141,7 @@ class Nibbler:
 
     @synchronized(lock)
     def listdir(self, path='/'):
+        path = path.decode('utf8')
         mdf = self.__get_metadata()
         dir_obj = mdf.find(path)
         if not dir_obj.is_dir():
@@ -149,6 +151,7 @@ class Nibbler:
 
     @synchronized(lock)
     def mkdir(self, path, recursive=False):
+        path = path.decode('utf8')
         mdf = self.__get_metadata()
         if mdf.exists(path):
             raise AlreadyExistsException('Directory "%s" is already exists!'%path)
@@ -167,6 +170,7 @@ class Nibbler:
 
     @synchronized(lock)
     def rmdir(self, path, recursive=False):
+        path = path.decode('utf8')
         mdf = self.__get_metadata()
 
         dir_obj = mdf.find(path)
@@ -189,6 +193,8 @@ class Nibbler:
 
     @synchronized(lock)
     def save_file(self, local_file_path, save_name, dest_dir, callback_func=None):
+        save_name = save_name.decode('utf8')
+        dest_dir = dest_dir.decode('utf8')
         if local_file_path and not os.path.exists(local_file_path):
             raise LocalPathException('File %s does not found!'%local_file_path)
 
@@ -251,6 +257,7 @@ class Nibbler:
             self.on_error(err_msg)
 
     def load_file(self, file_path, out_local_file, callback_func=None):
+        file_path = file_path.decode('utf8')
         lock.acquire()
         try:
             mdf = self.__get_metadata()
@@ -286,7 +293,9 @@ class Nibbler:
 
     @synchronized(lock)
     def move(self, s_path, d_path):
-        logger.info('mv %s to %s'%(s_path, d_path))
+        s_path = s_path.decode('utf8')
+        d_path = d_path.decode('utf8')
+
         mdf = self.__get_metadata()
         source = mdf.find(s_path)
 
@@ -300,15 +309,16 @@ class Nibbler:
             dst_path, new_name = os.path.split(d_path)
             mdf.find(dst_path) #check existance
 
+        mdf.remove(s_path)
         if new_name:
             source.name = new_name
-        mdf.remove(s_path)
         mdf.append(dst_path, source)
         self.__save_metadata()
 
 
     @synchronized(lock)
     def remove_file(self, file_path):
+        file_path = file_path.decode('utf8')
         mdf = self.__get_metadata()
         #TODO: remove file from NimbusFS should be implemented!
         mdf.remove(file_path)

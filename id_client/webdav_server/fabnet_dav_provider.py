@@ -44,7 +44,7 @@ class FileResource(DAVNonCollection):
 
         # Setting the name from the file path should fix the case on Windows
         self.name = os.path.basename(file_obj.name)
-        self.name = self.name.encode("utf8")
+        self.name = self.name
 
         self._filePath = None
 
@@ -111,8 +111,13 @@ class FileResource(DAVNonCollection):
                 self._filePath = None
 
         if not withErrors:
-            self.nibbler.save_file(self._filePath, self.file_obj.name, \
-                        os.path.dirname(self.path).decode('utf8'), callback)
+            if os.path.getsize(self._filePath) == 0:
+                os.unlink(self._filePath)
+                return
+
+            id = self.nibbler.save_file(self._filePath, self.file_obj.name, \
+                        os.path.dirname(self.path), callback)
+            #self.nibbler.wait_async_operation(id)
         else:
             callback(None)
 
@@ -125,7 +130,10 @@ class FileResource(DAVNonCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        self.nibbler.remove_file(self.path.decode('utf8'))
+        if self.provider.getVirtualResource(self.path):
+            self.provider.clearVirtualResource(self.path)
+        else:
+            self.nibbler.remove_file(self.path)
 
         self.removeAllProperties(True)
         self.removeAllLocks(True)
@@ -138,9 +146,9 @@ class FileResource(DAVNonCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
         if isMove:
-            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
+            self.nibbler.move(self.path.rstrip('/'), destPath.rstrip('/'))
         else:
-            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
+            self.nibbler.copy(self.path.rstrip('/'), destPath.rstrip('/'))
 
 
     def supportRecursiveMove(self, destPath):
@@ -155,7 +163,7 @@ class FileResource(DAVNonCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
 
-        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
+        self.nibbler.move(self.path.rstrip('/'), destPath.rstrip('/'))
 
 
 #===============================================================================
@@ -175,7 +183,7 @@ class FolderResource(DAVCollection):
         # Setting the name from the file path should fix the case on Windows
         self.path = os.path.normpath(path)
         self.name = os.path.basename(self.path)
-        self.name = self.name.encode("utf8")
+        #self.name = self.name.encode("utf8")
 
 
     # Getter methods for standard live properties     
@@ -225,6 +233,8 @@ class FolderResource(DAVCollection):
         """
         path = util.joinUri(self.path, name)
         r_obj = self.nibbler.find(path)
+        if r_obj is None:
+            raise Exception('Member "%s" does not found in %s'%(name, self.path))
 
         if r_obj.is_dir:
             res = FolderResource(self.nibbler, path, self.environ, r_obj)
@@ -272,7 +282,7 @@ class FolderResource(DAVCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        self.nibbler.rmdir(self.path.rstrip('/').decode('utf8'), recursive=True)
+        self.nibbler.rmdir(self.path.rstrip('/'), recursive=True)
 
         self.removeAllProperties(True)
         self.removeAllLocks(True)
@@ -285,9 +295,9 @@ class FolderResource(DAVCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
         if isMove:
-            self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
+            self.nibbler.move(self.path.rstrip('/'), destPath.rstrip('/'))
         else:
-            self.nibbler.copy(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
+            self.nibbler.copy(self.path.rstrip('/'), destPath.rstrip('/'))
 
 
     def supportRecursiveMove(self, destPath):
@@ -302,7 +312,7 @@ class FolderResource(DAVCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
 
-        self.nibbler.move(self.path.rstrip('/').decode('utf8'), destPath.rstrip('/').decode('utf8'))
+        self.nibbler.move(self.path.rstrip('/'), destPath.rstrip('/'))
 
 
 
@@ -323,16 +333,12 @@ class FabnetProvider(DAVProvider):
         See DAVProvider.getResourceInst()
         """
         self._count_getResourceInst += 1
-        fp = util.toUnicode(path.rstrip("/"))
+        #fp = util.toUnicode(path.rstrip("/"))
 
-        r_obj = self.nibbler.find(fp)
+        r_obj = self.nibbler.find(path)
 
         if r_obj is None:
-            self.__lock.acquire()
-            try:
-                r_obj = self.__virtual_resources.get(fp, None)
-            finally:
-                self.__lock.release()
+            r_obj = self.getVirtualResource(path)
 
         if r_obj is None:
             return None
@@ -351,6 +357,13 @@ class FabnetProvider(DAVProvider):
             self.__lock.release()
 
         return item
+
+    def getVirtualResource(self, path):
+        self.__lock.acquire()
+        try:
+            return self.__virtual_resources.get(path, None)
+        finally:
+            self.__lock.release()
 
     def clearVirtualResource(self, path):
         self.__lock.acquire()

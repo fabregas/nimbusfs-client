@@ -13,6 +13,7 @@ This module contains the implementation of user metadata classes.
 import json
 import uuid
 import hashlib
+import copy
 from datetime import datetime
 import threading
 
@@ -172,7 +173,7 @@ class DirectoryMD:
 
     def get(self, item_name):
         for item in self.content:
-            if item.name == item_name:
+            if unicode(item.name) == unicode(item_name):
                 return item
 
         raise PathException('"%s" does not found in %s directory'%(item_name, self.name))
@@ -196,7 +197,7 @@ class DirectoryMD:
     def remove(self, item_name):
         rm_i = None
         for i, item in enumerate(self.content):
-            if item.name == item_name:
+            if unicode(item.name) == unicode(item_name):
                 rm_i = i
                 break
 
@@ -219,7 +220,7 @@ class MDVersion:
         self.__app_items.append(item)
 
     def remove(self, item):
-        self.__rm_items.append(item)
+        self.__rm_items.append(copy.copy(item))
 
     def dump(self):
         ret_lst = []
@@ -242,7 +243,6 @@ class MetadataFile:
         md_obj = json.loads(md_str)
         self.versions = md_obj.get('versions', [])
         for ver_dt, md_ver in self.versions:
-            print 'VERSION: %s'%ver_dt
             for item, is_removed in md_ver:
                 if item.get('is_dir', False):
                     item_md = DirectoryMD()
