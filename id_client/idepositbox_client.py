@@ -53,7 +53,9 @@ class IdepositboxClient:
                     break
             else:
                 raise Exception('Webdav server does not started!')
+
             logger.debug('WebDav server is started!')
+            logger.info('IdepositboxClient is started')
         except Exception, err:
             logger.error('init fabnet provider error: %s'%err)
             self.status = CS_FAILED
@@ -67,6 +69,7 @@ class IdepositboxClient:
             self.token_agent.stop()
             self.webdav_server.stop()
             self.nibbler.stop()
+            logger.info('IdepositboxClient is stopped')
         except Exception, err:
             logger.error('stopping fabnet provider error: %s'%err)
             self.status = CS_FAILED

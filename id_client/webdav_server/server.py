@@ -66,7 +66,12 @@ class WebDavServer(threading.Thread):
 
         self.server = server
         logger.info('WebDav server is initialized!')
-        self.server.start()
+        try:
+            self.server.start()
+        except Exception, err:
+            self.server = None
+            logger.error('WebDav server: %s'%err)
+
 
     def stop(self):
         try:

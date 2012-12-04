@@ -1,0 +1,124 @@
+#!/usr/bin/python
+"""
+Copyright (C) 2012 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
+
+@author Konstantin Andrusenko
+@date December 4, 2012
+"""
+
+import os
+import sys
+import time
+import httplib
+import getpass
+import socket
+
+client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
+daemon_script = os.path.join(client_dir, 'id_client/client_daemon.py')
+sys.path.append(client_dir)
+
+from id_client.client_daemon import DAEMON_PORT, STATUS_PATH, \
+                        SYNC_STAT_PATH, START_PATH, STOP_PATH
+
+def check_daemon():
+    try:
+        conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
+        conn.request('GET', STATUS_PATH)
+        response = conn.getresponse()
+        conn.close()
+    except socket.error, err:
+        return False
+    return True
+
+def start_daemon():
+    if check_daemon():
+        sys.stderr.write('Idepositbox client daemon is already started\n')
+    else:
+        os.system('nohup python %s > /dev/null 2>&1&' % daemon_script)
+        time.sleep(2)
+        if not check_daemon():
+            sys.stderr.write('Idepositbox client daemon does not started!\n')
+            sys.exit(1)
+
+    ks_passwd = getpass.getpass('Key storage password: ')
+
+    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
+    conn.request('POST', START_PATH, ks_passwd)
+    response = conn.getresponse()
+    if response.status == 200:
+        sys.stdout.write('Idepositbox client is started!\n')
+    else:
+        sys.stderr.write('ERROR! %s\n'%response.reason)
+    conn.close()
+
+
+def stop_deamon():
+    if not check_daemon():
+        sys.stderr.write('Idepositbox client daemon does not started\n')
+        sys.exit(1)
+
+    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
+    conn.request('POST', STOP_PATH)
+    response = conn.getresponse()
+    conn.close()
+    if response.status != 200:
+        sys.stdout.write('Idepositbox client does not stopped!\n')
+        sys.exit(1)
+
+    os.system('killall -s INT client_daemon.py')
+    sys.stdout.write('Idepositbox client daemon is stopped now\n')
+
+
+def status_daemon():
+    if not check_daemon():
+        sys.stderr.write('Idepositbox client daemon does not started\n')
+        sys.exit(1)
+
+    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
+    conn.request('GET', STATUS_PATH)
+    response = conn.getresponse()
+    conn.close()
+    if response.status != 200:
+        sys.stderr.write('ERROR! %s %s\n'%(response.status, response.reason))
+    else:
+        sys.stdout.write('client status: %s\n'%response.read())
+
+def sync_stat_daemon():
+    if not check_daemon():
+        sys.stderr.write('Idepositbox client daemon does not started\n')
+        sys.exit(1)
+
+    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
+    conn.request('GET', SYNC_STAT_PATH)
+    response = conn.getresponse()
+    if response.status != 200:
+        sys.stderr.write('ERROR! %s %s\n'%(response.status, response.reason))
+    else:
+        stat = response.read().strip()
+        if not stat:
+            stat = 'all data is synchronized with Cloud'
+        else:
+            stat = '\n%s'%stat
+        sys.stdout.write('sync status: %s\n'%stat)
+    conn.close()
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print 'usage: %s start|stop|status|sync-stat'%sys.argv[0]
+        sys.exit(1)
+
+    command = sys.argv[1]
+    if command == 'start':
+        start_daemon()
+    elif command == 'stop':
+        stop_deamon()
+    elif command == 'status':
+        status_daemon()
+    elif command == 'sync-stat':
+        sync_stat_daemon()
+    else:
+        sys.stdout.write('ERROR! Unknown command "%s"\n'%command)
+
+
