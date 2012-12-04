@@ -14,6 +14,8 @@ import time
 import httplib
 import getpass
 import socket
+import tempfile
+import subprocess
 from datetime import datetime
 
 client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
@@ -22,6 +24,8 @@ sys.path.append(client_dir)
 
 from id_client.client_daemon import DAEMON_PORT, STATUS_PATH, \
                         SYNC_STAT_PATH, START_PATH, STOP_PATH
+
+PID_FILE_NAME = 'idepositbox_client_daemon.pid'
 
 def check_daemon():
     try:
@@ -33,20 +37,25 @@ def check_daemon():
         return False
     return True
 
+def get_pid_file():
+    return os.path.join(tempfile.gettempdir(), PID_FILE_NAME)
+
 def start_daemon():
     if check_daemon():
         sys.stderr.write('Idepositbox client daemon is already started\n')
         sys.exit(1)
 
     t0 = datetime.now()
-    os.system('nohup python %s > /dev/null 2>&1&' % daemon_script)
+    cmd = 'nohup python %s &' % daemon_script
+    devnull = open('/dev/null', 'r+')
+    sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull)
+    open(get_pid_file(), 'w').write(str(sp.pid))
 
     ks_passwd = getpass.getpass('Key storage password: ')
 
     dt = datetime.now() - t0
     sleep_time = 2 - dt.seconds
     if sleep_time > 0:
-        print 'sleep %s'%sleep_time
         time.sleep(sleep_time)
 
     if not check_daemon():
@@ -76,7 +85,14 @@ def stop_deamon():
         sys.stdout.write('Idepositbox client does not stopped!\n')
         sys.exit(1)
 
-    os.system('killall -s INT client_daemon.py')
+    pid_file = get_pid_file()
+    if not os.path.exists(pid_file):
+        sys.stderr.write('No pid file %s found. Please, kill client_daemon process manually\n'%pid_file)
+        sys.exit(1)
+
+    pid = open(pid_file, 'r').read()
+    os.system('kill -s INT %s'%pid)
+    os.unlink(pid_file)
     sys.stdout.write('Idepositbox client daemon is stopped now\n')
 
 
