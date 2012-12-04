@@ -36,6 +36,7 @@ def init_logger():
     console = logging.StreamHandler()
     console.setFormatter(formatter)
     logger.addHandler(console)
+    logger.propagate = False
 
     return logger
 

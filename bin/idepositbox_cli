@@ -14,6 +14,7 @@ import time
 import httplib
 import getpass
 import socket
+from datetime import datetime
 
 client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 daemon_script = os.path.join(client_dir, 'id_client/client_daemon.py')
@@ -35,14 +36,22 @@ def check_daemon():
 def start_daemon():
     if check_daemon():
         sys.stderr.write('Idepositbox client daemon is already started\n')
-    else:
-        os.system('nohup python %s > /dev/null 2>&1&' % daemon_script)
-        time.sleep(2)
-        if not check_daemon():
-            sys.stderr.write('Idepositbox client daemon does not started!\n')
-            sys.exit(1)
+        sys.exit(1)
+
+    t0 = datetime.now()
+    os.system('nohup python %s > /dev/null 2>&1&' % daemon_script)
 
     ks_passwd = getpass.getpass('Key storage password: ')
+
+    dt = datetime.now() - t0
+    sleep_time = 2 - dt.seconds
+    if sleep_time > 0:
+        print 'sleep %s'%sleep_time
+        time.sleep(sleep_time)
+
+    if not check_daemon():
+        sys.stderr.write('Idepositbox client daemon does not started!\n')
+        sys.exit(1)
 
     conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
     conn.request('POST', START_PATH, ks_passwd)

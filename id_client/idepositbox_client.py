@@ -11,8 +11,9 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of IdepositboxClient class
 """
 import time
+import logging
 
-from nimbus_client.core.security_manager import FileBasedSecurityManager
+from nimbus_client.core.security_manager import FileBasedSecurityManager, AbstractSecurityManager
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.logger import logger
 
@@ -21,6 +22,26 @@ from id_client.token_agent import TokenAgent
 from id_client.config import Config
 from id_client.constants import *
 
+##### FIXME: remove this mocked class ############
+
+class FileBasedSecurityManager(AbstractSecurityManager):
+    def __init__(self, ks_path, passwd):
+        self._client_cert = None
+        self._client_prikey = None
+
+    def get_client_cert(self):
+        return 'test_shared_user'
+
+    def get_client_cert_key(self):
+        return ''
+
+    def encrypt(self, data):
+        return data
+
+    def decrypt(self, data):
+        return data
+
+####################################################
 
 class IdepositboxClient:
     def __init__(self):
@@ -30,9 +51,19 @@ class IdepositboxClient:
         self.token_agent = TokenAgent(self.on_usb_token_event)
         self.status = CS_STOPPED
 
+    def __set_log_level(self):
+        log_level = self.config.log_level.lower()
+        if log_level == 'info':
+            logger.setLevel(logging.INFO)
+        elif log_level == 'debug':
+            logger.setLevel(logging.DEBUG)
+        elif log_level == 'error':
+            logger.setLevel(logging.ERROR)
+
     def start(self, ks_passwd):
         config = self.config
         try:
+            self.__set_log_level()
             if config.security_provider_type == SPT_TOKEN_BASED:
                 raise Exception('not implemented') #FIXME: token based security manager should be returned
             elif SPT_FILE_BASED:

@@ -265,11 +265,12 @@ class Nibbler:
 
             if not file_obj.is_file():
                 raise NotFileException('%s is not a file!'%file_path)
+
+            file_obj.callback = callback_func
+            self.__inprogress_oplist[file_obj.id] = (OT_LOAD, file_obj)
         finally:
             lock.release()
 
-        file_obj.callback = callback_func
-        self.__inprogress_oplist[file_obj.id] = (OT_LOAD, file_obj)
         self.get_manager.get_file(file_obj, out_local_file)
         return file_obj.id
 

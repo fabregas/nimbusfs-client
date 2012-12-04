@@ -33,7 +33,7 @@ UTE_TOKEN_INSERTED = 1
 UTE_TOKEN_REMOVED = 0
 
 #async operation types
-OT_SAVE = 'save'
-OT_LOAD = 'load'
+OT_SAVE = 'upload'
+OT_LOAD = 'download'
 
 ASYNC_WAIT_TIMEOUT = 0.1

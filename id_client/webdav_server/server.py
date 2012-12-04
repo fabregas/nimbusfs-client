@@ -16,14 +16,17 @@ import time
 import signal
 import sys
 import threading
+import logging
 
 from wsgidav.version import __version__
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
 from wsgidav.fs_dav_provider import FilesystemProvider
+from wsgidav.util import BASE_LOGGER_NAME
 from cherrypy import wsgiserver, __version__ as cp_version
 
 from fabnet_dav_provider import FabnetProvider
 from nimbus_client.core.logger import logger
+
 
 
 class WebDavServer(threading.Thread):
@@ -34,6 +37,22 @@ class WebDavServer(threading.Thread):
         self.nibbler = nibbler
 
         self.server = None
+
+    def __init_logger(self):
+        wsgi_logger = logging.getLogger(BASE_LOGGER_NAME)
+
+        for hdlr in wsgi_logger.handlers[:]:
+            try:
+                hdlr.flush()
+                hdlr.close()
+            except:
+                pass
+            logger.removeHandler(hdlr)
+
+        for hdlr in logger.handlers[:]:
+            wsgi_logger.addHandler(hdlr)
+
+        wsgi_logger.setLevel(logging.INFO)
 
     def is_ready(self):
         if not self.server:
@@ -65,6 +84,7 @@ class WebDavServer(threading.Thread):
         server.provider = provider
 
         self.server = server
+        self.__init_logger()
         logger.info('WebDav server is initialized!')
         try:
             self.server.start()

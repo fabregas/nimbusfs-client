@@ -38,22 +38,32 @@ class IDClientHandler(BaseHTTPRequestHandler):
     client = None
     def do_GET(self):
         logger.info('GET %s'%self.path)
-        if self.path == STATUS_PATH:
-            self.send_response(200)
-            self.end_headers()
-            if IDClientHandler.client:
-                self.wfile.write(IDClientHandler.client.status)
+        try:
+            if self.path == STATUS_PATH:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                if IDClientHandler.client:
+                    self.wfile.write(IDClientHandler.client.status)
+                else:
+                    self.wfile.write(CS_STOPPED)
+                self.wfile.close()
+            elif self.path == SYNC_STAT_PATH:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                if IDClientHandler.client:
+                    ops = IDClientHandler.client.nibbler.inprocess_operations()
+                    ret_str = ''
+                    for op in ops:
+                        ret_str += '[%s] %s\n'%(op.op_type, op.file_name.encode('utf8'))
+                    self.wfile.write(ret_str)
+                    self.wfile.close()
             else:
-                self.wfile.write(CS_STOPPED)
-        elif self.path == SYNC_STAT_PATH:
-            self.send_response(200)
-            self.end_headers()
-            if IDClientHandler.client:
-                ops = IDClientHandler.client.nibbler.inprocess_operations()
-                for op in ops:
-                    self.wfile.write('[%s] %s\n'%(op.op_type, op.file_name))
-        else:
-            self.send_error(404, 'Invalid request')
+                self.send_error(404, 'Invalid request')
+        except Exception, err:
+            logger.error('GET error: %s'%err)
+            self.send_error(500, str(err))
 
     def do_POST(self):
         logger.info('POST %s'%self.path)

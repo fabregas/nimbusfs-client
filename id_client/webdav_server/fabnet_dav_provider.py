@@ -229,6 +229,10 @@ class FolderResource(DAVCollection):
             if item not in nameList:
                 nameList.append(item)
 
+        #this magic does not allow load the whole content for crazy Finder on MacOS
+        nameList.append('.ql_disablecache')
+        nameList.append('.ql_disablethumbnails')
+
         return nameList
 
     def getMember(self, name):
@@ -237,6 +241,11 @@ class FolderResource(DAVCollection):
         See DAVCollection.getMember()
         """
         path = util.joinUri(self.path, name)
+
+        #this magic does not allow load the whole content for crazy Finder on MacOS
+        if name in ['.ql_disablecache', '.ql_disablethumbnails']:
+            self.provider.cache_fs.make_cache_file(path)
+
         return self.provider.getResourceInst(path, self.environ)
 
 
