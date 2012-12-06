@@ -22,7 +22,11 @@ from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED
 from security_provider_conf_dialog import SecurityProviderConfigDialog
 
 
-RESOURCES_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources')
+CUR_DIR = os.path.abspath(os.path.dirname(__file__))
+RESOURCES_DIR = os.path.join(CUR_DIR, 'resources')
+
+if not os.path.exists(RESOURCES_DIR):
+    RESOURCES_DIR = CUR_DIR
 
 LOGOUT_ICON = os.path.join(RESOURCES_DIR, "logout-icon.png")
 LOGIN_ICON = os.path.join(RESOURCES_DIR, "login-icon.png")
