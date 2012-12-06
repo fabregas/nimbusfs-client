@@ -111,13 +111,18 @@ class Nibbler:
 
         return FSItem(item_md.name, item_md.is_dir(), create_dt, modify_dt, size)
 
-    def register_user(self):
+    def is_registered(self):
         if self.metadata:
-            logger.warning('Trying register user in fabnet, but it is already registered!')
-            return
+            return True
 
         metadata = self.fabnet_gateway.get(self.metadata_key)
         if metadata is not None:
+            return True
+
+        return False
+
+    def register_user(self):
+        if self.is_registered():
             logger.warning('Trying register user in fabnet, but it is already registered!')
             return
 

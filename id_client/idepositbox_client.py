@@ -74,6 +74,18 @@ class IdepositboxClient:
             self.nibbler = Nibbler(config.fabnet_hostname, security_provider, \
                                 config.parallel_put_count, config.parallel_get_count)
 
+            try:
+                registered = self.nibbler.is_registered()
+            except Exception, err:
+                logger.error(err)
+                raise Exception('Service %s does not respond! Please, '\
+                                'ensure that network is configured correctly'%config.fabnet_hostname)
+
+            if not registered:
+                raise Exception('User does not registered in service')
+
+
+
             self.webdav_server = WebDavServer(config.webdav_bind_host, config.webdav_bind_port, self.nibbler)
             self.webdav_server.start()
 
@@ -98,8 +110,10 @@ class IdepositboxClient:
     def stop(self):
         try:
             self.token_agent.stop()
-            self.webdav_server.stop()
-            self.nibbler.stop()
+            if self.webdav_server:
+                self.webdav_server.stop()
+            if self.nibbler:
+                self.nibbler.stop()
             logger.info('IdepositboxClient is stopped')
         except Exception, err:
             logger.error('stopping fabnet provider error: %s'%err)
