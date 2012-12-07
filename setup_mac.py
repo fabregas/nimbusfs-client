@@ -1,13 +1,15 @@
 from setuptools import setup
 import sys
+import subprocess
 sys.path.append('third-party')
 
-#'git describe --always --tag'
+p = subprocess.Popen('git describe --always --tag'.split(), stdout=subprocess.PIPE)
+out, _ = p.communicate()
 
 APP = ['./id_client/gui/main_window.py']
 OPTIONS = {'argv_emulation': False,
            'iconfile': './id_client/gui/resources/app-icon.icns',
-           'plist': {'CFBundleShortVersionString':'0.1.1',},
+           'plist': {'CFBundleShortVersionString': out.strip(),},
            'includes' : ('PySide.QtGui', 'PySide.QtCore', 'wsgidav', 'cherrypy'),
            'semi_standalone': 'False',
            'compressed' : 'True',
@@ -20,7 +22,7 @@ OPTIONS = {'argv_emulation': False,
           }
 
 setup(
-    name= 'IdepositboxClient',
+    name= 'Idepositbox',
     app=APP,
     options={'py2app': OPTIONS},
     setup_requires=['py2app']
