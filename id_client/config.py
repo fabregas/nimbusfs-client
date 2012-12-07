@@ -28,7 +28,7 @@ class Config:
             config.read(config_file)
 
             self.log_level = config.get('LOG','log_level')
-            self.security_provider_type = config.get('SECURITY_PROVIDER', 'proviver_type')
+            self.security_provider_type = config.get('SECURITY_PROVIDER', 'provider_type')
             self.key_storage_path = config.get('SECURITY_PROVIDER', 'key_storage_path')
             self.fabnet_hostname = config.get('FABNET', 'fabnet_url')
             self.parallel_put_count = int(config.get('FABNET', 'parallel_put_count'))
@@ -45,13 +45,13 @@ class Config:
 
     def create_defaults(self):
         self.log_level = 'INFO'
-        self.fabnet_hostname = 'idepositbox.com'
+        self.fabnet_hostname = 'lb.idepositbox.com'
         self.parallel_put_count = '3'
         self.parallel_get_count = '3'
         self.security_provider_type = SPT_TOKEN_BASED
         self.key_storage_path = ''
         self.webdav_bind_host = '127.0.0.1'
-        self.webdav_bind_port = '80'
+        self.webdav_bind_port = '8080'
 
     def save(self):
         config = RawConfigParser()
@@ -65,7 +65,7 @@ class Config:
         config.set('FABNET', 'fabnet_url', self.fabnet_hostname)
         config.set('FABNET', 'parallel_put_count', self.parallel_put_count)
         config.set('FABNET', 'parallel_get_count', self.parallel_get_count)
-        config.set('SECURITY_PROVIDER', 'proviver_type', self.security_provider_type)
+        config.set('SECURITY_PROVIDER', 'provider_type', self.security_provider_type)
         config.set('SECURITY_PROVIDER', 'key_storage_path', self.key_storage_path)
         config.set('WEBDAV', 'bind_hostname', self.webdav_bind_host)
         config.set('WEBDAV', 'bind_port', self.webdav_bind_port)
