@@ -16,4 +16,4 @@ test:
 
 build_mac:
 	python setup_mac.py py2app
-	hdiutil create -srcfolder dist/IdepositboxClient.app dist/IdepositboxClient.dmg
+	hdiutil create -srcfolder dist/Idepositbox.app dist/Idepositbox.dmg
