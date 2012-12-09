@@ -21,8 +21,8 @@ import PySide
 from id_client.idepositbox_client import IdepositboxClient, logger
 from id_client.config import Config
 from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED
-from security_provider_conf_dialog import SecurityProviderConfigDialog
 from files_inprogress_dialog import FilesInprogressDialog
+from settings_dialog import SettingsDialog
 
 
 CUR_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -37,10 +37,12 @@ SYNCDATA_ICON = os.path.join(RESOURCES_DIR, "sync-icon.png")
 MENU_LOGIN_ICON = os.path.join(RESOURCES_DIR, "menu-login-icon.png")
 MENU_LOGOUT_ICON = os.path.join(RESOURCES_DIR, "menu-logout-icon.png")
 MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
+MENU_SETTING_ICON = os.path.join(RESOURCES_DIR, "menu-settings-icon.png")
 
 LM_LOGIN = unicode('Login')
 LM_LOGOUT = unicode('Logout')
 LM_SYNC_INFO = unicode('Data transmission...')
+LM_SETTINGS = unicode('Settings...')
 LM_EXIT = unicode('Exit')
 
 
@@ -65,12 +67,15 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.login_act.triggered.connect(self.onLoginLogout)
         self.sync_info_act = QAction(QIcon(SYNCDATA_ICON), LM_SYNC_INFO, parent)
         self.sync_info_act.triggered.connect(self.onSyncInfo)
+        self.settings_act = QAction(QIcon(MENU_SETTING_ICON), LM_SETTINGS, parent)
+        self.settings_act.triggered.connect(self.onSettings)
         self.exit_act = QAction(QIcon(MENU_EXIT_ICON), LM_EXIT, parent)
         self.exit_act.triggered.connect(self.onClose)
 
         self.tray_menu = QMenu(parent)
         self.tray_menu.addAction(self.login_act)
         self.tray_menu.addAction(self.sync_info_act)
+        self.tray_menu.addAction(self.settings_act)
         self.tray_menu.addSeparator()
         self.tray_menu.addAction(self.exit_act)
 
@@ -93,14 +98,11 @@ class SystemTrayIcon(QSystemTrayIcon):
         if config.key_storage_path:
             return
 
-        dialog = SecurityProviderConfigDialog()
+        dialog = SettingsDialog()
         ret = dialog.exec_()
         if not ret:
             raise Exception('Security provider does not configured!')
 
-        config.security_provider_type = dialog.provider_type
-        config.key_storage_path = dialog.key_storage_path
-        config.save()
 
     def on_token_event(self, event, data):
         if event == UTE_TOKEN_INSERTED:
@@ -191,6 +193,9 @@ class SystemTrayIcon(QSystemTrayIcon):
         finally:
             qApp.exit()
 
+    def onSettings(self):
+        SettingsDialog().exec_()
+
 
 class CheckSyncStatusThread(QThread):
     def __init__(self, tray):
@@ -202,15 +207,18 @@ class CheckSyncStatusThread(QThread):
         self.stopped = False
         while not self.stopped:
             try:
+                if not self.tray.idepositbox_client.nibbler:
+                    continue
+
                 ops = self.tray.idepositbox_client.nibbler.inprocess_operations()
                 if ops:
                     self.tray.sync_data_inprogress.emit()
                 else:
                     self.tray.no_sync_data.emit()
-
-                time.sleep(1)
             except Exception, err:
                 logger.error('CheckSyncStatusThread: %s'%err)
+            finally:
+                time.sleep(1)
 
     def stop(self):
         self.stopped = True
