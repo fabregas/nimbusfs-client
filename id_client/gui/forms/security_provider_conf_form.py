@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'id_client/gui/forms/security_provider_conf_form.ui'
 #
-# Created: Thu Dec  6 16:58:11 2012
+# Created: Sun Dec  9 14:48:12 2012
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
 #
 # WARNING! All changes made in this file will be lost!

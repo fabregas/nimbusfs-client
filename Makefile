@@ -14,6 +14,9 @@ clean:
 test:
 	@$(TEST_RUNNER)
 
+generate_forms:
+	python generate_forms.py id_client/gui/forms/
+
 build_mac:
 	python setup_mac.py py2app
 	hdiutil create -srcfolder dist/Idepositbox.app dist/Idepositbox.dmg

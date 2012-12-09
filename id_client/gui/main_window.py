@@ -11,15 +11,18 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 import os
 import sys
+import threading
+import time
 
 from PySide.QtCore import *
 from PySide.QtGui import *
 import PySide
 
-from id_client.idepositbox_client import IdepositboxClient
+from id_client.idepositbox_client import IdepositboxClient, logger
 from id_client.config import Config
 from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED
 from security_provider_conf_dialog import SecurityProviderConfigDialog
+from files_inprogress_dialog import FilesInprogressDialog
 
 
 CUR_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -30,28 +33,45 @@ if not os.path.exists(RESOURCES_DIR):
 
 LOGOUT_ICON = os.path.join(RESOURCES_DIR, "logout-icon.png")
 LOGIN_ICON = os.path.join(RESOURCES_DIR, "login-icon.png")
-SYNC_ICON = os.path.join(RESOURCES_DIR, "sync-icon.png")
+SYNCDATA_ICON = os.path.join(RESOURCES_DIR, "sync-icon.png")
 
 LM_LOGIN = unicode('Login')
 LM_LOGOUT = unicode('Logout')
+LM_SYNC_INFO = unicode('Data transmission...')
 LM_EXIT = unicode('Exit')
 
+
 class SystemTrayIcon(QSystemTrayIcon):
+    sync_data_inprogress = Signal()
+    no_sync_data = Signal()
+
     def __init__(self, parent=None):
         super(SystemTrayIcon, self).__init__(parent)
 
         self.is_login = False
+        self.sync_status = False
+
+        self.sync_data_inprogress.connect(self.on_sync_data_inprogress)
+        self.no_sync_data.connect(self.on_no_sync_data)
+
+        self.login_icon = QIcon(LOGIN_ICON)
+        self.logout_icon = QIcon(LOGOUT_ICON)
+        self.syncdata_icon = QIcon(SYNCDATA_ICON)
 
         self.login_act = QAction(LM_LOGIN, parent)
         self.login_act.triggered.connect(self.onLoginLogout)
+        self.sync_info_act = QAction(LM_SYNC_INFO, parent)
+        self.sync_info_act.triggered.connect(self.onSyncInfo)
         self.exit_act = QAction(LM_EXIT, parent)
         self.exit_act.triggered.connect(self.onClose)
 
         self.tray_menu = QMenu(parent)
         self.tray_menu.addAction(self.login_act)
+        self.tray_menu.addAction(self.sync_info_act)
+        self.tray_menu.addSeparator()
         self.tray_menu.addAction(self.exit_act)
 
-        self.setIcon(QIcon(LOGOUT_ICON))
+        self.setIcon(self.logout_icon)
         self.setContextMenu( self.tray_menu )
 
         self.configure_service()
@@ -61,6 +81,9 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.idepositbox_client = IdepositboxClient()
         if Config().security_provider_type == SPT_FILE_BASED:
             self.service_login()
+
+        self.check_sync_status_thr = CheckSyncStatusThread(self)
+        self.check_sync_status_thr.start()
 
     def configure_service(self):
         config = Config()
@@ -115,7 +138,7 @@ class SystemTrayIcon(QSystemTrayIcon):
             self.idepositbox_client.start(passws)
 
             self.login_act.setText(LM_LOGOUT)
-            self.setIcon(QIcon(LOGIN_ICON))
+            self.setIcon(self.login_icon)
             self.is_login = True
         except Exception, err:
             self.show_error('Service does not started.\nDetails: %s'%err)
@@ -130,10 +153,27 @@ class SystemTrayIcon(QSystemTrayIcon):
             self.idepositbox_client.stop()
 
             self.login_act.setText(LM_LOGIN)
-            self.setIcon(QIcon(LOGOUT_ICON))
+            self.setIcon(self.logout_icon)
             self.is_login = False
         except Exception, err:
             self.show_error('Service does not stopped.\nDetails: %s'%err)
+        finally:
+            self.check_sync_status_thr.stop()
+            self.check_sync_status_thr.wait()
+
+    def on_sync_data_inprogress(self):
+        self.sync_status = True
+        self.setIcon(self.syncdata_icon)
+
+    def on_no_sync_data(self):
+        if not self.sync_status:
+            return
+
+        self.setIcon(self.login_icon)
+
+    def onSyncInfo(self):
+        f_inprogress_dialog = FilesInprogressDialog(self.idepositbox_client.nibbler)
+        f_inprogress_dialog.exec_()
 
     def onClose(self):
         if not self.show_question('Exit?', 'Are you sure that you want to exit?!'):
@@ -147,6 +187,28 @@ class SystemTrayIcon(QSystemTrayIcon):
             qApp.exit()
 
 
+class CheckSyncStatusThread(QThread):
+    def __init__(self, tray):
+        QThread.__init__(self, tray)
+        self.tray = tray
+        self.stopped = True
+
+    def run(self):
+        self.stopped = False
+        while not self.stopped:
+            try:
+                ops = self.tray.idepositbox_client.nibbler.inprocess_operations()
+                if ops:
+                    self.tray.sync_data_inprogress.emit()
+                else:
+                    self.tray.no_sync_data.emit()
+
+                time.sleep(1)
+            except Exception, err:
+                logger.error('CheckSyncStatusThread: %s'%err)
+
+    def stop(self):
+        self.stopped = True
 
 def main():
     app = QApplication(sys.argv)

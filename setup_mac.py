@@ -16,6 +16,7 @@ OPTIONS = {'argv_emulation': False,
            'frameworks' : ('libpyside-python2.7.1.1.dylib', 'libshiboken-python2.7.1.1.dylib'),
            'resources': ['./id_client/gui/resources/login-icon.png',
                             './id_client/gui/resources/logout-icon.png',
+                            './id_client/gui/resources/sync-icon.png',
                             './id_client/gui/resources/qt.conf',
                             '/usr/lib/libpyside-python2.7.1.1.dylib',
                             '/usr/lib/libshiboken-python2.7.1.1.dylib']
