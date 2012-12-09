@@ -34,6 +34,9 @@ if not os.path.exists(RESOURCES_DIR):
 LOGOUT_ICON = os.path.join(RESOURCES_DIR, "logout-icon.png")
 LOGIN_ICON = os.path.join(RESOURCES_DIR, "login-icon.png")
 SYNCDATA_ICON = os.path.join(RESOURCES_DIR, "sync-icon.png")
+MENU_LOGIN_ICON = os.path.join(RESOURCES_DIR, "menu-login-icon.png")
+MENU_LOGOUT_ICON = os.path.join(RESOURCES_DIR, "menu-logout-icon.png")
+MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
 
 LM_LOGIN = unicode('Login')
 LM_LOGOUT = unicode('Logout')
@@ -58,11 +61,11 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.logout_icon = QIcon(LOGOUT_ICON)
         self.syncdata_icon = QIcon(SYNCDATA_ICON)
 
-        self.login_act = QAction(LM_LOGIN, parent)
+        self.login_act = QAction(QIcon(MENU_LOGIN_ICON), LM_LOGIN, parent)
         self.login_act.triggered.connect(self.onLoginLogout)
-        self.sync_info_act = QAction(LM_SYNC_INFO, parent)
+        self.sync_info_act = QAction(QIcon(SYNCDATA_ICON), LM_SYNC_INFO, parent)
         self.sync_info_act.triggered.connect(self.onSyncInfo)
-        self.exit_act = QAction(LM_EXIT, parent)
+        self.exit_act = QAction(QIcon(MENU_EXIT_ICON), LM_EXIT, parent)
         self.exit_act.triggered.connect(self.onClose)
 
         self.tray_menu = QMenu(parent)
@@ -138,6 +141,7 @@ class SystemTrayIcon(QSystemTrayIcon):
             self.idepositbox_client.start(passws)
 
             self.login_act.setText(LM_LOGOUT)
+            self.login_act.setIcon(QIcon(MENU_LOGOUT_ICON))
             self.setIcon(self.login_icon)
             self.is_login = True
         except Exception, err:
@@ -153,6 +157,7 @@ class SystemTrayIcon(QSystemTrayIcon):
             self.idepositbox_client.stop()
 
             self.login_act.setText(LM_LOGIN)
+            self.login_act.setIcon(QIcon(MENU_LOGIN_ICON))
             self.setIcon(self.logout_icon)
             self.is_login = False
         except Exception, err:

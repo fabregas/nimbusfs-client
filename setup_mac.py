@@ -18,6 +18,9 @@ OPTIONS = {'argv_emulation': False,
                             './id_client/gui/resources/logout-icon.png',
                             './id_client/gui/resources/sync-icon.png',
                             './id_client/gui/resources/qt.conf',
+                            './id_client/gui/resources/menu-exit-icon.png',
+                            './id_client/gui/resources/menu-login-icon.png',
+                            './id_client/gui/resources/menu-logout-icon.png',
                             '/usr/lib/libpyside-python2.7.1.1.dylib',
                             '/usr/lib/libshiboken-python2.7.1.1.dylib']
           }
