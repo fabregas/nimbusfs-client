@@ -61,6 +61,7 @@ class IdepositboxClient:
             logger.setLevel(logging.ERROR)
 
     def start(self, ks_passwd):
+        self.config.refresh()
         config = self.config
         try:
             self.__set_log_level()

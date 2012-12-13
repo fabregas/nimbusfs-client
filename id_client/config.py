@@ -18,6 +18,9 @@ from constants import SPT_TOKEN_BASED
 
 class Config:
     def __init__(self):
+        self.refresh()
+
+    def refresh(self):
         try:
             config_file = self.get_config_file_path()
             if not os.path.exists(config_file):

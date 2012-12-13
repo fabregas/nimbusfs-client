@@ -44,7 +44,6 @@ class FilesInprogressDialog(QDialog):
         ops = self.nibbler.inprocess_operations()
         operations = []
         for op in ops:
-            print op
             operations.append((op.op_type, op.file_name))
 
         if self.__cache == operations:

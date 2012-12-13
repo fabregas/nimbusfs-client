@@ -9,7 +9,8 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date December 10, 2012
 """
 
-from PySide.QtGui import QDialog, QMessageBox
+import os
+from PySide.QtGui import QDialog, QMessageBox, QFileDialog
 
 from forms.settings_base_form import Ui_SettingsDialog
 

@@ -82,6 +82,8 @@ class CacheFS:
                 os.unlink(old_f)
 
             f_idx, tmpfl = tempfile.mkstemp(prefix=self.__prefix, dir=self.__cache_dir)
+            f = os.fdopen(f_idx)
+            f.close()
 
             self.put(path, tmpfl)
             return tmpfl

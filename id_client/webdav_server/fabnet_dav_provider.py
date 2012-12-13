@@ -230,8 +230,11 @@ class FolderResource(DAVCollection):
                 nameList.append(item)
 
         #this magic does not allow load the whole content for crazy Finder on MacOS
-        nameList.append('.ql_disablecache')
-        nameList.append('.ql_disablethumbnails')
+        if nameList:
+            if '.ql_disablecache' not in nameList:
+                nameList.append('.ql_disablecache')
+            if '.ql_disablethumbnails' not in nameList:
+                nameList.append('.ql_disablethumbnails')
 
         return nameList
 
@@ -241,9 +244,12 @@ class FolderResource(DAVCollection):
         See DAVCollection.getMember()
         """
         path = util.joinUri(self.path, name)
-
+        f_path = self.provider.cache_fs.get(path)
         #this magic does not allow load the whole content for crazy Finder on MacOS
-        if name in ['.ql_disablecache', '.ql_disablethumbnails']:
+        if not f_path and name in ['.ql_disablecache', '.ql_disablethumbnails']:
+            if (not self.nibbler.listdir(self.path)) and \
+                    (not self.provider.cache_fs.get_dir_content(self.path)):
+                return None
             self.provider.cache_fs.make_cache_file(path)
 
         return self.provider.getResourceInst(path, self.environ)
