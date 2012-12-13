@@ -44,10 +44,9 @@ class SettingsDialog(QDialog):
 
         self.no_changed = True
         self.ui.applyButton.setText('Ok')
+        self.ui.cancelButton.setFocus()
 
     def on_config_change(self, dummy=None):
-        if self.no_changed == False:
-            return
         self.no_changed = False
         self.ui.applyButton.setText('Apply')
 

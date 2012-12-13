@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'id_client/gui/forms/settings_base_form.ui'
 #
-# Created: Sat Dec 15 01:56:41 2012
+# Created: Sat Dec 15 15:41:01 2012
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -65,7 +65,13 @@ class Ui_SettingsDialog(object):
         self.horizontalLayout_5 = QtGui.QHBoxLayout()
         self.horizontalLayout_5.setObjectName("horizontalLayout_5")
         self.label_2 = QtGui.QLabel(self.nimbusFSBox)
-        self.label_2.setMinimumSize(QtCore.QSize(180, 0))
+        self.label_2.setEnabled(True)
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.label_2.sizePolicy().hasHeightForWidth())
+        self.label_2.setSizePolicy(sizePolicy)
+        self.label_2.setMinimumSize(QtCore.QSize(120, 0))
         self.label_2.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         self.label_2.setObjectName("label_2")
         self.horizontalLayout_5.addWidget(self.label_2)
@@ -80,7 +86,12 @@ class Ui_SettingsDialog(object):
         self.horizontalLayout_4 = QtGui.QHBoxLayout()
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
         self.label_3 = QtGui.QLabel(self.nimbusFSBox)
-        self.label_3.setMinimumSize(QtCore.QSize(180, 0))
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.label_3.sizePolicy().hasHeightForWidth())
+        self.label_3.setSizePolicy(sizePolicy)
+        self.label_3.setMinimumSize(QtCore.QSize(120, 0))
         self.label_3.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         self.label_3.setObjectName("label_3")
         self.horizontalLayout_4.addWidget(self.label_3)
@@ -155,8 +166,8 @@ class Ui_SettingsDialog(object):
         self.selectFileButton.setText(QtGui.QApplication.translate("SettingsDialog", "select ...", None, QtGui.QApplication.UnicodeUTF8))
         self.nimbusFSBox.setTitle(QtGui.QApplication.translate("SettingsDialog", "Nimbus FS", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("SettingsDialog", "Service URL", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_2.setText(QtGui.QApplication.translate("SettingsDialog", "Parallel downloads count", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_3.setText(QtGui.QApplication.translate("SettingsDialog", "Parallel upload count", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_2.setText(QtGui.QApplication.translate("SettingsDialog", "Parallel downloads", None, QtGui.QApplication.UnicodeUTF8))
+        self.label_3.setText(QtGui.QApplication.translate("SettingsDialog", "Parallel uploads", None, QtGui.QApplication.UnicodeUTF8))
         self.webdavBox.setTitle(QtGui.QApplication.translate("SettingsDialog", "WebDav server", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("SettingsDialog", "Bind address", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("SettingsDialog", "Bind port", None, QtGui.QApplication.UnicodeUTF8))

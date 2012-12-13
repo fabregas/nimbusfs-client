@@ -56,5 +56,5 @@ class FilesInprogressDialog(QDialog):
         self.ui.tableWidget.setRowCount(len(self.__cache))
         for i, (op_type, file_name) in enumerate(self.__cache):
             self.ui.tableWidget.setItem(i, 0,   QTableWidgetItem(op_type))
-            self.ui.tableWidget.setItem(i, 1,   QTableWidgetItem(file_name.encode('utf8')))
+            self.ui.tableWidget.setItem(i, 1,   QTableWidgetItem(file_name))
 

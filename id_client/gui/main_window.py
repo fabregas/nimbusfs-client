@@ -24,6 +24,7 @@ from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED
 from files_inprogress_dialog import FilesInprogressDialog
 from settings_dialog import SettingsDialog
 from about_dialog import AboutDialog
+from id_client.webdav_mounter import WebdavMounter
 
 
 CUR_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -44,7 +45,7 @@ ABOUT_ICON = os.path.join(RESOURCES_DIR, "about-icon.png")
 
 LM_LOGIN = unicode('Login')
 LM_LOGOUT = unicode('Logout')
-LM_SYNC_INFO = unicode('Data transmission...')
+LM_SYNC_INFO = unicode('Data transfers...')
 LM_SETTINGS = unicode('Settings...')
 LM_ABOUT = unicode('About')
 LM_EXIT = unicode('Exit')
@@ -56,6 +57,8 @@ class SystemTrayIcon(QSystemTrayIcon):
 
     def __init__(self, parent=None):
         super(SystemTrayIcon, self).__init__(parent)
+
+        self.webdav_mounter = WebdavMounter()
 
         self.is_login = False
         self.sync_status = False
@@ -150,6 +153,8 @@ class SystemTrayIcon(QSystemTrayIcon):
 
             self.idepositbox_client.start(passws)
 
+            self.webdav_mounter.mount()
+
             self.login_act.setText(LM_LOGOUT)
             self.login_act.setIcon(QIcon(MENU_LOGOUT_ICON))
             self.setIcon(self.login_icon)
@@ -159,11 +164,12 @@ class SystemTrayIcon(QSystemTrayIcon):
         else:
             config = Config()
             self.show_information('Service information', \
-                    'Service is started!\nYou can mount WebDav resource by URL http://%s:%s/' \
-                    %(config.webdav_bind_host, config.webdav_bind_port))
+                    'iDepositBox service is started!\nWebDav directory is mounted' )
 
     def service_logout(self):
         try:
+            self.webdav_mounter.unmount()
+
             self.idepositbox_client.stop()
 
             self.login_act.setText(LM_LOGIN)
