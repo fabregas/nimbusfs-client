@@ -32,8 +32,24 @@ class SettingsDialog(QDialog):
         self.ui.rbTokenKS.toggled.connect(self.on_token_ks_toggled)
         self.ui.rbLocalKS.toggled.connect(self.on_file_ks_toggled)
 
+        self.ui.lineEdit.textChanged.connect(self.on_config_change)
+        self.ui.webdavBindAddr.textChanged.connect(self.on_config_change)
+        self.ui.serviceURL.textChanged.connect(self.on_config_change)
+        self.ui.uploadCount.valueChanged.connect(self.on_config_change)
+        self.ui.downloadCount.valueChanged.connect(self.on_config_change)
+        self.ui.webdavBindPort.valueChanged.connect(self.on_config_change)
+
         self.config = Config()
         self.set_form_data()
+
+        self.no_changed = True
+        self.ui.applyButton.setText('Ok')
+
+    def on_config_change(self, dummy=None):
+        if self.no_changed == False:
+            return
+        self.no_changed = False
+        self.ui.applyButton.setText('Apply')
 
     def set_form_data(self):
         if self.config.security_provider_type == SPT_FILE_BASED:
@@ -76,10 +92,12 @@ class SettingsDialog(QDialog):
         self.ui.lineEdit.setText(fname)
 
     def on_token_ks_toggled(self, checked):
+        self.on_config_change()
         if checked:
             self.ui.selectFileButton.setEnabled(False)
 
     def on_file_ks_toggled(self, checked):
+        self.on_config_change()
         if checked:
             self.ui.selectFileButton.setEnabled(True)
 
@@ -88,6 +106,9 @@ class SettingsDialog(QDialog):
         self.reject()
 
     def on_apply(self):
+        if self.no_changed:
+            return self.accept()
+
         try:
             self.apply()
         except Exception, err:
@@ -95,4 +116,5 @@ class SettingsDialog(QDialog):
             return
 
         self.config.save()
-        self.accept()
+        self.no_changed = True
+        self.ui.applyButton.setText('Ok')
