@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'id_client/gui/forms/settings_base_form.ui'
 #
-# Created: Mon Dec 10 23:30:04 2012
+# Created: Sat Dec 15 01:56:41 2012
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PySide import QtCore, QtGui
 class Ui_SettingsDialog(object):
     def setupUi(self, SettingsDialog):
         SettingsDialog.setObjectName("SettingsDialog")
-        SettingsDialog.resize(647, 491)
+        SettingsDialog.resize(647, 556)
         self.verticalLayout = QtGui.QVBoxLayout(SettingsDialog)
         self.verticalLayout.setObjectName("verticalLayout")
         self.securityProviderBox = QtGui.QGroupBox(SettingsDialog)
@@ -160,6 +160,6 @@ class Ui_SettingsDialog(object):
         self.webdavBox.setTitle(QtGui.QApplication.translate("SettingsDialog", "WebDav server", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("SettingsDialog", "Bind address", None, QtGui.QApplication.UnicodeUTF8))
         self.label_6.setText(QtGui.QApplication.translate("SettingsDialog", "Bind port", None, QtGui.QApplication.UnicodeUTF8))
-        self.applyButton.setText(QtGui.QApplication.translate("SettingsDialog", "Apply", None, QtGui.QApplication.UnicodeUTF8))
+        self.applyButton.setText(QtGui.QApplication.translate("SettingsDialog", "Ok", None, QtGui.QApplication.UnicodeUTF8))
         self.cancelButton.setText(QtGui.QApplication.translate("SettingsDialog", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
 

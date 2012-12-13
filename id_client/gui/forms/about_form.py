@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'id_client/gui/forms/about_form.ui'
 #
-# Created: Sat Dec 15 01:21:49 2012
+# Created: Sat Dec 15 02:00:11 2012
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
 #
 # WARNING! All changes made in this file will be lost!
@@ -13,6 +13,8 @@ class Ui_AboutDialog(object):
     def setupUi(self, AboutDialog):
         AboutDialog.setObjectName("AboutDialog")
         AboutDialog.resize(400, 300)
+        AboutDialog.setMinimumSize(QtCore.QSize(400, 300))
+        AboutDialog.setMaximumSize(QtCore.QSize(400, 300))
         self.verticalLayout = QtGui.QVBoxLayout(AboutDialog)
         self.verticalLayout.setObjectName("verticalLayout")
         self.iconLabel = QtGui.QLabel(AboutDialog)
