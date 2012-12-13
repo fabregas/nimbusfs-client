@@ -23,6 +23,7 @@ from id_client.config import Config
 from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED
 from files_inprogress_dialog import FilesInprogressDialog
 from settings_dialog import SettingsDialog
+from about_dialog import AboutDialog
 
 
 CUR_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -38,11 +39,14 @@ MENU_LOGIN_ICON = os.path.join(RESOURCES_DIR, "menu-login-icon.png")
 MENU_LOGOUT_ICON = os.path.join(RESOURCES_DIR, "menu-logout-icon.png")
 MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
 MENU_SETTING_ICON = os.path.join(RESOURCES_DIR, "menu-settings-icon.png")
+MENU_ABOUT_ICON = os.path.join(RESOURCES_DIR, "menu-about-icon.png")
+ABOUT_ICON = os.path.join(RESOURCES_DIR, "about-icon.png")
 
 LM_LOGIN = unicode('Login')
 LM_LOGOUT = unicode('Logout')
 LM_SYNC_INFO = unicode('Data transmission...')
 LM_SETTINGS = unicode('Settings...')
+LM_ABOUT = unicode('About')
 LM_EXIT = unicode('Exit')
 
 
@@ -69,6 +73,8 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.sync_info_act.triggered.connect(self.onSyncInfo)
         self.settings_act = QAction(QIcon(MENU_SETTING_ICON), LM_SETTINGS, parent)
         self.settings_act.triggered.connect(self.onSettings)
+        self.about_act = QAction(QIcon(MENU_ABOUT_ICON), LM_ABOUT, parent)
+        self.about_act.triggered.connect(self.onAbout)
         self.exit_act = QAction(QIcon(MENU_EXIT_ICON), LM_EXIT, parent)
         self.exit_act.triggered.connect(self.onClose)
 
@@ -76,6 +82,8 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.tray_menu.addAction(self.login_act)
         self.tray_menu.addAction(self.sync_info_act)
         self.tray_menu.addAction(self.settings_act)
+        self.tray_menu.addSeparator()
+        self.tray_menu.addAction(self.about_act)
         self.tray_menu.addSeparator()
         self.tray_menu.addAction(self.exit_act)
 
@@ -196,6 +204,8 @@ class SystemTrayIcon(QSystemTrayIcon):
     def onSettings(self):
         SettingsDialog().exec_()
 
+    def onAbout(self):
+        AboutDialog(ABOUT_ICON, '0.1.1').exec_()
 
 class CheckSyncStatusThread(QThread):
     def __init__(self, tray):
