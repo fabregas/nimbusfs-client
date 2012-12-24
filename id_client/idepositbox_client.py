@@ -22,26 +22,7 @@ from id_client.token_agent import TokenAgent
 from id_client.config import Config
 from id_client.constants import *
 
-##### FIXME: remove this mocked class ############
 
-class FileBasedSecurityManager(AbstractSecurityManager):
-    def __init__(self, ks_path, passwd):
-        self._client_cert = None
-        self._client_prikey = None
-
-    def get_client_cert(self):
-        return 'test_shared_user'
-
-    def get_client_cert_key(self):
-        return ''
-
-    def encrypt(self, data):
-        return data
-
-    def decrypt(self, data):
-        return data
-
-####################################################
 
 class IdepositboxClient:
     def __init__(self):
@@ -59,6 +40,7 @@ class IdepositboxClient:
             logger.setLevel(logging.DEBUG)
         elif log_level == 'error':
             logger.setLevel(logging.ERROR)
+
 
     def start(self, ks_passwd):
         self.config.refresh()
@@ -83,9 +65,11 @@ class IdepositboxClient:
                                 'ensure that network is configured correctly'%config.fabnet_hostname)
 
             if not registered:
-                raise Exception('User does not registered in service')
-
-
+                try:
+                    self.nibbler.register_user() #FIXME: this is dangerous call! user should accept this case...
+                except Exception, err:
+                    logger.error('Register user error: %s'%err)
+                    raise Exception('User does not registered in service')
 
             self.webdav_server = WebDavServer(config.webdav_bind_host, config.webdav_bind_port, self.nibbler)
             self.webdav_server.start()

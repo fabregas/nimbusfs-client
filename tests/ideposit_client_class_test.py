@@ -16,11 +16,13 @@ sys.path.insert(0, './third-party')
 
 from tinydav import WebDAVClient, HTTPUserError, HTTPServerError
 
+from  nimbus_client.core import fabnet_gateway
 from id_client.idepositbox_client import IdepositboxClient, \
             CS_STARTED, CS_STOPPED, Config
 from id_client.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 
-from client_base_test import MockedFabnetGateway
+from client_base_test import MockedFriClient
+fabnet_gateway.FriClient = MockedFriClient
 from nimbus_client.core.logger import logger
 
 #logger.setLevel(logging.INFO)
@@ -41,10 +43,6 @@ class TestIdepositbox(unittest.TestCase):
         TestIdepositbox.CLIENT = IdepositboxClient()
 
         TestIdepositbox.CLIENT.start(PASSWD)
-
-        mocked = MockedFabnetGateway()
-        TestIdepositbox.CLIENT.nibbler.fabnet_gateway.put = mocked.put
-        TestIdepositbox.CLIENT.nibbler.fabnet_gateway.get = mocked.get
         TestIdepositbox.CLIENT.nibbler.register_user()
 
         self.assertEqual(TestIdepositbox.CLIENT.status, CS_STARTED)

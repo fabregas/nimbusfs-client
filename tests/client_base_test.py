@@ -12,6 +12,7 @@ import string
 import hashlib
 from datetime import datetime
 from nimbus_client.core.logger import logger
+from nimbus_client.core.fri_base import FabnetPacketResponse
 
 logger.setLevel(logging.WARNING)
 from nimbus_client.core import constants
@@ -29,29 +30,41 @@ PASSWD = 'qwerty123'
 
 TMP_FILE = '/tmp/test_file.out'
 
-class MockedFabnetGateway:
-    def __init__(self):
+class MockedFriClient:
+    def __init__(self, is_ssl=None, cert=None, session_id=None):
         self.data_map = {}
 
-    def put(self, data, key=None, replica_count=2, wait_writes_count=2):
-        logger.info('MockedFabnetGateway.put: key=%s replica_count=%s wait_writes_count=%s'%(key, replica_count, wait_writes_count))
+    def call_sync(self, node_addr, packet, FRI_CLIENT_TIMEOUT):
+        if packet.method == 'GetKeysInfo':
+            ret_keys = []
+            key = packet.parameters.get('key', None)
+            ret_keys.append((key, False, 'some_mode_addr'))
+            return FabnetPacketResponse(ret_parameters={'keys_info': ret_keys})
 
-        if key:
-            primary_key = key
-        else:
-            primary_key = hashlib.sha1(datetime.utcnow().isoformat()).hexdigest()
-        source_checksum = hashlib.sha1(data).hexdigest()
+        elif packet.method == 'ClientPutData':
+            key = packet.parameters.get('key', None)
+            if key:
+                primary_key = key
+            else:
+                primary_key = hashlib.sha1(datetime.utcnow().isoformat()+str(random.randint(0,1000000))).hexdigest()
 
-        self.data_map[primary_key] = data
+            data = packet.binary_data
+            source_checksum = hashlib.sha1(data).hexdigest()
 
-        time.sleep(0.1)
-        return primary_key, source_checksum
+            self.data_map[primary_key] = data
 
-    def get(self, primary_key, replica_count=2):
-        logger.info('MockedFabnetGateway.get: key=%s replica_count=%s'%(primary_key, replica_count))
-        time.sleep(0.1)
+            time.sleep(.1)
+            return FabnetPacketResponse(ret_parameters={'key': primary_key})
 
-        return self.data_map.get(primary_key, None)
+        elif packet.method == 'GetDataBlock':
+            time.sleep(0.1)
+
+            raw_data = self.data_map.get(packet.parameters['key'], None)
+            if not raw_data:
+                return FabnetPacketResponse(ret_code=324, ret_message='No data found!')
+            return FabnetPacketResponse(binary_data=raw_data, ret_parameters={'checksum': hashlib.sha1(raw_data).hexdigest()})
+
+
 
 class TestDHTInitProcedure(unittest.TestCase):
     NIBBLER_INST = None
@@ -59,9 +72,7 @@ class TestDHTInitProcedure(unittest.TestCase):
     def test01_dht_init(self):
         security_manager = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
         nibbler = Nibbler('127.0.0.1', security_manager)
-        mocked = MockedFabnetGateway()
-        nibbler.fabnet_gateway.put = mocked.put
-        nibbler.fabnet_gateway.get = mocked.get
+        nibbler.fabnet_gateway.fri_client = MockedFriClient()
         TestDHTInitProcedure.NIBBLER_INST = nibbler
 
         nibbler.register_user()

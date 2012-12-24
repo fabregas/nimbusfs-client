@@ -19,4 +19,4 @@ generate_forms:
 
 build_mac:
 	python setup_mac.py py2app
-	hdiutil create -srcfolder dist/Idepositbox.app dist/Idepositbox.dmg
+	hdiutil create -srcfolder dist/Idepositbox.app dist/iDepositBox.dmg

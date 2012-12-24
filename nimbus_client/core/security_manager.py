@@ -28,8 +28,8 @@ CLIENT_CERT_FILENAME = 'client_certificate.pem'
 CLIENT_PRIKEY_FILENAME = 'client_prikey'
 
 BLOCK_SIZE = 32
-INTERRUPT = u'\u0001'
-PAD = u'\u0000'
+INTERRUPT = '\x00\x01'
+PAD = '\x00'
 
 
 class AbstractSecurityManager:
@@ -54,6 +54,7 @@ class AbstractSecurityManager:
 
     def __add_padding(self, data):
         new_data = ''.join([data, INTERRUPT])
+
         new_data_len = len(new_data)
         remaining_len = BLOCK_SIZE - new_data_len
         to_pad_len = remaining_len % BLOCK_SIZE

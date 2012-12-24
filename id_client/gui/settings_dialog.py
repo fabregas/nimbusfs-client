@@ -20,7 +20,7 @@ from id_client.config import Config
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
-        super(SettingsDialog, self).__init__(parent, Qt.WindowStaysOnTopHint|Qt.Window)
+        super(SettingsDialog, self).__init__(parent)
 
         self.ui = Ui_SettingsDialog()
         self.ui.setupUi(self)

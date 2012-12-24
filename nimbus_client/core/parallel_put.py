@@ -48,6 +48,7 @@ class PutWorker(threading.Thread):
                 try:
                     key, checksum = self.fabnet_gateway.put(data, replica_count=file_md.replica_count)
                 except Exception, err:
+                    logger.error('Put data block error: %s'%err)
                     logger.error('Cant put data block from file %s. Wait %s seconds and try again...'%(file_md.name, FG_ERROR_TIMEOUT))
                     time.sleep(FG_ERROR_TIMEOUT)
                     PutWorker.QUEUE.put(job)

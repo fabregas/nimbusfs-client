@@ -227,10 +227,11 @@ class FriClient:
 
             sock.sendall(data)
 
-            if self.is_ssl:
-                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=read_timeout))
-            else:
-                sock.settimeout(read_timeout)
+            if read_timeout:
+                if self.is_ssl:
+                    sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=read_timeout))
+                else:
+                    sock.settimeout(read_timeout)
 
             ret_packet = self.__read_packet(sock)
             if ret_packet.get('ret_code', -1) == RC_REQ_CERTIFICATE:

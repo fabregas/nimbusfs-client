@@ -24,6 +24,7 @@ OPTIONS = {'argv_emulation': False,
                             './id_client/gui/resources/menu-settings-icon.png',
                             './id_client/gui/resources/menu-about-icon.png',
                             './id_client/gui/resources/about-icon.png',
+                            './id_client/gui/resources/about-bg.png',
                             '/usr/lib/libpyside-python2.7.1.1.dylib',
                             '/usr/lib/libshiboken-python2.7.1.1.dylib']
           }
