@@ -42,6 +42,7 @@ MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
 MENU_SETTING_ICON = os.path.join(RESOURCES_DIR, "menu-settings-icon.png")
 MENU_ABOUT_ICON = os.path.join(RESOURCES_DIR, "menu-about-icon.png")
 ABOUT_ICON = os.path.join(RESOURCES_DIR, "about-icon.png")
+ABOUT_BG = os.path.join(RESOURCES_DIR, "about-bg.png")
 
 LM_LOGIN = unicode('Login')
 LM_LOGOUT = unicode('Logout')
@@ -122,7 +123,10 @@ class SystemTrayIcon(QSystemTrayIcon):
             self.service_logout()
 
     def show_information(self, title, message):
-        QMessageBox.information(None, title, message)
+        if self.supportsMessages():
+            self.showMessage(title, message)
+        else:
+            QMessageBox.information(None, title, message)
 
     def show_error(self, message):
         QMessageBox.critical(None, 'Error', message)
@@ -136,7 +140,7 @@ class SystemTrayIcon(QSystemTrayIcon):
             return False
 
     def get_password(self, message):
-        msg, is_ok = QInputDialog.getText(None, 'Password', message, QLineEdit.Password)
+        msg, is_ok = QInputDialog.getText(None, 'Password', message, QLineEdit.Password, flags=Qt.WindowStaysOnTopHint)
         if is_ok:
             return msg
         return None
@@ -150,6 +154,8 @@ class SystemTrayIcon(QSystemTrayIcon):
     def service_login(self):
         try:
             passws = self.get_password('Please, enter password for key storage')
+            if passws is None:
+                return
 
             self.idepositbox_client.start(passws)
 
@@ -162,7 +168,6 @@ class SystemTrayIcon(QSystemTrayIcon):
         except Exception, err:
             self.show_error('Service does not started.\nDetails: %s'%err)
         else:
-            config = Config()
             self.show_information('Service information', \
                     'iDepositBox service is started!\nWebDav directory is mounted' )
 
@@ -211,7 +216,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         SettingsDialog().exec_()
 
     def onAbout(self):
-        AboutDialog(ABOUT_ICON, '0.1.1').exec_()
+        AboutDialog(ABOUT_ICON, ABOUT_BG, '0.1.1').exec_()
 
 class CheckSyncStatusThread(QThread):
     def __init__(self, tray):

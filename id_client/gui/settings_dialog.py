@@ -10,6 +10,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 """
 
 import os
+from PySide.QtCore import Qt
 from PySide.QtGui import QDialog, QMessageBox, QFileDialog
 
 from forms.settings_base_form import Ui_SettingsDialog
@@ -19,7 +20,7 @@ from id_client.config import Config
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
-        super(SettingsDialog, self).__init__(parent)
+        super(SettingsDialog, self).__init__(parent, Qt.WindowStaysOnTopHint|Qt.Window)
 
         self.ui = Ui_SettingsDialog()
         self.ui.setupUi(self)

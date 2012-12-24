@@ -9,7 +9,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date December 09, 2012
 """
 
-from PySide.QtCore import QTimer
+from PySide.QtCore import QTimer, Qt
 from PySide.QtGui import QDialog, QFileDialog,  QTableWidgetItem
 
 from forms.files_inprogress_form import Ui_FilesInprogressDialog
@@ -17,7 +17,7 @@ from forms.files_inprogress_form import Ui_FilesInprogressDialog
 
 class FilesInprogressDialog(QDialog):
     def __init__(self, nibbler, parent=None):
-        super(FilesInprogressDialog, self).__init__(parent)
+        super(FilesInprogressDialog, self).__init__(parent, Qt.WindowStaysOnTopHint|Qt.Window)
 
         self.__cache = []
         self.nibbler = nibbler
@@ -27,6 +27,7 @@ class FilesInprogressDialog(QDialog):
         self.timer = QTimer()
         self.timer.timeout.connect(self.on_update_table)
         self.on_update_table()
+
 
     def resizeEvent(self, event):
         w = self.ui.tableWidget.size().width()
