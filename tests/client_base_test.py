@@ -12,7 +12,7 @@ import string
 import hashlib
 from datetime import datetime
 from nimbus_client.core.logger import logger
-from nimbus_client.core.fri_base import FabnetPacketResponse
+from nimbus_client.core.fri.fri_base import FabnetPacketResponse
 
 logger.setLevel(logging.WARNING)
 from nimbus_client.core import constants
@@ -48,7 +48,7 @@ class MockedFriClient:
             else:
                 primary_key = hashlib.sha1(datetime.utcnow().isoformat()+str(random.randint(0,1000000))).hexdigest()
 
-            data = packet.binary_data
+            data = packet.binary_data.data()
             source_checksum = hashlib.sha1(data).hexdigest()
 
             self.data_map[primary_key] = data

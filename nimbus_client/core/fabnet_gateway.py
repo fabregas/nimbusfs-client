@@ -12,9 +12,10 @@ This module contains the implementation of gateway API for talking with fabnet
 """
 import hashlib
 
-from nimbus_client.core.fri_base import FriClient, FabnetPacketRequest
-from constants import DEFAULT_REPLICA_COUNT, FRI_PORT, FRI_CLIENT_TIMEOUT, \
-                            RC_NO_DATA
+from nimbus_client.core.fri.fri_base import FabnetPacketRequest, RamBasedBinaryData
+from nimbus_client.core.fri.fri_client import FriClient
+from constants import RC_NO_DATA, DEFAULT_REPLICA_COUNT, FRI_PORT, FILE_ITER_BLOCK_SIZE
+from fri.constants import FRI_CLIENT_TIMEOUT
 from logger import logger
 
 class FabnetGateway:
@@ -34,12 +35,16 @@ class FabnetGateway:
         checksum =  hashlib.sha1(data).hexdigest()
 
         params = {'key':key, 'checksum': checksum, 'wait_writes_count': wait_writes_count}
-        packet = FabnetPacketRequest(method='ClientPutData', parameters=params, binary_data=data, sync=True)
+        packet = FabnetPacketRequest(method='ClientPutData', parameters=params, \
+                        binary_data=RamBasedBinaryData(data, FILE_ITER_BLOCK_SIZE), sync=True)
 
         resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
             logger.error('ClientPutData error: %s'%resp.ret_message)
             raise Exception('ClientPutData error: %s'%resp.ret_message)
+
+        if not resp.ret_parameters.has_key('key'):
+            raise Exception('put data block error: no data key found in response message "%s"'%resp)
 
         primary_key = resp.ret_parameters['key']
 
@@ -63,7 +68,7 @@ class FabnetGateway:
                 logger.error('Get data block error for key %s from node %s: %s'%(key, node_addr, resp.ret_message))
             elif resp.ret_code == 0:
                 exp_checksum = resp.ret_parameters['checksum']
-                data = resp.binary_data
+                data = resp.binary_data.data()
                 checksum =  hashlib.sha1(data).hexdigest()
                 if exp_checksum != checksum:
                     logger.error('Currupted data block for key %s from node %s'%(primary_key, node_addr))
