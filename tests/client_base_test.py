@@ -41,6 +41,10 @@ class MockedFriClient:
             ret_keys.append((key, False, 'some_mode_addr'))
             return FabnetPacketResponse(ret_parameters={'keys_info': ret_keys})
 
+        elif packet.method == 'PutKeysInfo':
+            primary_key = hashlib.sha1(datetime.utcnow().isoformat()+str(random.randint(0,1000000))).hexdigest()
+            return FabnetPacketResponse(ret_parameters={'key_info': (primary_key, 'some_mode_addr')})
+
         elif packet.method == 'ClientPutData':
             key = packet.parameters.get('key', None)
             if key:

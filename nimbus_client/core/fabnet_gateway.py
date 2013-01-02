@@ -30,6 +30,18 @@ class FabnetGateway:
         self.fri_client = FriClient(bool(ckey), cert, ckey)
 
     def put(self, data, key=None, replica_count=DEFAULT_REPLICA_COUNT, wait_writes_count=2):
+        packet = FabnetPacketRequest(method='PutKeysInfo', parameters={'key': key}, sync=True)
+        resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
+        if resp.ret_code != 0:
+            raise Exception('Key info error: %s'%resp.ret_message)
+
+        if not resp.ret_parameters.has_key('key_info'):
+            raise Exception('Invalid PutKeysInfo response! key_info is expected')
+
+        key_info = resp.ret_parameters['key_info']
+        key, node_addr = key_info
+
+        #prepare data for put...
         source_checksum =  hashlib.sha1(data).hexdigest()
         data = self.security_manager.encrypt(data)
         checksum =  hashlib.sha1(data).hexdigest()
@@ -38,7 +50,7 @@ class FabnetGateway:
         packet = FabnetPacketRequest(method='ClientPutData', parameters=params, \
                         binary_data=RamBasedBinaryData(data, FILE_ITER_BLOCK_SIZE), sync=True)
 
-        resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
+        resp = self.fri_client.call_sync(node_addr, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
             logger.error('ClientPutData error: %s'%resp.ret_message)
             raise Exception('ClientPutData error: %s'%resp.ret_message)
