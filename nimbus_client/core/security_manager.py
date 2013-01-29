@@ -49,8 +49,8 @@ class AbstractSecurityManager:
 
     def get_client_cert_key(self):
         cert = X509.load_cert_string(self._client_cert)
-        return cert.get_fingerprint()
-        #return cert.get_ext('authorityKeyIdentifier').get_value()[5:].strip().replace(':','')
+        user_key = cert.get_serial_number()
+        return user_key
 
     def __add_padding(self, data):
         new_data = ''.join([data, INTERRUPT])

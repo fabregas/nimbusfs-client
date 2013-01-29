@@ -29,7 +29,7 @@ class FabnetGateway:
         ckey = self.security_manager.get_client_cert_key()
         self.fri_client = FriClient(bool(ckey), cert, ckey)
 
-    def put(self, data, key=None, replica_count=DEFAULT_REPLICA_COUNT, wait_writes_count=2):
+    def put(self, data, key=None, replica_count=DEFAULT_REPLICA_COUNT, wait_writes_count=2, allow_rewrite=True):
         packet = FabnetPacketRequest(method='PutKeysInfo', parameters={'key': key}, sync=True)
         resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
@@ -46,13 +46,16 @@ class FabnetGateway:
         data = self.security_manager.encrypt(data)
         checksum =  hashlib.sha1(data).hexdigest()
 
-        params = {'key':key, 'checksum': checksum, 'wait_writes_count': wait_writes_count}
+        params = {'key':key, 'checksum': checksum, 'replica_count':replica_count, \
+                    'wait_writes_count': wait_writes_count}
         packet = FabnetPacketRequest(method='ClientPutData', parameters=params, \
                         binary_data=RamBasedBinaryData(data, FILE_ITER_BLOCK_SIZE), sync=True)
 
         resp = self.fri_client.call_sync(node_addr, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
             logger.error('ClientPutData error: %s'%resp.ret_message)
+            if not allow_rewrite:
+                self.remove(key, replica_count)
             raise Exception('ClientPutData error: %s'%resp.ret_message)
 
         if not resp.ret_parameters.has_key('key'):
@@ -61,6 +64,15 @@ class FabnetGateway:
         primary_key = resp.ret_parameters['key']
 
         return primary_key, source_checksum
+
+    def remove(self, key, replica_count=DEFAULT_REPLICA_COUNT):
+        params = {'key':key, 'replica_count':replica_count}
+        packet = FabnetPacketRequest(method='ClientRemoveData', parameters=params, sync=True)
+        resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
+        if resp.ret_code != 0:
+            logger.error('ClientRemoveData error: %s'%resp.ret_message)
+            return False
+        return True
 
     def get(self, primary_key, replica_count=DEFAULT_REPLICA_COUNT):
         packet = FabnetPacketRequest(method='GetKeysInfo', parameters={'key': primary_key, 'replica_count': replica_count}, sync=True)

@@ -230,7 +230,15 @@ class Nibbler:
         return file_md.id
 
 
-    def __finish_file_put(self, file_md):
+    def __finish_file_put(self, file_md, error=None):
+        if error:
+            if file_md.callback:
+                try:
+                    file_md.callback(error)
+                except Exception, err:
+                    logger.error('Callback function error: %s'%err)
+            return
+
         lock.acquire()
         try:
             mdf = self.__get_metadata()
