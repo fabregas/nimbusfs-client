@@ -23,3 +23,7 @@ OT_LOAD = 'download'
 
 ASYNC_WAIT_TIMEOUT = 0.1
 
+#data block constants
+BUF_LEN = 1024
+READ_TRY_COUNT = 30
+READ_SLEEP_TIME = 1
