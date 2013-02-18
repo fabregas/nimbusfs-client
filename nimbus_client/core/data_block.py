@@ -73,6 +73,7 @@ class DataBlock:
         self.__rest_str = ''
         self.__locked = False
         self.__raw_len = raw_len
+        self.__lock = threading.RLock()
 
         if self.SECURITY_MANAGER:
             self.__encdec = self.SECURITY_MANAGER.get_encoder(raw_len)
@@ -87,6 +88,13 @@ class DataBlock:
 
         if not os.path.exists(self.__path):
             open(self.__path, 'wb').close()
+
+    def get_progress(self):
+        self.__lock.acquire()
+        try:
+            return self.__seek, self.__expected_len
+        finally:
+            self.__lock.release()
 
     def __del__(self):
         self.close()
@@ -114,7 +122,11 @@ class DataBlock:
             self.__f_obj = open(self.__path, 'ab')
 
         self.__f_obj.write(data)
-        self.__seek += len(data)
+        self.__lock.acquire()
+        try:
+            self.__seek += len(data)
+        finally:
+            self.__lock.release()
 
         return data
 
@@ -172,7 +184,7 @@ class DataBlock:
     def __read_buf(self, read_buf_len):
         if not self.__expected_len:
             raise RuntimeError('Unknown data block size!')
-        if self.__expected_len <= self.__seek:
+        if self.__expected_len <= self.__get_seek():
             return None
 
         ret_data = ''
@@ -180,17 +192,23 @@ class DataBlock:
         for i in xrange(READ_TRY_COUNT):
             if self.__is_closed():
                 self.__f_obj = open(self.__path, 'rb')
-                self.__f_obj.seek(self.__seek)
+                self.__f_obj.seek(self.__get_seek())
 
             data = self.__f_obj.read(remained_read_len)
             read_data_len = len(data)
-            self.__seek += read_data_len
+
+            self.__lock.acquire()
+            try:
+                self.__seek += read_data_len
+            finally:
+                self.__lock.release()
+
             ret_data += data
             remained_read_len -= read_data_len
 
             if remained_read_len:
                 self.__f_obj.close()
-                if self.__expected_len <= self.__seek:
+                if self.__expected_len <= self.__get_seek():
                     break
                 else:
                     time.sleep(READ_SLEEP_TIME)    
@@ -200,4 +218,11 @@ class DataBlock:
             raise TimeoutException('read data block timeouted at %s'%self.__path)
 
         return ret_data
+
+    def __get_seek(self):
+        self.__lock.acquire()
+        try:
+            return self.__seek
+        finally:
+            self.__lock.release()
 

@@ -16,9 +16,10 @@ from datetime import datetime
 
 from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.metadata import FileMD, ChunkMD
+from nimbus_client.core.base_safe_object import LockObject
 
-
-MAX_DATA_BLOCK_SIZE = 1024*1024*64
+GTLock = LockObject()
+TLock = LockObject()
 
 class Transaction:
     TS_INIT = 0
@@ -40,38 +41,47 @@ class Transaction:
         self.__file_path = file_path
         self.__data_blocks_info = {}
 
+    @TLock
     def get_id(self):
         return self.__transaction_id
 
+    @TLock
     def get_file_path(self):
         return self.__file_path
 
+    @TLock
     def is_uploading(self):
         return self.__transaction_type == self.TT_WRITE
 
+    @TLock
     def is_downloading(self):
         return self.__transaction_type == self.TT_READ
 
+    @TLock
     def get_status(self):
         return self.__status
 
+    @TLock
     def total_size(self):
         t_size = 0
         for size,_,_,_ in self.__data_blocks_info.values():
             t_size += size
         return t_size
 
+    @TLock
     def append_data_block(self, seek, size, data_block, foreign_name=None):
         if size == 0:
             raise RuntimeError('Data block with size=0 is not supported!')
         self.__data_blocks_info[seek] = [size, data_block, foreign_name, False]
 
+    @TLock
     def get_data_block(self, seek):
         if self.__data_blocks_info.has_key(seek):
             raise Exception('No data block with seek %s found in transaction %s'%(seek, self.__transaction_id))
 
         return self.__data_blocks_info[seek][:3]
 
+    @TLock
     def finish_data_block_transfer(self, seek, foreign_name=None):
         if not self.__data_blocks_info.has_key(seek):
             raise Exception('No data block with seek %s found in transaction %s'%(seek, self.__transaction_id))
@@ -80,9 +90,11 @@ class Transaction:
             self.__data_blocks_info[seek][2] = foreign_name
         self.__data_blocks_info[seek][3] = True
             
+    @TLock
     def change_status(self, new_status):
         self.__status = new_status
 
+    @TLock
     def finished(self):
         if self.__status == Transaction.TS_INIT:
             return False
@@ -93,11 +105,16 @@ class Transaction:
         return True
 
     def iter_data_blocks(self):
-        sorted_seeks = sorted(self.__data_blocks_info.keys())
-        for seek in sorted_seeks:
-            dbi = self.__data_blocks_info[seek]
-            yield seek, dbi[0], dbi[1], dbi[2]
+        TLock.lock()
+        try:
+            sorted_seeks = sorted(self.__data_blocks_info.keys())
+            for seek in sorted_seeks:
+                dbi = self.__data_blocks_info[seek]
+                yield seek, dbi[0], dbi[1], dbi[2]
+        finally:
+            TLock.unlock()
 
+    @TLock
     def get_data_block(self, seek):
         sorted_seeks = sorted(self.__data_blocks_info.keys())
         if seek not in sorted_seeks:
@@ -128,6 +145,7 @@ class TransactionsManager:
         path = self.__db_cache.get_cache_path(new_db_hash)
         return DataBlock(path, size)
 
+    @GTLock
     def start_transaction(self, transaction_type, file_path):
         transaction = Transaction(transaction_type, file_path)
         transaction_id = transaction.get_id()
@@ -147,22 +165,14 @@ class TransactionsManager:
         self.__tr_log_start_transaction(transaction.get_id(), transaction_type, file_path)
         return transaction_id
 
-    def __get_transaction(self, transaction_id):
-        tr = self.__transactions.get(transaction_id, None)
-        if tr is None:
-            raise Exception('No transaction found with ID=%s'%transaction_id)
-        return tr
 
+    @GTLock
     def get_data_block(self, transaction_id, seek):
         transaction = self.__get_transaction(transaction_id)
         db, next_seek = transaction.get_data_block(seek)
         return db, next_seek
 
-    def __mv_local_data_blocks(self, transaction):
-        for seek, size, data_block, foreign_name in transaction.iter_data_blocks():
-            self.__db_cache.mklink(data_block.get_name(), foreign_name)
-
-
+    @GTLock
     def update_transaction_state(self, transaction_id, status):
         transaction = self.__get_transaction(transaction_id)
         if status == Transaction.TS_FINISHED:
@@ -174,6 +184,7 @@ class TransactionsManager:
         self.__tr_log_update_state(transaction.get_id(), status)
 
 
+    @GTLock
     def update_transaction(self, transaction_id, seek, is_failed=False, foreign_name=None):
         transaction = self.__get_transaction(transaction_id)
         if transaction.get_status() == Transaction.TS_FAILED:
@@ -189,6 +200,7 @@ class TransactionsManager:
         if transaction.finished():
             self.update_transaction_state(transaction_id, Transaction.TS_FINISHED)
 
+    @GTLock
     def transfer_data_block(self, transaction_id, seek, size, data_block, foreign_name=None):
         transaction = self.__get_transaction(transaction_id)
         transaction.append_data_block(seek, size, data_block, foreign_name)
@@ -199,6 +211,17 @@ class TransactionsManager:
             self.__put_queue.put((transaction, seek))
         else:
             self.__get_queue.put((transaction, seek))
+
+    def __get_transaction(self, transaction_id):
+        tr = self.__transactions.get(transaction_id, None)
+        if tr is None:
+            raise Exception('No transaction found with ID=%s'%transaction_id)
+        return tr
+
+    def __mv_local_data_blocks(self, transaction):
+        for seek, size, data_block, foreign_name in transaction.iter_data_blocks():
+            self.__db_cache.mklink(data_block.get_name(), foreign_name)
+
 
     def __save_metadata(self, transaction):
         file_path = transaction.get_file_path()
