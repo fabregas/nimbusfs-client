@@ -436,6 +436,13 @@ class MDFile:
             print 'int error: %s'%err
             raise PathException('Path %s does not found'%path)
 
+    def exists(self, path):
+        try:
+            self.find(path)
+            return True
+        except PathException, err:
+            return False
+
     def close(self):
         self.db.close()
 

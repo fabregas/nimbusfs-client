@@ -17,6 +17,12 @@ class BadMetadata(NimbusException):
     def __init__(self, msg):
         NimbusException.__init__(self, 'Bad metadata. %s'%msg)
 
+class MDValidationError(BadMetadata):
+    pass
+
+class MDIivalid(BadMetadata):
+    pass
+
 class PathException(NimbusException):
     pass
 

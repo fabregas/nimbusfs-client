@@ -14,7 +14,7 @@ import os
 import hashlib
 import time
 from datetime import datetime, timedelta
-from constants import FILE_ITER_BLOCK_SIZE, CHUNK_SIZE, \
+from constants import FILE_ITER_BLOCK_SIZE, \
             OT_SAVE, OT_LOAD, ASYNC_WAIT_TIMEOUT
 from logger import logger
 from fabnet_gateway import FabnetGateway

@@ -15,7 +15,7 @@ import time
 import threading
 from Queue import Queue
 
-from constants import CHUNK_SIZE, FG_ERROR_TIMEOUT
+from constants import MAX_DATA_BLOCK_SIZE, FG_ERROR_TIMEOUT
 from logger import logger
 
 QUIT_JOB = None
@@ -88,11 +88,11 @@ class PutDataManager:
                 worker.join()
 
     def put_file(self, file_md, file_path):
-        full_chunks_cnt = file_md.size / CHUNK_SIZE
+        full_chunks_cnt = file_md.size /MAX_DATA_BLOCK_SIZE
         for i in xrange(full_chunks_cnt):
-            PutWorker.QUEUE.put((file_path, i*CHUNK_SIZE, CHUNK_SIZE, file_md))
+            PutWorker.QUEUE.put((file_path, i*MAX_DATA_BLOCK_SIZE, MAX_DATA_BLOCK_SIZE, file_md))
 
-        rest =  file_md.size % CHUNK_SIZE
+        rest =  file_md.size % MAX_DATA_BLOCK_SIZE
         if rest:
-            PutWorker.QUEUE.put((file_path, full_chunks_cnt*CHUNK_SIZE, rest, file_md))
+            PutWorker.QUEUE.put((file_path, full_chunks_cnt*MAX_DATA_BLOCK_SIZE, rest, file_md))
 

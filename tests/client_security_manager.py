@@ -15,7 +15,7 @@ import hashlib
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core import constants
 constants.READ_TRY_COUNT = 100
-constants.READ_SLEEP_TIME = 0.1
+constants.READ_SLEEP_TIME = 0.2
 from nimbus_client.core.data_block import DataBlock
 
 
@@ -33,7 +33,7 @@ class DBWriter(threading.Thread):
         open(self.path, 'w').close()
         self.f_len = f_len
         print 'simulating data block with size = %s ...'%f_len
-        self.db = DataBlock(self.path, self.f_len)
+        self.db = DataBlock(self.path)# self.f_len)
         self.checksum = hashlib.sha1()
 
     def run(self):
@@ -50,6 +50,7 @@ class DBWriter(threading.Thread):
             data = ''.join(random.choice(string.letters) for i in xrange(rest))
             self.checksum.update(data)
             self.db.write(data)
+        self.db.finalize()
         self.db.close()
 
     def get_checksum(self):
@@ -98,7 +99,7 @@ class TestSecManager(unittest.TestCase):
 
         self.assertEqual(decrypted, data)
 
-    def __test_inc_encode_decode(self):
+    def test_inc_encode_decode(self):
         ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
         data = ''.join(random.choice(string.letters) for i in xrange(1024))
         TEST_LEN = 10000
@@ -161,7 +162,8 @@ class TestSecManager(unittest.TestCase):
     def test_parallel_read_write(self):
         writers = []
         readers = []
-        for i in xrange(50):
+        NUM = 25
+        for i in xrange(NUM):
             path = '/tmp/parallel_read_write_db.%s'%i
             flen = random.randint(10, 10000)
             dbw = DBWriter(path, flen)
@@ -178,7 +180,6 @@ class TestSecManager(unittest.TestCase):
             writer.join()
             readers[i].join()
             self.assertEqual(writer.get_checksum(), readers[i].get_checksum(), writer.f_len)
-
 
 
 if __name__ == '__main__':

@@ -10,42 +10,103 @@ Copyright (C) 2013 Konstantin Andrusenko
 
 This module contains the implementation of DataBlock class
 """
-
+import os
 import time
 import hashlib
+import threading
 
 from nimbus_client.core.exceptions import TimeoutException
 from nimbus_client.core.constants import BUF_LEN, READ_TRY_COUNT, READ_SLEEP_TIME
 
+class DBLocksManager:
+    def __init__(self):
+        self.__locks = {}
+        self.__thrd_lock = threading.RLock()
+
+    def set(self, lock_obj):
+        self.__thrd_lock.acquire()
+        try:
+            cur_locks = self.__locks.get(lock_obj, 0)
+            self.__locks[lock_obj] = cur_locks+1
+        finally:
+            self.__thrd_lock.release()
+
+    def release(self, lock_obj):
+        self.__thrd_lock.acquire()
+        try:
+            cur_locks = self.__locks.get(lock_obj, 0)
+            if cur_locks <= 1:
+                del self.__locks[lock_obj]
+            else:
+                self.__locks[lock_obj] = cur_locks-1
+        finally:
+            self.__thrd_lock.release()
+
+    def locked(self, lock_obj):
+        self.__thrd_lock.acquire()
+        try:
+            cur_locks = self.__locks.get(lock_obj, 0)
+            if cur_locks <= 0:
+                return False
+            return True
+        finally:
+            self.__thrd_lock.release()
+
+
+
 class DataBlock:
     SECURITY_MANAGER = None
+    LOCK_MANAGER = None
 
-    def __init__(self, path, raw_len):
+    @classmethod
+    def is_locked(cls, path):
+        if cls.LOCK_MANAGER:
+            return cls.LOCK_MANAGER.locked(path)
+        return False
+
+    def __init__(self, path, raw_len=None):
         self.__path = path
         self.__checksum = hashlib.sha1()
         self.__f_obj = None
         self.__encdec = None
         self.__seek = 0
         self.__rest_str = ''
+        self.__locked = False
+        self.__raw_len = raw_len
+
         if self.SECURITY_MANAGER:
             self.__encdec = self.SECURITY_MANAGER.get_encoder(raw_len)
+            self.__expected_len = self.__encdec.get_expected_data_len()
         else:
             self.__encdec = None
-        self.__expected_len = self.__encdec.get_expected_data_len()
+            self.__expected_len = None
+
+        if self.LOCK_MANAGER:
+            self.LOCK_MANAGER.set(path)
+            self.__locked = True
+
+        if not os.path.exists(self.__path):
+            open(self.__path, 'wb').close()
 
     def __del__(self):
         self.close()
 
+    def clone(self):
+        return DataBlock(self.__path, self.__raw_len)
+
     def checksum(self):
         return self.__checksum.hexdigest()
 
-    def write(self, data):
+    def get_name(self):
+        return os.path.basename(self.__path)
+
+    def write(self, data, finalize=False):
         """Encode (if security manager is setuped) and write to file
         data block.
         NOTICE: file object will be not closed after this method call.
         """
         if self.__encdec:
-            data = self.__encdec.encrypt(data)
+            data = self.__encdec.encrypt(data, finalize)
 
         self.__checksum.update(data)
 
@@ -57,9 +118,17 @@ class DataBlock:
 
         return data
 
+    def finalize(self):
+        self.write('', finalize=True)
+        self.__f_obj.close()
+
     def close(self):
         if self.__f_obj and not self.__f_obj.closed:
             self.__f_obj.close()
+
+        if self.__locked:
+            self.LOCK_MANAGER.release(self.__path)
+            self.__locked = False
 
 
     def read_raw(self, rlen=None):
@@ -101,6 +170,8 @@ class DataBlock:
         return ((not self.__f_obj) or self.__f_obj.closed)
 
     def __read_buf(self, read_buf_len):
+        if not self.__expected_len:
+            raise RuntimeError('Unknown data block size!')
         if self.__expected_len <= self.__seek:
             return None
 

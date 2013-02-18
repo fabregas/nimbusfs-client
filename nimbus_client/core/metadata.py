@@ -4,7 +4,7 @@ import time
 import zlib
 from datetime import datetime
 
-from nimbus_exceptions import *
+from nimbus_client.core.exceptions import *
 
 MAX_B = pow(2, struct.calcsize('<B')*8)-1
 MAX_L = pow(2, struct.calcsize('<L')*8)-1
@@ -98,7 +98,7 @@ class ChunkMD(AbstractMetadataObject):
         if self.seek is None:
             raise MDValidationError('Seek is empty')
         if self.size is None:
-            raise MDValidationError('Size is empty')
+            raise MDValidationError('ChunkMD: Size is empty')
         if self.seek < 0 or self.seek > MAX_Q:
             raise MDValidationError('Seek %s is out of supported range [0..%s]'%(self.seek, MAX_Q))
         if self.size < 0 or self.size > MAX_L:
@@ -156,7 +156,7 @@ class FileMD(AbstractMetadataObject):
 
     def validate(self):
         if not self.size:
-            raise MDValidationError('Size is empty')
+            raise MDValidationError('FileMD: Size is empty')
         if self.parent_dir_id is None:
             raise MDValidationError('ParentDirID is empty')
         if not self.name:

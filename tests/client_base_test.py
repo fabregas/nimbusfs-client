@@ -16,7 +16,7 @@ from nimbus_client.core.fri.fri_base import FabnetPacketResponse
 
 logger.setLevel(logging.WARNING)
 from nimbus_client.core import constants
-constants.CHUNK_SIZE = 100000
+constants.MAX_DATA_BLOCK_SIZE = 100000
 
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.security_manager import FileBasedSecurityManager
