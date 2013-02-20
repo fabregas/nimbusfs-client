@@ -1,6 +1,23 @@
+#!/usr/bin/python
+"""
+Copyright (C) 2013 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
 
-from metadata import *
+@package nimbus_client.core.metadata_file
+@author Konstantin Andrusenko
+@date January 20, 2013
+
+This module contains the implementation of Metadata class
+"""
 import anydbm
+
+from nimbus_client.core.metadata import *
+from nimbus_client.core.journal import Journal
+from nimbus_client.core.base_safe_object import LockObject
+
+MDLock = LockObject()
+
 
 class Key:
     KEY_STRUCT = '<QiB'
@@ -166,18 +183,35 @@ class MDFile:
     IT_DIRECTORY =  0x0f
     IT_FILE = 0x0e
 
-    def __init__(self, md_file_path='md.cache'):
+    def __init__(self, md_file_path='md.cache', journal=None):
         self.db =  anydbm.open(md_file_path, 'c')
-        self.__last_item_id = 0
+        self.__last_item_id = self.__get_db_val('last_item_id', 0)
+        self.__last_journal_rec_id = self.__get_db_val('last_journal_rec_id', 0)
         self.__root_id = 0
+        self.__journal = journal
 
-        #############FIXME#################
-        for key in self.db.keys():
-            k = Key.from_dump(key)
-            if k.key_type == Key.KT_ITEM:
-                if k.parent_id > self.__last_item_id:
-                    self.__last_item_id = k.parent_id
-        ###################################
+        self.__init_from_journal(self.__last_journal_rec_id)
+
+    def __get_db_val(self, key, default=None):
+        if self.db.has_key(key):
+            return self.db[key]
+        return default
+
+    def __init_from_journal(self, start_rec_id):
+        if self.__journal:
+            for record_id, operation_type, item_md in self.__journal.iter(start_rec_id):
+                if operation_type == Journal.OT_APPEND:
+                    self.__last_item_id = item_md.item_id 
+                    try:
+                        self.append(None, item_md)
+                    except AlreadyExistsException, err:
+                        pass
+                elif operation_type == Journal.OT_UPDATE:
+                    self.update(item_md)
+                elif operation_type == Journal.OT_REMOVE:
+                    item_md = self.__get_item_md(item_md)
+                    self.remove(item_md)
+                self.__last_journal_rec_id = record_id
 
     def __hash(self, str_data):
         return zlib.adler32(str_data)
@@ -312,12 +346,12 @@ class MDFile:
         if addr_st_raw:
             addr_items = AddressItems.from_dump(addr_st_raw)
             for addr_item in addr_items:
-                if addr_item.item_id == dir_md.dir_id:
+                if addr_item.item_id == dir_md.item_id:
                     addr_item.append_addr(item_id)
                     break
         else:
             addr_items = AddressItems()
-            addr_item = ChildAddrList(dir_md.dir_id)
+            addr_item = ChildAddrList(dir_md.item_id)
             addr_item.append_addr(item_id)
             addr_items.append(addr_item)
         
@@ -330,7 +364,7 @@ class MDFile:
             raise Exception('No address record found for %s'%dir_md)
         addr_items = AddressItems.from_dump(addr_st_raw)
         for addr_item in addr_items:
-            if addr_item.item_id == dir_md.dir_id:
+            if addr_item.item_id == dir_md.item_id:
                 addr_item.remove(item_id)
         self.__set_raw_value(par_a_key, addr_items.dump())
         
@@ -347,14 +381,19 @@ class MDFile:
 
         return False
 
+    def __update_journal(self, op_type, item_md):
+        if self.__journal:
+            self.__last_journal_rec_id = self.__journal.append(op_type, item_md)
+
+    @MDLock
     def append(self, path, item_md):
         self.__last_item_id += 1
         dir_md = self.find(path)
-        item_md.dir_id = self.__last_item_id
-        item_md.parent_dir_id = dir_md.dir_id
+        item_md.item_id = self.__last_item_id
+        item_md.parent_dir_id = dir_md.item_id
 
         i_key = Key(Key.KT_ITEM, self.__last_item_id)
-        a_key = Key(Key.KT_ADDR, dir_md.dir_id, self.__hash(item_md.name))
+        a_key = Key(Key.KT_ADDR, dir_md.item_id, self.__hash(item_md.name))
         par_a_key = Key(Key.KT_ADDR, dir_md.parent_dir_id, self.__hash(dir_md.name))
 
         if self.__exists(item_md):
@@ -366,6 +405,9 @@ class MDFile:
         self.__update_addr(a_key, self.__last_item_id)
         self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
 
+        self.__update_journal(Journal.OT_APPEND, item_md)
+
+    @MDLock
     def listdir(self, path):
         dir_md = self.find(path)
         par_a_key = Key(Key.KT_ADDR, dir_md.parent_dir_id, self.__hash(dir_md.name))
@@ -374,11 +416,12 @@ class MDFile:
         if addr_st_raw:
             addr_items = AddressItems.from_dump(addr_st_raw)
             for addr_item in addr_items:
-                if addr_item.item_id == dir_md.dir_id:
+                if addr_item.item_id == dir_md.item_id:
                     for i_id in addr_item:
                         ret_lst.append(self.__get_item_md(i_id))
         return ret_lst
 
+    @MDLock
     def update(self, item_md):
         if item_md.item_id is None:
             raise Exception('Item ID does not found for item {%s}'%item_md)
@@ -389,6 +432,9 @@ class MDFile:
         i_key = Key(Key.KT_ITEM, item_md.item_id)
         self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
 
+        self.__update_journal(Journal.OT_UPDATE, item_md)
+
+    @MDLock
     def remove(self, item_md):
         if item_md.item_id is None:
             raise Exception('Item ID does not found for item {%s}'%item_md)
@@ -403,7 +449,7 @@ class MDFile:
             if addr_st_raw:
                 addr_items = AddressItems.from_dump(addr_st_raw)
                 for addr_item in addr_items:
-                    if addr_item.item_id == item_md.dir_id:
+                    if addr_item.item_id == item_md.item_id:
                         if len(addr_item):
                             raise NotEmptyException('Item "%s" has children items!'%item_md)
                         break
@@ -418,6 +464,9 @@ class MDFile:
         #remove item metadata
         self.__remove_key(i_key)
 
+        self.__update_journal(Journal.OT_REMOVE, item_md)
+
+    @MDLock
     def find(self, path):
         items = path.split('/')
         cur_id = self.__root_id
@@ -430,7 +479,7 @@ class MDFile:
                 cur_id = self.__get_child_id(cur_id, item_name)
 
             if cur_id == self.__root_id:
-                return DirectoryMD(dir_id=0, parent_dir_id=0, name='')
+                return DirectoryMD(item_id=0, parent_dir_id=0, name='')
             return self.__get_item_md(cur_id)
         except PathException, err:
             print 'int error: %s'%err
@@ -443,9 +492,13 @@ class MDFile:
         except PathException, err:
             return False
 
+    @MDLock
     def close(self):
+        self.db['last_journal_rec_id'] = self.__last_journal_rec_id
+        self.db['last_item_id'] = self.__last_item_id
         self.db.close()
 
+    @MDLock
     def _print(self):
         addr_keys = []
         item_keys = []
@@ -470,18 +523,4 @@ class MDFile:
 
 
 
-'''
-md = MD()
-dir_md = md.mkdir('test')
-print dir_md
-md.append('/', dir_md)
-md.close()
-dir_md = MD().find('/test')
-print dir_md
-dir_md.name = 'test_1'
-MD().update(dir_md)
-dir_md = MD().find('/test_1')
-print dir_md
-MD()._print()
-print 'list of / : ', MD().listdir('/')
-'''
+

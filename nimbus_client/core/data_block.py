@@ -64,7 +64,7 @@ class DataBlock:
             return cls.LOCK_MANAGER.locked(path)
         return False
 
-    def __init__(self, path, raw_len=None):
+    def __init__(self, path, raw_len=None, actsize=False):
         self.__path = path
         self.__checksum = hashlib.sha1()
         self.__f_obj = None
@@ -75,6 +75,9 @@ class DataBlock:
         self.__raw_len = raw_len
         self.__lock = threading.RLock()
 
+        if not os.path.exists(self.__path):
+            open(self.__path, 'wb').close()
+
         if self.SECURITY_MANAGER:
             self.__encdec = self.SECURITY_MANAGER.get_encoder(raw_len)
             self.__expected_len = self.__encdec.get_expected_data_len()
@@ -82,12 +85,12 @@ class DataBlock:
             self.__encdec = None
             self.__expected_len = None
 
+        if actsize:
+            self.__expected_len = os.path.getsize(self.__path)
+
         if self.LOCK_MANAGER:
             self.LOCK_MANAGER.set(path)
             self.__locked = True
-
-        if not os.path.exists(self.__path):
-            open(self.__path, 'wb').close()
 
     def get_progress(self):
         self.__lock.acquire()
@@ -108,17 +111,17 @@ class DataBlock:
     def get_name(self):
         return os.path.basename(self.__path)
 
-    def write(self, data, finalize=False):
+    def write(self, data, finalize=False, encrypt=True):
         """Encode (if security manager is setuped) and write to file
         data block.
         NOTICE: file object will be not closed after this method call.
         """
-        if self.__encdec:
+        if encrypt and self.__encdec:
             data = self.__encdec.encrypt(data, finalize)
 
         self.__checksum.update(data)
 
-        if not self.__f_obj:
+        if self.__is_closed():
             self.__f_obj = open(self.__path, 'ab')
 
         self.__f_obj.write(data)

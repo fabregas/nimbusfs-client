@@ -14,6 +14,11 @@ import hashlib
 
 from nimbus_client.core.metadata import *
 from nimbus_client.core.metadata_file import *
+from nimbus_client.core.security_manager import FileBasedSecurityManager
+from nimbus_client.core.data_block import DataBlock
+
+CLIENT_KS_PATH = './tests/cert/test_client_ks.zip'
+PASSWD = 'qwerty123'
 
 
 class TestMetadata(unittest.TestCase):
@@ -105,7 +110,7 @@ class TestMetadata(unittest.TestCase):
         size = 23213432532523
         parent_dir_id= 23423452
         replica_count=4
-        file_md = FileMD(name=fname, size=size, replica_count=replica_count, parent_dir_id=parent_dir_id)
+        file_md = FileMD(item_id=234,name=fname, size=size, replica_count=replica_count, parent_dir_id=parent_dir_id)
         file_md.append_chunk(chunk)
         dump = file_md.dump()
 
@@ -127,27 +132,27 @@ class TestMetadata(unittest.TestCase):
             dir_md.dump()
 
         with self.assertRaises(MDValidationError):
-            dir_md = DirectoryMD(name='test', dir_id=pow(2,35), parent_dir_id=0)
+            dir_md = DirectoryMD(name='test', item_id=pow(2,35), parent_dir_id=0)
             dir_md.dump()
 
         with self.assertRaises(MDValidationError):
-            dir_md = DirectoryMD(name='test', dir_id=54353, parent_dir_id=pow(2,36))
+            dir_md = DirectoryMD(name='test', item_id=54353, parent_dir_id=pow(2,36))
             dir_md.dump()
 
         with self.assertRaises(MDValidationError):
-            dir_md = DirectoryMD(name='test'*200, dir_id=54353, parent_dir_id=325)
+            dir_md = DirectoryMD(name='test'*200, item_id=54353, parent_dir_id=325)
             dir_md.dump()
 
 
         dir_name = 'Test directory'
         dir_id = 235532
         parent_dir_id = 345
-        dir_md = DirectoryMD(name=dir_name, dir_id=dir_id, parent_dir_id=parent_dir_id)
+        dir_md = DirectoryMD(name=dir_name, item_id=dir_id, parent_dir_id=parent_dir_id)
         dump = dir_md.dump()
         r_dir_md = DirectoryMD()
         r_dir_md.load(dump)
         self.assertEqual(r_dir_md.name, dir_name)
-        self.assertEqual(r_dir_md.dir_id, dir_id)
+        self.assertEqual(r_dir_md.item_id, dir_id)
         self.assertEqual(r_dir_md.parent_dir_id, parent_dir_id)
         self.assertTrue(r_dir_md.create_date > 0)
         self.assertTrue(r_dir_md.last_modify_date > 0)
@@ -221,7 +226,7 @@ class TestMetadata(unittest.TestCase):
         dir_md = md_file.find('/test_dir/subdir')
         f_md = md_file.find('/test_dir/my_file.txt')
         f_md.name = 'my_updated_file.txt'
-        f_md.parent_dir_id = dir_md.dir_id
+        f_md.parent_dir_id = dir_md.item_id
         md_file.update(f_md)
 
         with self.assertRaises(PathException):
@@ -249,6 +254,47 @@ class TestMetadata(unittest.TestCase):
         md_file.append('/test_dir/', DirectoryMD(name='subdir'))
         md_file.find('/test_dir/subdir')
         
+
+    def test_journal(self):
+        ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
+        DataBlock.SECURITY_MANAGER = ks
+        os.system('rm /tmp/test_nimbusfs_journal')
+        journal = Journal('%040x'%23453, '/tmp/test_nimbusfs_journal', MockedFabnetGateway())
+
+        dir_name = 'Test directory'
+        dir_id = 235532
+        parent_dir_id = 345
+        dir_md = DirectoryMD(name=dir_name, item_id=dir_id, parent_dir_id=parent_dir_id)
+        journal.append(Journal.OT_APPEND, dir_md)
+
+        for record_id, operation_type, item_md in journal.iter():
+            self.assertEqual(record_id, 1)
+            self.assertEqual(operation_type, Journal.OT_APPEND)
+            self.assertEqual(item_md.item_id, dir_id)
+            self.assertEqual(item_md.parent_dir_id, parent_dir_id)
+            self.assertEqual(item_md.name, dir_name)
+
+        dir_name = 'new directory name'
+        dir_md.dir_name = dir_name
+        journal.append(Journal.OT_UPDATE, dir_md)
+        for record_id, operation_type, item_md in journal.iter(2):
+            self.assertEqual(record_id, 2)
+            self.assertEqual(operation_type, Journal.OT_UPDATE)
+            self.assertEqual(item_md.item_id, dir_id)
+            self.assertEqual(item_md.parent_dir_id, parent_dir_id)
+            self.assertEqual(item_md.name, dir_name)
+
+        journal.append(Journal.OT_REMOVE, dir_md)
+
+
+class MockedFabnetGateway:
+    def get(self, primary_key, replica_count, data_block):
+        if primary_key != '%040x'%23453:
+            raise Exception('unknown metadata journal key')
+
+    def put(self, data_block, key):
+        if key != '%040x'%23453:
+            raise Exception('unknown metadata journal key')
 
 
 if __name__ == '__main__':

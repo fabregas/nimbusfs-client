@@ -30,17 +30,22 @@ class Transaction:
     TT_WRITE = 1
     TT_READ = 2
 
-    def __init__(self, transaction_type, file_path):
+    def __init__(self, transaction_type, file_path, replica_count):
         if transaction_type not in (self.TT_READ, self.TT_WRITE):
             raise RuntimeError('Unknown transaction type: %s'%transaction_type)
 
         self.__start_dt = datetime.now()
+        self.__replica_count = replica_count
         self.__transaction_id = hashlib.sha1(str(self.__start_dt)).hexdigest()
         self.__transaction_type = transaction_type
         self.__status = Transaction.TS_INIT
         self.__file_path = file_path
         self.__data_blocks_info = {}
 
+    @TLock
+    def get_replica_count(self):
+        return self.__replica_count
+    
     @TLock
     def get_id(self):
         return self.__transaction_id
@@ -147,20 +152,31 @@ class TransactionsManager:
 
     @GTLock
     def start_transaction(self, transaction_type, file_path):
-        transaction = Transaction(transaction_type, file_path)
-        transaction_id = transaction.get_id()
-        self.__transactions[transaction_id] = transaction
-
-        if transaction.is_downloading():
+        if transaction_type == Transaction.TT_READ:
             file_md = self.__metadata.find(file_path)
             if not file_md.is_file():
                 raise RuntimeError('No file found at %s'%file_path)
+
+            transaction = Transaction(transaction_type, file_path, file_md.replica_count)
+            transaction_id = transaction.get_id()
+            self.__transactions[transaction_id] = transaction
+
             for chunk in file_md.chunks:
                 db_path = self.__db_cache.get_cache_path(chunk.key)
                 if os.path.exists(db_path):
                     transaction.append_data_block(chunk.seek, chunk.size, self.new_data_block(chunk.size, chunk.key), chunk.key)
                 else:
                     self.transfer_data_block(transaction_id, chunk.seek, chunk.size, self.new_data_block(chunk.size, chunk.key), chunk.key)
+        else:
+            save_path, file_name = os.path.split(file_path)
+            parent_dir = self.__metadata.find(save_path)
+            if (not parent_dir) or (not parent_dir.is_dir()):
+                raise Exception('Directory "%s" does not found!'%save_path)
+
+            replica_count = 2 #FIXME ... replica_count = parent_dir.replica_count
+            transaction = Transaction(transaction_type, file_path, replica_count)
+            transaction_id = transaction.get_id()
+            self.__transactions[transaction_id] = transaction
 
         self.__tr_log_start_transaction(transaction.get_id(), transaction_type, file_path)
         return transaction_id
@@ -226,17 +242,14 @@ class TransactionsManager:
     def __save_metadata(self, transaction):
         file_path = transaction.get_file_path()
         save_path, file_name = os.path.split(file_path)
-        parent_dir = self.__metadata.find(save_path)
-        if (not parent_dir) or (not parent_dir.is_dir()):
-            raise Exception('Directory "%s" does not found!'%save_path)
 
-        replica_count = 2 #FIXME ... replica_count = parent_dir.replica_count
         file_md = FileMD(name=file_name, size=transaction.total_size(), \
-                    replica_count=replica_count)
+                    replica_count=transaction.get_replica_count())
 
         for seek, size, data_block, block_hash in transaction.iter_data_blocks():
             chunk = ChunkMD(checksum=data_block.checksum(), size=size, seek=seek, key=block_hash)
             file_md.append_chunk(chunk)
+
         self.__metadata.append(save_path, file_md)
 
 

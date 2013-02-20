@@ -29,7 +29,7 @@ class FabnetGateway:
         ckey = self.security_manager.get_client_cert_key()
         self.fri_client = FriClient(bool(ckey), cert, ckey)
 
-    def put(self, data, key=None, replica_count=DEFAULT_REPLICA_COUNT, wait_writes_count=2, allow_rewrite=True):
+    def put(self, data_block, key=None, replica_count=DEFAULT_REPLICA_COUNT, wait_writes_count=2, allow_rewrite=True):
         packet = FabnetPacketRequest(method='PutKeysInfo', parameters={'key': key}, sync=True)
         resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
@@ -41,29 +41,29 @@ class FabnetGateway:
         key_info = resp.ret_parameters['key_info']
         key, node_addr = key_info
 
-        #prepare data for put...
-        source_checksum =  hashlib.sha1(data).hexdigest()
-        data = self.security_manager.encrypt(data)
-        checksum =  hashlib.sha1(data).hexdigest()
-
-        params = {'key':key, 'checksum': checksum, 'replica_count':replica_count, \
+        params = {'key':key, 'replica_count':replica_count, \
                     'wait_writes_count': wait_writes_count}
         packet = FabnetPacketRequest(method='ClientPutData', parameters=params, \
-                        binary_data=RamBasedBinaryData(data, FILE_ITER_BLOCK_SIZE), sync=True)
+                        binary_data=ChunkedBinaryData(data_block, FILE_ITER_BLOCK_SIZE), sync=True)
 
         resp = self.fri_client.call_sync(node_addr, packet, FRI_CLIENT_TIMEOUT)
-        if resp.ret_code != 0:
-            logger.error('ClientPutData error: %s'%resp.ret_message)
+        try:
+            if resp.ret_code != 0:
+                raise Exception('ClientPutData error: %s'%resp.ret_message)
+
+            if not resp.ret_parameters.has_key('key'):
+                raise Exception('put data block error: no data key found in response message "%s"'%resp)
+
+            primary_key = resp.ret_parameters['key']
+            checksum = resp.ret_parameters['checksum']
+            if checksum != data_block.checksum():
+                raise Exception('Invalid data block checksum!')
+        except Exception, err)
+            logger.error(err)
             if not allow_rewrite:
                 self.remove(key, replica_count)
-            raise Exception('ClientPutData error: %s'%resp.ret_message)
 
-        if not resp.ret_parameters.has_key('key'):
-            raise Exception('put data block error: no data key found in response message "%s"'%resp)
-
-        primary_key = resp.ret_parameters['key']
-
-        return primary_key, source_checksum
+        return primary_key
 
     def remove(self, key, replica_count=DEFAULT_REPLICA_COUNT):
         params = {'key':key, 'replica_count':replica_count}
@@ -74,7 +74,7 @@ class FabnetGateway:
             return False
         return True
 
-    def get(self, primary_key, replica_count=DEFAULT_REPLICA_COUNT):
+    def get(self, primary_key, replica_count, data_block):
         packet = FabnetPacketRequest(method='GetKeysInfo', parameters={'key': primary_key, 'replica_count': replica_count}, sync=True)
         resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
@@ -92,13 +92,16 @@ class FabnetGateway:
                 logger.error('Get data block error for key %s from node %s: %s'%(key, node_addr, resp.ret_message))
             elif resp.ret_code == 0:
                 exp_checksum = resp.ret_parameters['checksum']
-                data = resp.binary_data.data()
-                checksum =  hashlib.sha1(data).hexdigest()
-                if exp_checksum != checksum:
+                while True:
+                    chunk = resp.binary_data.get_next_chunk()
+                    if not chunk:
+                        break
+                    data_block.write(chunk, encrypt=False)
+
+                if exp_checksum != data_block.checksum():
                     logger.error('Currupted data block for key %s from node %s'%(primary_key, node_addr))
                     continue
-                data = self.security_manager.decrypt(data)
-                return data
+                return data_block
 
         return None
 

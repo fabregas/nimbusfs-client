@@ -48,6 +48,9 @@ class SafeDict:
 
 
 class AbstractMetadataObject(object):
+    #metadata objects labels
+    MOL_FILE = 1
+    MOL_DIR = 2
     def __init__(self, dumped_md=None, **kw_args):
         self._args = kw_args
         if dumped_md:
@@ -86,6 +89,18 @@ class AbstractMetadataObject(object):
 
     def load(self, dumped):
         raise Exception('Not implemented')
+
+    @classmethod
+    def load_md(cls, dumped):
+        md_obj_label = ord(dumped[0])
+        if md_obj_label == cls.MOL_FILE:
+            md = FileMD()
+        elif md_obj_label == cls.MOL_DIR:
+            md = DirectoryMD()
+        else:
+            raise Exception('Unknown metadata label "%s"'%md_obj_label)
+        md.load(dumped)
+        return md
 
 
 class ChunkMD(AbstractMetadataObject):
@@ -143,7 +158,7 @@ class ChunkMD(AbstractMetadataObject):
 
 
 class FileMD(AbstractMetadataObject):
-    HDR_STRUCT = '<BQBLQ'
+    HDR_STRUCT = '<BBLQBLQ'
     HDR_LEN = struct.calcsize(HDR_STRUCT)
 
     @classmethod
@@ -164,6 +179,8 @@ class FileMD(AbstractMetadataObject):
         if not self.chunks:
             raise MDValidationError('Chunks is empty')
 
+        if self.item_id < 0 or self.item_id > MAX_L:
+            raise MDValidationError('File id %s is out of supported range [0..%s]'%(self.item_id, MAX_L))
         if self.replica_count < 0 or self.replica_count > MAX_B:
             raise MDValidationError('Replica count %s is out of supported range [0..%s]'%(self.seek, MAX_B))
         if self.size < 0 or self.size > MAX_Q:
@@ -186,7 +203,8 @@ class FileMD(AbstractMetadataObject):
         if fname_len < 1 or fname_len > MAX_B:
             raise MDValidationError('File name length should be in range [1..%s], but "%s" occured'%(MAX_B, fname))
 
-        dump = struct.pack(self.HDR_STRUCT, fname_len, self.size, self.replica_count, self.parent_dir_id, self.create_date)
+        dump = struct.pack(self.HDR_STRUCT, AbstractMetadataObject.MOL_FILE, fname_len, self.item_id, \
+                self.size, self.replica_count, self.parent_dir_id, self.create_date)
         dump += fname
         for chunk in self.chunks:
             ch_dump = chunk.dump(is_local)
@@ -197,7 +215,7 @@ class FileMD(AbstractMetadataObject):
         if len(dumped) < self.HDR_LEN:
             raise MDIivalid('Invalid file MD dump size %s'%len(dumped))
 
-        f_name_len, self.size, self.replica_count, \
+        file_label, f_name_len, self.item_id, self.size, self.replica_count, \
             self.parent_dir_id, self.create_date = \
             struct.unpack(self.HDR_STRUCT, dumped[:self.HDR_LEN])
 
@@ -267,7 +285,7 @@ class DirItem:
 
 
 class DirectoryMD(AbstractMetadataObject):
-    HDR_STRUCT = '<BLLQQ'
+    HDR_STRUCT = '<BBLLQQ'
     HDR_LEN = struct.calcsize(HDR_STRUCT)
     ITEM_HDR_STRUCT = '<IB'
     ITEM_HDR_LEN = struct.calcsize(ITEM_HDR_STRUCT)
@@ -297,13 +315,13 @@ class DirectoryMD(AbstractMetadataObject):
     def validate(self):
         if not self.name:
             raise MDValidationError('DirectoryName is empty')
-        if not self.dir_id:
+        if not self.item_id:
             raise MDValidationError('DirID is empty')
         if self.parent_dir_id is None:
             raise MDValidationError('ParentDirID is empty')
 
-        if self.dir_id < 0 or self.dir_id > MAX_L:
-            raise MDValidationError('Directory id %s is out of supported range [0..%s]'%(self.dir_id, MAX_L))
+        if self.item_id < 0 or self.item_id > MAX_L:
+            raise MDValidationError('Directory id %s is out of supported range [0..%s]'%(self.item_id, MAX_L))
         if self.parent_dir_id < 0 or self.parent_dir_id > MAX_L:
             raise MDValidationError('Directory parent id %s is out of supported range [0..%s]'%(self.parent_dir_id, MAX_L))
 
@@ -313,7 +331,8 @@ class DirectoryMD(AbstractMetadataObject):
         dname_len = len(dname)
         if dname_len < 1 or dname_len > MAX_B:
             raise MDValidationError('Directory name length should be in range [1..%s], but "%s" occured'%(MAX_B, dname))
-        dump = struct.pack(self.HDR_STRUCT, dname_len, self.dir_id, self.parent_dir_id, self.create_date, self.last_modify_date)
+        dump = struct.pack(self.HDR_STRUCT, AbstractMetadataObject.MOL_DIR, dname_len, self.item_id, \
+                self.parent_dir_id, self.create_date, self.last_modify_date)
         dump += dname
 
         if recursive:
@@ -328,7 +347,7 @@ class DirectoryMD(AbstractMetadataObject):
         if len(dumped) < self.HDR_LEN:
             raise MDIivalid('Invalid directory MD dump size %s'%len(dumped))
 
-        d_name_len, self.dir_id, self.parent_dir_id, \
+        dir_label, d_name_len, self.item_id, self.parent_dir_id, \
             self.create_date, self.last_modify_date = \
             struct.unpack(self.HDR_STRUCT, dumped[:self.HDR_LEN])
         d_name = dumped[self.HDR_LEN: self.HDR_LEN+d_name_len]
@@ -382,7 +401,7 @@ class DirectoryMD(AbstractMetadataObject):
             item_o = DirItem(item_md)
             self.content[f_hash] = item_o
 
-        item_md.parent_dir_id = self.dir_id
+        item_md.parent_dir_id = self.item_id
         self.__update_modify_date()
 
     def empty(self):
@@ -452,7 +471,7 @@ class Metadata:
     def __apply_j_item(self, j_oper, j_item):
         if j_oper == MO_APPEND:
             if j_item.is_dir():
-                self.__last_dir_id = j_item.dir_id
+                self.__last_dir_id = j_item.item_id
 
             self.append(j_item)
         elif j_oper == MO_UPDATE:
