@@ -86,11 +86,14 @@ class DataBlock:
             self.__expected_len = None
 
         if actsize:
-            self.__expected_len = os.path.getsize(self.__path)
+            self.__expected_len = self.get_actual_size()
 
         if self.LOCK_MANAGER:
             self.LOCK_MANAGER.set(path)
             self.__locked = True
+
+    def get_actual_size(self):
+        return os.path.getsize(self.__path)
 
     def get_progress(self):
         self.__lock.acquire()
@@ -136,6 +139,9 @@ class DataBlock:
     def finalize(self):
         self.write('', finalize=True)
         self.__f_obj.close()
+        self.__expected_len = self.__seek
+        self.__seek = 0
+        self.__checksum = hashlib.sha1()
 
     def close(self):
         if self.__f_obj and not self.__f_obj.closed:
@@ -185,7 +191,7 @@ class DataBlock:
         return ((not self.__f_obj) or self.__f_obj.closed)
 
     def __read_buf(self, read_buf_len):
-        if not self.__expected_len:
+        if self.__expected_len is None:
             raise RuntimeError('Unknown data block size!')
         if self.__expected_len <= self.__get_seek():
             return None

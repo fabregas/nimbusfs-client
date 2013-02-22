@@ -23,6 +23,7 @@ class MDValidationError(BadMetadata):
 class MDIivalid(BadMetadata):
     pass
 
+
 class PathException(NimbusException):
     pass
 
@@ -48,4 +49,10 @@ class LocalPathException(NimbusException):
     pass
 
 class TimeoutException(NimbusException):
+    pass
+
+class NoJournalFoundException(NimbusException):
+    pass
+
+class ClosedFileException(NimbusException):
     pass

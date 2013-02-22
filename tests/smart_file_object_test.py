@@ -40,13 +40,13 @@ class TestSmartFileObject(unittest.TestCase):
         ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
         DataBlock.SECURITY_MANAGER = ks
         DataBlock.LOCK_MANAGER = DBLocksManager()
-        p_queue = Queue()
-        g_queue = Queue()
         os.system('rm -rf /tmp/dynamic_cache/*')
-        os.system('rm /tmp/test_tr.log')
-        os.system('rm /tmp/test_md.bin')
+        os.system('rm -rf /tmp/static_cache/*')
+
         db_cache = DataBlockCache('/tmp')
-        tr_manager = TransactionsManager(MDFile('/tmp/test_md.bin'), db_cache, '/tmp/test_tr.log', p_queue, g_queue)
+        tr_manager = TransactionsManager(MDFile(db_cache.get_static_cache_path('test_md.bin')), db_cache)
+        p_queue = tr_manager.get_upload_queue()
+        g_queue = tr_manager.get_download_queue()
         SmartFileObject.setup_transaction_manager(tr_manager)
 
         test_file = SmartFileObject('/test.file')

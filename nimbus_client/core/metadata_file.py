@@ -175,7 +175,7 @@ class AddressItems:
 
 
 
-class MDFile:
+class MetadataFile:
     ITEM_HDR_STRUCT = '<IIB'
     ITEM_HDR_SIZE = struct.calcsize(ITEM_HDR_STRUCT)
     ITEM_PADDING_SIZE = 128
@@ -185,10 +185,11 @@ class MDFile:
 
     def __init__(self, md_file_path='md.cache', journal=None):
         self.db =  anydbm.open(md_file_path, 'c')
-        self.__last_item_id = self.__get_db_val('last_item_id', 0)
-        self.__last_journal_rec_id = self.__get_db_val('last_journal_rec_id', 0)
+        self.__last_item_id = long(self.__get_db_val('last_item_id', 0))
+        self.__last_journal_rec_id = long(self.__get_db_val('last_journal_rec_id', 0))
         self.__root_id = 0
         self.__journal = journal
+        self.__valid = False
 
         self.__init_from_journal(self.__last_journal_rec_id)
 
@@ -212,6 +213,7 @@ class MDFile:
                     item_md = self.__get_item_md(item_md)
                     self.remove(item_md)
                 self.__last_journal_rec_id = record_id
+        self.__valid = True
 
     def __hash(self, str_data):
         return zlib.adler32(str_data)
@@ -382,30 +384,8 @@ class MDFile:
         return False
 
     def __update_journal(self, op_type, item_md):
-        if self.__journal:
+        if self.__journal and self.__valid:
             self.__last_journal_rec_id = self.__journal.append(op_type, item_md)
-
-    @MDLock
-    def append(self, path, item_md):
-        self.__last_item_id += 1
-        dir_md = self.find(path)
-        item_md.item_id = self.__last_item_id
-        item_md.parent_dir_id = dir_md.item_id
-
-        i_key = Key(Key.KT_ITEM, self.__last_item_id)
-        a_key = Key(Key.KT_ADDR, dir_md.item_id, self.__hash(item_md.name))
-        par_a_key = Key(Key.KT_ADDR, dir_md.parent_dir_id, self.__hash(dir_md.name))
-
-        if self.__exists(item_md):
-            raise AlreadyExistsException('Item "%s" alredy exists in %s'%(item_md.name, path))
-        if self.__key_exists(i_key):
-            raise AlreadyExistsException('Item with ID=%s is already exists!'%self.__last_item_id)
-
-        self.__append_addr_child(dir_md, self.__last_item_id)
-        self.__update_addr(a_key, self.__last_item_id)
-        self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
-
-        self.__update_journal(Journal.OT_APPEND, item_md)
 
     @MDLock
     def listdir(self, path):
@@ -422,6 +402,48 @@ class MDFile:
         return ret_lst
 
     @MDLock
+    def append(self, path, item_md):
+        self.__last_item_id += 1
+        if path:
+            dir_md = self.find(path)
+        else:
+            if item_md.parent_dir_id is None:
+                raise Exception('Parent ID does not found for item {%s}'%item_md)
+
+            if item_md.item_id == 0:
+                #append root dir to fs
+                i_key = Key(Key.KT_ITEM, 0)
+                self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
+                return
+
+            if item_md.parent_dir_id:
+                dir_md = self.__get_item_md(item_md.parent_dir_id)
+
+
+        item_md.item_id = self.__last_item_id
+        item_md.parent_dir_id = dir_md.item_id
+
+        i_key = Key(Key.KT_ITEM, self.__last_item_id)
+        a_key = Key(Key.KT_ADDR, dir_md.item_id, self.__hash(item_md.name))
+        par_a_key = Key(Key.KT_ADDR, dir_md.parent_dir_id, self.__hash(dir_md.name))
+
+        if self.__exists(item_md):
+            raise AlreadyExistsException('Item "%s" alredy exists in %s'%(item_md.name, path))
+        if self.__key_exists(i_key):
+            raise AlreadyExistsException('Item with ID=%s is already exists!'%self.__last_item_id)
+
+        self.__append_addr_child(dir_md, self.__last_item_id)
+        self.__update_addr(a_key, self.__last_item_id)
+        self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
+
+        if dir_md.item_id > 0:
+            i_key = Key(Key.KT_ITEM, dir_md.item_id)
+            dir_md.update_datetime()
+            self.__set_raw_value(i_key, self.__do_item_raw_padding(dir_md))
+
+        self.__update_journal(Journal.OT_APPEND, item_md)
+
+    @MDLock
     def update(self, item_md):
         if item_md.item_id is None:
             raise Exception('Item ID does not found for item {%s}'%item_md)
@@ -430,6 +452,8 @@ class MDFile:
         old_md = self.__get_item_md(item_md.item_id)
         self.__update_addr_item(old_md, item_md)
         i_key = Key(Key.KT_ITEM, item_md.item_id)
+        if item_md.is_dir():
+            dir_md.update_datetime()
         self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
 
         self.__update_journal(Journal.OT_UPDATE, item_md)
@@ -477,13 +501,9 @@ class MDFile:
                     continue
 
                 cur_id = self.__get_child_id(cur_id, item_name)
-
-            if cur_id == self.__root_id:
-                return DirectoryMD(item_id=0, parent_dir_id=0, name='')
             return self.__get_item_md(cur_id)
         except PathException, err:
-            print 'int error: %s'%err
-            raise PathException('Path %s does not found'%path)
+            raise PathException('Path %s does not found (Internal: %s)'%(path, err))
 
     def exists(self, path):
         try:
@@ -494,8 +514,8 @@ class MDFile:
 
     @MDLock
     def close(self):
-        self.db['last_journal_rec_id'] = self.__last_journal_rec_id
-        self.db['last_item_id'] = self.__last_item_id
+        self.db['last_journal_rec_id'] = str(self.__last_journal_rec_id)
+        self.db['last_item_id'] = str(self.__last_item_id)
         self.db.close()
 
     @MDLock

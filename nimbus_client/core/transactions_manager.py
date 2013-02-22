@@ -13,10 +13,13 @@ This module contains the implementation of Transaction and TransactionsManager c
 import os
 import hashlib
 from datetime import datetime
+from Queue import Queue
 
 from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.metadata import FileMD, ChunkMD
 from nimbus_client.core.base_safe_object import LockObject
+from nimbus_client.core.exceptions import AlreadyExistsException, \
+                                NotDirectoryException, PathException
 
 GTLock = LockObject()
 TLock = LockObject()
@@ -41,6 +44,14 @@ class Transaction:
         self.__status = Transaction.TS_INIT
         self.__file_path = file_path
         self.__data_blocks_info = {}
+
+    def __repr__(self):
+        return '<Transaction[%s] %s %s>'%(self.__transaction_id, \
+                'UPLOAD' if self.__transaction_type==self.TT_WRITE else 'DOWNLOAD',\
+                self.__file_path)
+
+    def get_start_datetime(self):
+        return self.__start_dt
 
     @TLock
     def get_replica_count(self):
@@ -72,6 +83,16 @@ class Transaction:
         for size,_,_,_ in self.__data_blocks_info.values():
             t_size += size
         return t_size
+
+    @TLock
+    def progress_perc(self):
+        p_size = 0
+        t_size = 0
+        for _,data_block,_,_ in self.__data_blocks_info.values():
+            seek, exp_s = data_block.get_progress()
+            p_size += seek
+            t_size += exp_s
+        return (p_size * 100.) / t_size
 
     @TLock
     def append_data_block(self, seek, size, data_block, foreign_name=None):
@@ -135,14 +156,20 @@ class Transaction:
 
 
 class TransactionsManager:
-    def __init__(self, metadata, db_cache, transfer_log_path, put_queue, get_queue):
+    def __init__(self, metadata, db_cache):
         self.__metadata = metadata
         self.__db_cache = db_cache
-        self.__put_queue = put_queue
-        self.__get_queue = get_queue
-        self.__trlog_path = transfer_log_path
+        self.__put_queue = Queue()
+        self.__get_queue = Queue()
+        self.__trlog_path = db_cache.get_static_cache_path('transactions.log')
         self.__transactions = {}
         self.__tr_log = open(self.__trlog_path, 'a+')
+
+    def get_upload_queue(self):
+        return self.__put_queue
+
+    def get_download_queue(self):
+        return self.__get_queue
 
     def new_data_block(self, size=None, new_db_hash=None):
         if not new_db_hash:
@@ -150,12 +177,48 @@ class TransactionsManager:
         path = self.__db_cache.get_cache_path(new_db_hash)
         return DataBlock(path, size)
 
+    def iterate_transactions(self):
+        GTLock.lock()
+        try:
+            for transaction in self.__transactions.values():
+                yield transaction.is_uploading(), transaction.get_file_path(), \
+                        transaction.get_status(), transaction.total_size(), transaction.progress_perc()
+        finally:
+            GTLock.unlock()
+
+    def __find_file(self, file_path):
+        try:
+            file_md = self.__metadata.find(file_path)
+            return file_md
+        except PathException:
+            pass
+
+        return self.__find_inprogress_file(file_path)
+
+    def __find_inprogress_file(self, file_path):
+        for transaction in self.__transactions.values():
+            if (not transaction.is_uploading()) or (transaction.get_file_path() != file_path) \
+                    or (transaction.get_status() != Transaction.TS_LOCAL_SAVED):
+                continue
+            file_md = FileMD(name=os.path.basename(file_path), \
+                    replica_count=transaction.get_replica_count(), size=transaction.total_size())
+            for seek, size, data_block, block_hash in transaction.iter_data_blocks():
+                chunk = ChunkMD(size=size, seek=seek, key=data_block.get_name())
+                file_md.append_chunk(chunk)
+
+            return file_md
+
+    @GTLock
+    def find_inprogress_file(self, file_path):
+        return self.__find_inprogress_file(file_path)
+
     @GTLock
     def start_transaction(self, transaction_type, file_path):
         if transaction_type == Transaction.TT_READ:
-            file_md = self.__metadata.find(file_path)
-            if not file_md.is_file():
-                raise RuntimeError('No file found at %s'%file_path)
+            file_md = self.__find_file(file_path)
+
+            if (not file_md) or (not file_md.is_file()):
+                raise PathException('No file found at %s'%file_path)
 
             transaction = Transaction(transaction_type, file_path, file_md.replica_count)
             transaction_id = transaction.get_id()
@@ -170,8 +233,11 @@ class TransactionsManager:
         else:
             save_path, file_name = os.path.split(file_path)
             parent_dir = self.__metadata.find(save_path)
-            if (not parent_dir) or (not parent_dir.is_dir()):
-                raise Exception('Directory "%s" does not found!'%save_path)
+            if not parent_dir.is_dir():
+                raise NotDirectoryException('Directory "%s" does not found!'%save_path)
+
+            if self.__find_file(file_path):
+                raise AlreadyExistsException('File %s already exists!'%file_path)
 
             replica_count = 2 #FIXME ... replica_count = parent_dir.replica_count
             transaction = Transaction(transaction_type, file_path, replica_count)

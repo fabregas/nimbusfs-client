@@ -12,6 +12,7 @@ This module contains the implementation of SmartFileObject class
 """
 from nimbus_client.core.transactions_manager import TransactionsManager, Transaction
 from nimbus_client.core.constants import MAX_DATA_BLOCK_SIZE
+from nimbus_client.core.exceptions import ClosedFileException
 
 class SmartFileObject:
     TRANSACTIONS_MANAGER = None
@@ -28,9 +29,12 @@ class SmartFileObject:
         self.__cur_db_seek = 0
         self.__transaction_id = None
         self.__unsync = False
+        self.__closed = False
 
     def write(self, data):
         try:
+            if self.__closed:
+                raise ClosedFileException('closed file!')
             if self.__cur_data_block is None:
                 self.__cur_data_block = self.TRANSACTIONS_MANAGER.new_data_block()
 
@@ -49,12 +53,14 @@ class SmartFileObject:
             if rest_data:
                 self.__send_data_block()
                 self.write(rest_data)
-                self.__cur_db_seek += len(rest_data)
         except Exception, err:
             self.__failed_transaction(err)
             raise err
 
     def read(self, read_len=None):
+        if self.__closed:
+            raise ClosedFileException('closed file!')
+
         if not self.__transaction_id:
             self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_READ, self.__file_path)
 
@@ -78,10 +84,15 @@ class SmartFileObject:
 
 
     def close(self):
-        if self.__unsync:
-            if self.__cur_data_block:
-                self.__send_data_block()
-            self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
+        if self.__closed:
+            return
+        try:
+            if self.__unsync:
+                if self.__cur_data_block:
+                    self.__send_data_block()
+                self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
+        finally:
+            self.__closed = True
             
     def __send_data_block(self):
         self.__cur_data_block.finalize()

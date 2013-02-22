@@ -15,7 +15,7 @@ import struct
 
 from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.encdec_provider import BLOCK_SIZE, PAD 
-from nimbus_client.core.metadata_file import AbstractMetadataObject
+from nimbus_client.core.metadata import AbstractMetadataObject, DirectoryMD
 
 class Journal:
     OT_APPEND = 1
@@ -33,18 +33,41 @@ class Journal:
         self.__journal = DataBlock(self.__journal_path)
         self.__fabnet_gateway = fabnet_gateway
         self.__last_record_id = 0
-
-        self.__recv_journal()
+        self.__no_foreign = True
 
     def __recv_journal(self):
-        self.__fabnet_gateway.get(self.__journal_key, 2, self.__journal)
+        is_recv = self.__fabnet_gateway.get(self.__journal_key, 2, self.__journal)
+        if is_recv:
+            self.__no_foreign = False
+        else:
+            self.__no_foreign = True
 
     def __send_journal(self):
         self.__journal.finalize()
         j_data = DataBlock(self.__journal_path, actsize=True)
-        self.__fabnet_gateway.put(j_data, key=self.__journal_key)
+        return self.__fabnet_gateway.put(j_data, key=self.__journal_key)
+
+    def foreign_exists(self):
+        if self.__no_foreign:
+            self.__recv_journal()
+        return not self.__no_foreign
+
+    def init(self):
+        if self.__journal.get_actual_size() > 0:
+            raise RuntimeError('Journal is already initialized')
+
+        #append root directory
+        self.__int_append(self.OT_APPEND, DirectoryMD(item_id=0, parent_dir_id=0, name='/'))
+        saved = self.__send_journal() #full initialized journal should be send
+        if saved:
+            self.__no_foreign = False
+
 
     def append(self, operation_type, item_md):
+        self.__int_append(operation_type, item_md)
+        self.__send_journal() #TODO incremental journal changes should be send
+
+    def __int_append(self, operation_type, item_md):
         if operation_type not in (self.OT_APPEND, self.OT_UPDATE, self.OT_REMOVE):
             raise RuntimeError('Unsupported journal operation type: %s'%operation_type)
 
@@ -61,7 +84,6 @@ class Journal:
         pad_string = PAD * to_pad_len
 
         unsync_j_data = self.__journal.write(''.join([record_h, item_dump, pad_string]))
-        self.__send_journal()
 
     def iter(self, start_record_id=None):
         j_data = DataBlock(self.__journal_path, actsize=True)

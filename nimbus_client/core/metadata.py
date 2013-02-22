@@ -51,6 +51,7 @@ class AbstractMetadataObject(object):
     #metadata objects labels
     MOL_FILE = 1
     MOL_DIR = 2
+
     def __init__(self, dumped_md=None, **kw_args):
         self._args = kw_args
         if dumped_md:
@@ -246,42 +247,6 @@ class FileMD(AbstractMetadataObject):
 
 
 
-class DirItem:
-    def __init__(self, item):
-        self.__items = [item]
-
-    def __iter__(self):
-        for item in self.__items:
-            yield item
-
-    def to_str(self, val):
-        if type(val) == unicode:
-            return val.encode('utf8')
-        return val
-
-    def get_by_name(self, item_name):
-        for item in self.__items:
-            if self.to_str(item.name) == self.to_str(item_name):
-                return item
-        return None
-
-    def append(self, item):
-        ex_item = self.get_by_name(item.name)
-        if ex_item:
-            return False
-        self.__items.append(item)
-        return True
-
-    def remove(self, item_name):
-        ret_i = None
-        for i, item in enumerate(self.__items):
-            if self.to_str(item.name) == self.to_str(item_name):
-                ret_i = i
-                break
-        del self.__items[ret_i]
-
-    def empty(self):
-        return len(self.__items) == 0
 
 
 class DirectoryMD(AbstractMetadataObject):
@@ -298,7 +263,7 @@ class DirectoryMD(AbstractMetadataObject):
     def is_file(cls):
         return False
 
-    def __update_modify_date(self):
+    def update_datetime(self):
         self.last_modify_date = int(time.mktime(datetime.now().timetuple()))
 
     def __hash(self, str_data):
@@ -308,14 +273,14 @@ class DirectoryMD(AbstractMetadataObject):
         if not self.create_date:
             self.create_date = int(time.mktime(datetime.now().timetuple()))
         if not self.last_modify_date:
-            self.__update_modify_date()
+            self.update_datetime()
         if not self.content:
             self.content = {}
 
     def validate(self):
         if not self.name:
             raise MDValidationError('DirectoryName is empty')
-        if not self.item_id:
+        if self.item_id is None:
             raise MDValidationError('DirID is empty')
         if self.parent_dir_id is None:
             raise MDValidationError('ParentDirID is empty')
@@ -369,229 +334,4 @@ class DirectoryMD(AbstractMetadataObject):
             self.append(item)
             seek += item_len
 
-    def iteritems(self):
-        for item in self.content.values():
-            for subitem in item:
-                yield subitem
 
-    def get(self, item_name):
-        item = None
-        if self.content:
-            f_hash = self.__hash(item_name)
-            item_o = self.content.get(f_hash, None)
-            if item_o:
-                item = item_o.get_by_name(item_name)
-
-        if not item:
-            raise PathException('"%s" does not found in %s directory'%(item_name, self.name))
-
-        return item
-
-    def append(self, item_md):
-        if not isinstance(item_md, AbstractMetadataObject):
-            raise TypeError('Item cant be appended to directory, bcs it type is equal to "%s"'%item_md.__class__.__name__)
-
-        f_hash = self.__hash(item_md.name)
-        item_o = self.content.get(f_hash, None)
-        if item_o:
-            if not item_o.append(item_md):
-                raise AlreadyExistsException('Item %s is already exists in directory %s'%\
-                                            (item_md.name, self.name))
-        else:
-            item_o = DirItem(item_md)
-            self.content[f_hash] = item_o
-
-        item_md.parent_dir_id = self.item_id
-        self.__update_modify_date()
-
-    def empty(self):
-        if not self.content:
-            return True
-        return False
-
-    def remove(self, item_name):
-        try:
-            ex_item = self.get(item_name)
-        except PathException:
-            #item not found
-            return
-
-        f_hash = self.__hash(item_name)
-        item_o = self.content.get(f_hash, None)
-        if not item_o:
-            raise PathException('No item %s in directory %s'%(item_name, self.name))
-
-        item_o.remove(item_name)
-        if item_o.empty():
-            del self.content[f_hash]
-        self.__update_modify_date()
-
-
-
-class Metadata:
-    MD_DUMP_HDR_STRUCT = '<Q'
-    MD_DUMP_HDR_LEN = struct.calcsize(MD_DUMP_HDR_STRUCT)
-
-    MD_DUMP_NAME = 'metadata.dump'
-
-    def __init__(self, cache_dir, journal):
-        self.__journal = journal
-        self.__cache_dir = cache_dir
-
-        self.__lock = threading.RLock()
-        self.__last_dir_id = 0
-        self.__last_saved_transaction = None
-        self.__root_dir = DirectoryMD(dir_id=0)
-
-        self.__init_meta()
-
-    def dump(self):
-        md_dump_file = os.path.join(self.__cache_dir, MD_DUMP_NAME)
-        md_dump_db = DataBlock(md_dump_file)
-        md_dump_db.write(self.__root_dir.dump(recursive=True))
-
-    def __init_meta(self):
-        md_dump_file = os.path.join(self.__cache_dir, MD_DUMP_NAME)
-        if os.path.exists(md_dump_file):
-            md_dump_db = DataBlock(md_dump_file)
-            md_dump = md_dump_db.read()
-            self.__last_saved_transaction = struct.unpack(self.MD_DUMP_HDR_STRUCT,
-                                                    md_dump[:self.MD_DUMP_HDR_LEN])
-            self.__root_dir.load(md_dump[self.MD_DUMP_HDR_LEN:])
-
-        self.__restore_journal()
-
-    def __restore_journal(self):
-        for j_oper, j_item in self.__journal.iteritems(self.__last_saved_transaction):
-            self.__apply_j_item(j_oper, j_item)
-
-        for j_oper, j_item in self.__journal.iter_unsaved():
-            self.__apply_j_item(j_oper, j_item)
-
-    def __apply_j_item(self, j_oper, j_item):
-        if j_oper == MO_APPEND:
-            if j_item.is_dir():
-                self.__last_dir_id = j_item.item_id
-
-            self.append(j_item)
-        elif j_oper == MO_UPDATE:
-            self.update(j_item)
-        elif j_oper == MO_REMOVE:
-            self.remove(j_item)
-        else:
-            raise MDIivalid('Unknown journal operation type: %s'%j_oper)
-
-    def __find_by_id(self, dir_id, start_dir=None):
-        if not dir_id:
-            return self.root_dir
-
-        if not start_dir:
-            start_dir = self.root_dir
-
-        if start_dir.dir_id == dir_id:
-            return start_dir
-
-        for item_md in start_dir.items():
-            if item_md.is_dir():
-                found_id = self.__find_by_id(dir_id, item_md)
-                if found_id:
-                    return found_id
-
-    def find(self, path):
-        self.__lock.acquire()
-        try:
-            items = path.split('/')
-            cur_item = self.__root_dir
-            for item_name in items:
-                if not item_name:
-                    continue
-
-                if not cur_item.is_dir():
-                    raise PathException('Path "%s" does not found!'%path)
-
-                cur_item = cur_item.get(item_name)
-            return cur_item.copy()
-        finally:
-            self.__lock.release()
-
-    def mkdir(self, dir_name):
-        self.__lock.acquire()
-        try:
-            self.__last_dir_id += 1
-            dir_id = self.__last_dir_id
-        finally:
-            self.__lock.release()
-
-        return DirectoryMD(dir_id=dir_id, name=dir_name)
-
-    def exists(self, path):
-        try:
-            self.find(path)
-        except PathException, err:
-            return False
-        return True
-
-    def append(self, dest_dir, item_md):
-        self.__lock.acquire()
-        try:
-            dest_dir_md = self.find(dest_dir)
-            n_item_md = item_md.copy()
-            dest_dir_md.append(n_item_md)
-
-            self.journal.add_to_transaction(MO_APPEND, n_item_md)
-        finally:
-            self.__lock.release()
-
-        '''
-        self.__lock.acquire()
-        try:
-            self.__unsaved_items.append((MO_APPEND, item_md))
-        finally:
-            self.__lock.release()
-        '''
-
-    def update(self, item_md):
-        self.__lock.acquire()
-        try:
-            parent_dir_id = item_md.parent_dir_id
-            if parent_dir_id is None:
-                raise NimbusException('metadata object does not initialized!')
-
-            base_dir = self.__find_by_id(parent_dir_id)
-            c_item_md = base_dir.get(item_md.name)
-            c_item_md.update(item_md)
-
-            self.journal.add_to_transaction(MO_UPDATE, c_item_md)
-        finally:
-            self.__lock.release()
-
-    def remove(self, rm_path):
-        self.__lock.acquire()
-        try:
-            rm_item_md = self.find(rm_path)
-            if rm_item_md.is_dir() and not rm_item_md.empty():
-                raise NotEmptyException('Directory %s is not empty!'%rm_path)
-
-            base_dir = self.__find_by_id(rm_item_md.parent_dir_id)
-            base_dir.remove(rm_item_md.name)
-
-            self.journal.add_to_transaction(MO_REMOVE, item_md)
-        finally:
-            self.__lock.release()
-
-        '''
-        self.__lock.acquire()
-        try:
-            self.__unsaved_items.append((MO_REMOVE, rm_item_md))
-        finally:
-            self.__lock.release()
-        '''
-    '''
-    def save(self):
-        self.__lock.acquire()
-        try:
-            self.__journal.transaction(self.__unsaved_items)
-            self.__unsaved_items = []
-        finally:
-            self.__lock.release()
-    '''

@@ -11,12 +11,42 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of gateway API for talking with fabnet
 """
 import hashlib
+import traceback
 
-from nimbus_client.core.fri.fri_base import FabnetPacketRequest, RamBasedBinaryData
+from nimbus_client.core.fri.fri_base import FabnetPacketRequest, RamBasedBinaryData, FriBinaryData
 from nimbus_client.core.fri.fri_client import FriClient
-from constants import RC_NO_DATA, DEFAULT_REPLICA_COUNT, FRI_PORT, FILE_ITER_BLOCK_SIZE
-from fri.constants import FRI_CLIENT_TIMEOUT
-from logger import logger
+from nimbus_client.core.fri.constants import FRI_CLIENT_TIMEOUT
+
+from nimbus_client.core.data_block import DataBlock
+from nimbus_client.core.constants import RC_NO_DATA, DEFAULT_REPLICA_COUNT, FRI_PORT, FILE_ITER_BLOCK_SIZE
+from nimbus_client.core.logger import logger
+
+class ChunkedBinaryData(FriBinaryData):
+    @classmethod
+    def prepare(cls, data_block, chunk_size):
+        if isinstance(data_block, DataBlock):
+            return cls(data_block, chunk_size)
+        else:
+            return RamBasedBinaryData(data_block)
+
+    def __init__(self, data_block, chunk_size):
+        self.__chunk_size = chunk_size
+        self.__data_block = data_block
+
+    def chunks_count(self):
+        f_size = self.__data_block.get_actual_size()
+        cnt = f_size / self.__chunk_size
+        if f_size % self.__chunk_size != 0:
+            cnt += 1
+        return cnt
+
+    def get_next_chunk(self):
+        return self.__data_block.read_raw(self.__chunk_size)
+
+    def data(self):
+        return self.__data_block.read_raw()
+
+
 
 class FabnetGateway:
     def __init__(self, fabnet_hostname, security_manager):
@@ -44,7 +74,7 @@ class FabnetGateway:
         params = {'key':key, 'replica_count':replica_count, \
                     'wait_writes_count': wait_writes_count}
         packet = FabnetPacketRequest(method='ClientPutData', parameters=params, \
-                        binary_data=ChunkedBinaryData(data_block, FILE_ITER_BLOCK_SIZE), sync=True)
+                        binary_data=ChunkedBinaryData.prepare(data_block, FILE_ITER_BLOCK_SIZE), sync=True)
 
         resp = self.fri_client.call_sync(node_addr, packet, FRI_CLIENT_TIMEOUT)
         try:
@@ -56,12 +86,20 @@ class FabnetGateway:
 
             primary_key = resp.ret_parameters['key']
             checksum = resp.ret_parameters['checksum']
-            if checksum != data_block.checksum():
+            if isinstance(data_block, DataBlock):
+                db_checksum = data_block.checksum()
+            else:
+                db_checksum = hashlib.sha1(data_block).hexdigest()
+
+            if checksum != db_checksum:
                 raise Exception('Invalid data block checksum!')
-        except Exception, err)
-            logger.error(err)
+        except Exception, err:
+            logger.write = logger.debug
+            traceback.print_exc(file=logger)
+            logger.error('[put] %s'%err)
             if not allow_rewrite:
                 self.remove(key, replica_count)
+            raise err
 
         return primary_key
 

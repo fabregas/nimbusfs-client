@@ -22,9 +22,12 @@ QUIT_JOB = None
 class PutWorker(threading.Thread):
     def __init__(self, queue, fabnet_gateway, transactions_manager):
         threading.Thread.__init__(self)
-        self.queue = queue
         self.fabnet_gateway = fabnet_gateway
         self.transactions_manager = transactions_manager
+        self.queue = transactions_manager.get_upload_queue()
+
+    def stop(self):
+        self.queue.put(QUIT_JOB)
 
     def run(self):
         while True:
@@ -54,9 +57,12 @@ class PutWorker(threading.Thread):
 class GetWorker(threading.Thread):
     def __init__(self, queue, fabnet_gateway, transactions_manager):
         threading.Thread.__init__(self)
-        self.queue = queue
         self.fabnet_gateway = fabnet_gateway
         self.transactions_manager = transactions_manager
+        self.queue = transactions_manager.get_download_queue()
+
+    def stop(self):
+        self.queue.put(QUIT_JOB)
 
     def run(self):
         while True:
@@ -70,12 +76,12 @@ class GetWorker(threading.Thread):
                 data_block,_ = transaction.get_data_block(seek)
                 w_db = data_block.clone()
 
-                self.fabnet_gateway.get(key, replica_count, w_db)
+                self.fabnet_gateway.get(data_block.get_name(), transaction.get_replica_count(), w_db)
                 w_db.close()
             except Exception, err:
                 logger.error('[GetWorker][%s] %s'%(job, err))
             finally:
-                self.__queue.task_done()
+                self.queue.task_done()
 
 
 class WorkersManager:
@@ -94,7 +100,7 @@ class WorkersManager:
 
     def stop(self):
         for worker in self.__workers:
-            self.__queue.put(QUIT_JOB)
+            worker.stop()
 
         for worker in self.__workers:
             if worker.is_alive():

@@ -200,7 +200,7 @@ class TestMetadata(unittest.TestCase):
         if os.path.exists(md_file_path):
             os.remove(md_file_path)
         FS_STR = [('/test_dir', 1), ('/test_dir/subdir', 1), ('/test_dir/my_file.txt', 0), ('/test_dir/subdir/test_file.txt', 0)]
-        md_file = MDFile(md_file_path)
+        md_file = MetadataFile(md_file_path)
 
         for path, is_dir in FS_STR:
             b_dir, i_name = os.path.split(path)
@@ -291,6 +291,7 @@ class MockedFabnetGateway:
     def get(self, primary_key, replica_count, data_block):
         if primary_key != '%040x'%23453:
             raise Exception('unknown metadata journal key')
+        return 'OK'
 
     def put(self, data_block, key):
         if key != '%040x'%23453:
