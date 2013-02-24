@@ -62,7 +62,7 @@ class SmartFileObject:
             raise ClosedFileException('closed file!')
 
         if not self.__transaction_id:
-            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_READ, self.__file_path)
+            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_DOWNLOAD, self.__file_path)
 
         ret_data = ''
         while True:
@@ -98,7 +98,7 @@ class SmartFileObject:
         self.__cur_data_block.finalize()
 
         if not self.__transaction_id:
-            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_WRITE, self.__file_path)
+            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_UPLOAD, self.__file_path)
 
         self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, self.__seek, self.__cur_db_seek, self.__cur_data_block)
 

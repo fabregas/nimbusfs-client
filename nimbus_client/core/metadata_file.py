@@ -213,6 +213,8 @@ class MetadataFile:
                     item_md = self.__get_item_md(item_md)
                     self.remove(item_md)
                 self.__last_journal_rec_id = record_id
+        else:
+            self.append(None, DirectoryMD(name='/', item_id=0, parent_dir_id=0))
         self.__valid = True
 
     def __hash(self, str_data):

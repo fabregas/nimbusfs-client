@@ -13,7 +13,6 @@ MAX_Q = pow(2, struct.calcsize('<Q')*8)-1
 MO_APPEND = 1
 MO_REMOVE = 0
 
-
 DEFAULT_REPLICA_COUNT = 2
 
 class SafeDict:

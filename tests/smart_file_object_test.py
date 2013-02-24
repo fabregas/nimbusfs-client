@@ -12,10 +12,13 @@ import string
 import hashlib
 from Queue import Queue, Empty
 
+from nimbus_client.core import transactions_manager
+transactions_manager.MAX_TR_LOG_ITEMS = 10
+
 from nimbus_client.core.smart_file_object import SmartFileObject
 from nimbus_client.core.transactions_manager import *
 from nimbus_client.core.data_block_cache import DataBlockCache
-from nimbus_client.core.metadata_file import MDFile
+from nimbus_client.core.metadata_file import MetadataFile
 from nimbus_client.core.data_block import DataBlock, DBLocksManager
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 
@@ -36,7 +39,7 @@ class MockedGetThread(threading.Thread):
 
 class TestSmartFileObject(unittest.TestCase):
 
-    def test_base(self):
+    def test00_base(self):
         ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
         DataBlock.SECURITY_MANAGER = ks
         DataBlock.LOCK_MANAGER = DBLocksManager()
@@ -44,49 +47,119 @@ class TestSmartFileObject(unittest.TestCase):
         os.system('rm -rf /tmp/static_cache/*')
 
         db_cache = DataBlockCache('/tmp')
-        tr_manager = TransactionsManager(MDFile(db_cache.get_static_cache_path('test_md.bin')), db_cache)
-        p_queue = tr_manager.get_upload_queue()
-        g_queue = tr_manager.get_download_queue()
-        SmartFileObject.setup_transaction_manager(tr_manager)
+        md = MetadataFile(db_cache.get_static_cache_path('test_md.bin'))
+        try:
+            tr_manager = TransactionsManager(md, db_cache)
+            p_queue = tr_manager.get_upload_queue()
+            g_queue = tr_manager.get_download_queue()
+            SmartFileObject.setup_transaction_manager(tr_manager)
 
-        test_file = SmartFileObject('/test.file')
-        test_file.write('this is test message for one data block!')
-        test_file.close()
-        put_obj = p_queue.get(False)
-        transaction, seek = put_obj
-        self.assertEqual(seek, 0)
-        data_block, next_seek = transaction.get_data_block(seek)
-        self.assertNotEqual(data_block, None)
-        self.assertEqual(next_seek, None)
-        data_block.close()
+            test_file = SmartFileObject('/test.file')
+            test_file.write('this is test message for one data block!')
+            test_file.close()
+            put_obj = p_queue.get(False)
+            transaction, seek = put_obj
+            self.assertEqual(seek, 0)
+            data_block, next_seek = transaction.get_data_block(seek)
+            self.assertNotEqual(data_block, None)
+            self.assertEqual(next_seek, None)
+            data_block.close()
 
-        tr_manager.update_transaction(transaction.get_id(), seek, is_failed=False, foreign_name='%040x'%123456)
-        self.assertEqual(transaction.get_status(), Transaction.TS_FINISHED)
+            tr_manager.update_transaction(transaction.get_id(), seek, is_failed=False, foreign_name='%040x'%123456)
+            self.assertEqual(transaction.get_status(), Transaction.TS_FINISHED)
 
 
-        test_file = SmartFileObject('/test.file')
-        data = test_file.read(4)
-        self.assertEqual(data, 'this')
-        self.assertTrue(DataBlock.is_locked(db_cache.get_cache_path('%040x'%123456)))
-        data = test_file.read()
-        self.assertEqual(data, ' is test message for one data block!')
-        test_file.close()
-        self.assertFalse(DataBlock.is_locked(db_cache.get_cache_path('%040x'%123456)))
-        with self.assertRaises(Empty):
-            get_obj = g_queue.get(False)
+            test_file = SmartFileObject('/test.file')
+            data = test_file.read(4)
+            self.assertEqual(data, 'this')
+            self.assertTrue(DataBlock.is_locked(db_cache.get_cache_path('%040x'%123456)))
+            data = test_file.read()
+            self.assertEqual(data, ' is test message for one data block!')
+            test_file.close()
+            self.assertFalse(DataBlock.is_locked(db_cache.get_cache_path('%040x'%123456)))
+            with self.assertRaises(Empty):
+                get_obj = g_queue.get(False)
 
-        mgt = MockedGetThread(g_queue)
-        mgt.start()
-        os.system('rm -rf /tmp/dynamic_cache/*')
-        test_file = SmartFileObject('/test.file')
-        data = test_file.read()
-        self.assertEqual(data, 'this is test message for one data block!')
-        test_file.close()
+            mgt = MockedGetThread(g_queue)
+            mgt.start()
+            os.system('rm -rf /tmp/dynamic_cache/*')
+            test_file = SmartFileObject('/test.file')
+            data = test_file.read()
+            self.assertEqual(data, 'this is test message for one data block!')
+            test_file.close()
 
-        self.assertFalse(DataBlock.is_locked(db_cache.get_cache_path('%040x'%123456)))
+            self.assertFalse(DataBlock.is_locked(db_cache.get_cache_path('%040x'%123456)))
 
-        db_cache.stop()
+            tr_manager.close()
+        finally:
+            md.close()
+            db_cache.stop()
 
+
+    def test01_trans_manager(self):
+        db_cache = DataBlockCache('/tmp')
+        try:
+            md = MetadataFile(db_cache.get_static_cache_path('test_md.bin'))
+            tr_manager = TransactionsManager(md, db_cache, 2)
+
+            transaction_id = tr_manager.start_transaction(Transaction.TT_UPLOAD, '/not_cached_test.file')
+            tr_manager.transfer_data_block(transaction_id, 0, 3500, DataBlock(db_cache.get_cache_path('fake_for_delete')))
+            self.assertTrue(os.path.exists(db_cache.get_cache_path('fake_for_delete')))
+
+            transaction_id = tr_manager.start_transaction(Transaction.TT_UPLOAD, '/my_second_test.file')
+            tr_manager.transfer_data_block(transaction_id, 0, 1000, DataBlock(db_cache.get_cache_path('fake')))
+            tr_manager.transfer_data_block(transaction_id, 1000, 2000, DataBlock(db_cache.get_cache_path('fake')))
+            tr_manager.update_transaction_state(transaction_id, Transaction.TS_LOCAL_SAVED)
+            tr_manager.transfer_data_block(transaction_id, 0, 1000, DataBlock(db_cache.get_cache_path('fake')), '%040x'%123456)
+
+            transaction_id = tr_manager.start_transaction(Transaction.TT_DOWNLOAD, '/test.file')
+            db, _ = tr_manager.get_data_block(transaction_id, 0)
+            read_block_name = db.get_name()
+            self.assertTrue(os.path.exists(db_cache.get_cache_path(read_block_name)))
+
+            md.close()
+            tr_manager.close()
+
+            md = MetadataFile(db_cache.get_static_cache_path('test_md.bin'))
+            tr_manager = TransactionsManager(md, db_cache, 2)
+
+            up_queue = tr_manager.get_upload_queue()
+            self.assertEqual(up_queue.qsize(), 1)
+
+            self.assertFalse(os.path.exists(db_cache.get_cache_path('fake_for_delete')))
+            self.assertFalse(os.path.exists(db_cache.get_cache_path(read_block_name)))
+            md.close()
+            tr_manager.close()
+
+            open(db_cache.get_static_cache_path('transactions.log'), 'w').close()
+
+            md = MetadataFile(db_cache.get_static_cache_path('test_md.bin'))
+            tr_manager = TransactionsManager(md, db_cache, 5)
+            transactions = []
+            for i in xrange(7):
+                transaction_id = tr_manager.start_transaction(Transaction.TT_UPLOAD, '/%s_test.file'%i)
+                transactions.append(transaction_id)
+
+            cnt = 0
+            for i, (is_up, path, stat, size, progress) in enumerate(tr_manager.iterate_transactions()):
+                self.assertEqual(path, '/%s_test.file'%i)
+                cnt += 1
+            self.assertEqual(cnt, 7)
+
+            for tr_id in transactions:
+                tr_manager.update_transaction_state(tr_id, Transaction.TS_FAILED)
+
+            cnt = 0
+            tr_manager.start_transaction(Transaction.TT_UPLOAD, '/7_test.file')
+            for i, (is_up, path, stat, size, progress) in enumerate(tr_manager.iterate_transactions()):
+                self.assertEqual(path, '/%s_test.file'%(i+3))
+                cnt += 1
+            self.assertEqual(cnt, 5)
+
+            for i in xrange(5):
+                tr_manager.start_transaction(Transaction.TT_UPLOAD, '/%s_2_test.file'%i)
+        finally:
+            db_cache.stop()
 
 if __name__ == '__main__':
     unittest.main()

@@ -148,6 +148,16 @@ class DataBlockCache:
             return False
         return True
 
+    def remove_data_block(self, db_hash):
+        path = os.path.join(self.__dyn_cache, db_hash)
+        if os.path.exists(path) and os.path.islink(path):
+            r_path = os.readlink(path)
+            if not os.path.exists(r_path):
+                r_path = os.path.join(self.__dyn_cache, r_path)
+            os.remove(r_path)
+        os.remove(path)
+
+
 
 class CheckCapacityThrd(threading.Thread):
     def __init__(self, data_block_cache):

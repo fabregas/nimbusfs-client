@@ -32,6 +32,7 @@ class PutWorker(threading.Thread):
     def run(self):
         while True:
             job = self.queue.get()
+            data_block = None
             try:
                 if job == QUIT_JOB:
                     break
@@ -52,6 +53,8 @@ class PutWorker(threading.Thread):
             except Exception, err:
                 logger.error('[PutWorker][%s] %s'%(job, err))
             finally:
+                if data_block:
+                    data_block.close()
                 self.queue.task_done()
 
 class GetWorker(threading.Thread):
@@ -68,6 +71,7 @@ class GetWorker(threading.Thread):
         while True:
             out_streem = data = None
             job = self.queue.get()
+            w_db = None
             try:
                 if job == QUIT_JOB:
                     break
@@ -81,6 +85,8 @@ class GetWorker(threading.Thread):
             except Exception, err:
                 logger.error('[GetWorker][%s] %s'%(job, err))
             finally:
+                if w_db:
+                    w_db.close()
                 self.queue.task_done()
 
 

@@ -121,6 +121,8 @@ class Nibbler:
             self.get_manager.stop()
         if self.metadata:
             self.metadata.close()
+        if self.transactions_manager:
+            self.transactions_manager.close()
         self.db_cache.stop()
 
     def __make_item_fs(self, item_md):

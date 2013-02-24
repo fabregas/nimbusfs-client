@@ -88,9 +88,6 @@ class DataBlock:
         if actsize:
             self.__expected_len = self.get_actual_size()
 
-        if self.LOCK_MANAGER:
-            self.LOCK_MANAGER.set(path)
-            self.__locked = True
 
     def get_actual_size(self):
         return os.path.getsize(self.__path)
@@ -125,7 +122,7 @@ class DataBlock:
         self.__checksum.update(data)
 
         if self.__is_closed():
-            self.__f_obj = open(self.__path, 'ab')
+            self.__f_obj = self.__open_file('ab')
 
         self.__f_obj.write(data)
         self.__lock.acquire()
@@ -186,6 +183,12 @@ class DataBlock:
 
         return ret_str
 
+    def __open_file(self, open_flags):
+        if self.LOCK_MANAGER and not self.__locked:
+            self.LOCK_MANAGER.set(self.__path)
+            self.__locked = True
+
+        return open(self.__path, open_flags)
 
     def __is_closed(self):
         return ((not self.__f_obj) or self.__f_obj.closed)
@@ -200,7 +203,7 @@ class DataBlock:
         remained_read_len = read_buf_len
         for i in xrange(READ_TRY_COUNT):
             if self.__is_closed():
-                self.__f_obj = open(self.__path, 'rb')
+                self.__f_obj = self.__open_file('rb')
                 self.__f_obj.seek(self.__get_seek())
 
             data = self.__f_obj.read(remained_read_len)
