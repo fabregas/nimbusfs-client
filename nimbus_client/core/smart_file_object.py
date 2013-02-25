@@ -64,21 +64,25 @@ class SmartFileObject:
         if not self.__transaction_id:
             self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_DOWNLOAD, self.__file_path)
 
-        ret_data = ''
-        while True:
-            if not self.__cur_data_block:
-                if self.__seek is None:
+        try:
+            ret_data = ''
+            while True:
+                if not self.__cur_data_block:
+                    if self.__seek is None:
+                        break
+                    self.__cur_data_block, self.__seek = self.TRANSACTIONS_MANAGER.get_data_block(self.__transaction_id, self.__seek)
+
+                data = self.__cur_data_block.read(read_len)
+                if data:
+                    ret_data += data
+
+                if read_len and len(ret_data) >= read_len:
                     break
-                self.__cur_data_block, self.__seek = self.TRANSACTIONS_MANAGER.get_data_block(self.__transaction_id, self.__seek)
-
-            data = self.__cur_data_block.read(read_len)
-            if data:
-                ret_data += data
-
-            if read_len and len(ret_data) >= read_len:
-                break
-            self.__cur_data_block.close()
-            self.__cur_data_block = None
+                self.__cur_data_block.close()
+                self.__cur_data_block = None
+        except Exception, err:
+            self.__failed_transaction(err)
+            raise err
 
         return ret_data
 
@@ -91,6 +95,9 @@ class SmartFileObject:
                 if self.__cur_data_block:
                     self.__send_data_block()
                 self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
+            else:
+                if self.__cur_data_block:
+                    self.__cur_data_block.close()
         finally:
             self.__closed = True
             
@@ -109,6 +116,9 @@ class SmartFileObject:
 
     def __failed_transaction(self, err):
         #TODO: implement error writing to events log
+        if self.__cur_data_block:
+            self.__cur_data_block.remove()
+
         if self.__transaction_id:
             self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_FAILED)
 

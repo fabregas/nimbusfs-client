@@ -85,6 +85,10 @@ class Transaction:
         return self.__transaction_type == self.TT_DOWNLOAD
 
     @TLock
+    def is_failed(self):
+        return self.__status == self.TS_FAILED
+
+    @TLock
     def get_status(self):
         return self.__status
 
@@ -114,13 +118,6 @@ class Transaction:
         self.__data_blocks_info[seek] = [size, data_block, foreign_name, False]
 
     @TLock
-    def get_data_block(self, seek):
-        if self.__data_blocks_info.has_key(seek):
-            raise Exception('No data block with seek %s found in transaction %s'%(seek, self.__transaction_id))
-
-        return self.__data_blocks_info[seek][:3]
-
-    @TLock
     def finish_data_block_transfer(self, seek, foreign_name=None):
         if not self.__data_blocks_info.has_key(seek):
             raise Exception('No data block with seek %s found in transaction %s'%(seek, self.__transaction_id))
@@ -135,12 +132,15 @@ class Transaction:
 
     @TLock
     def finished(self):
-        if self.__status == Transaction.TS_INIT:
+        if self.__status == Transaction.TS_FINISHED:
+            True
+        if self.__status == Transaction.TS_FAILED or \
+                (self.__status == Transaction.TS_INIT and self.__transaction_type == self.TT_UPLOAD):
             return False
-        if self.__status == self.TS_LOCAL_SAVED:
-            for _,_,_, is_finished in self.__data_blocks_info.values():
-                if not is_finished:
-                    return False
+
+        for _,_,_, is_finished in self.__data_blocks_info.values():
+            if not is_finished:
+                return False
         return True
 
     def iter_data_blocks(self):
@@ -252,9 +252,11 @@ class TransactionsManager:
             for chunk in file_md.chunks:
                 db_path = self.__db_cache.get_cache_path(chunk.key)
                 if os.path.exists(db_path):
-                    transaction.append_data_block(chunk.seek, chunk.size, self.new_data_block(chunk.size, chunk.key), chunk.key)
+                    transaction.append_data_block(chunk.seek, chunk.size, \
+                            self.new_data_block(chunk.size, chunk.key), chunk.key)
                 else:
-                    self.transfer_data_block(transaction_id, chunk.seek, chunk.size, self.new_data_block(chunk.size, chunk.key), chunk.key)
+                    self.transfer_data_block(transaction_id, chunk.seek, chunk.size, \
+                            self.new_data_block(chunk.size, chunk.key), chunk.key)
         except Exception, err:
             self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
             raise err
@@ -294,21 +296,28 @@ class TransactionsManager:
     @GTLock
     def update_transaction_state(self, transaction_id, status):
         transaction = self.__get_transaction(transaction_id)
-        if status == Transaction.TS_FINISHED:
-            self.__mv_local_data_blocks(transaction)
-            self.__save_metadata(transaction)
+        if transaction.get_transaction_type() == Transaction.TT_UPLOAD:
+            if status == Transaction.TS_FINISHED:
+                self.__mv_local_data_blocks(transaction)
+                self.__save_metadata(transaction)
+            elif status == Transaction.TS_FAILED:
+                for _,_,data_block, foreign_name in transaction.iter_data_blocks():
+                    if foreign_name:
+                        self.__cancel_data_block_upload(foreign_name, data_block)
 
         transaction.change_status(status)
 
         self.__tr_log_update_state(transaction.get_id(), status)
-
 
     @GTLock
     def update_transaction(self, transaction_id, seek, is_failed=False, foreign_name=None):
         transaction = self.__get_transaction(transaction_id)
         if transaction.get_status() == Transaction.TS_FAILED:
             #should be removed data block from backend
-            raise Exception('Transaction is failed!')
+            if transaction.get_transaction_type() == Transaction.TT_UPLOAD:
+                data_block, _ = transaction.get_data_block(seek)
+                self.__cancel_data_block_upload(foreign_name, data_block)
+            return
 
         if is_failed:
             self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
@@ -341,6 +350,9 @@ class TransactionsManager:
         for seek, size, data_block, foreign_name in transaction.iter_data_blocks():
             self.__db_cache.mklink(data_block.get_name(), foreign_name)
 
+    def __cancel_data_block_upload(self, foreign_name, data_block):
+        #FIXME remove data block from backend
+        self.__db_cache.remove_data_block(data_block.get_name())
 
     def __save_metadata(self, transaction):
         file_path = transaction.get_file_path()

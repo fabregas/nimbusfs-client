@@ -15,7 +15,7 @@ import time
 import hashlib
 import threading
 
-from nimbus_client.core.exceptions import TimeoutException
+from nimbus_client.core.exceptions import TimeoutException, IOException
 from nimbus_client.core.constants import BUF_LEN, READ_TRY_COUNT, READ_SLEEP_TIME
 
 class DBLocksManager:
@@ -111,6 +111,11 @@ class DataBlock:
     def get_name(self):
         return os.path.basename(self.__path)
 
+    def remove(self):
+        self.close()
+        if os.path.exists(self.__path):
+            os.remove(self.__path)
+
     def write(self, data, finalize=False, encrypt=True):
         """Encode (if security manager is setuped) and write to file
         data block.
@@ -151,17 +156,20 @@ class DataBlock:
 
     def read_raw(self, rlen=None):
         ret_str = ''
-        if rlen is None:
-            while True:
-                buf = self.__read_buf(BUF_LEN)
-                if not buf:
-                    break
-                ret_str += buf
-        else:
-            ret_str = self.__read_buf(rlen)
+        try:
+            if rlen is None:
+                while True:
+                    buf = self.__read_buf(BUF_LEN)
+                    if not buf:
+                        break
+                    ret_str += buf
+            else:
+                ret_str = self.__read_buf(rlen)
 
-        if ret_str:
-            self.__checksum.update(ret_str)
+            if ret_str:
+                self.__checksum.update(ret_str)
+        except IOError, err:
+            raise IOException("Can't read data block! Details: %s"%err)
 
         return ret_str
 

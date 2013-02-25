@@ -72,18 +72,37 @@ class GetWorker(threading.Thread):
             out_streem = data = None
             job = self.queue.get()
             w_db = None
+            transaction = None
+            seek = None
             try:
                 if job == QUIT_JOB:
                     break
 
                 transaction, seek = job
-                data_block,_ = transaction.get_data_block(seek)
-                w_db = data_block.clone()
 
+                data_block,_ = transaction.get_data_block(seek)
+
+                if transaction.is_failed():
+                    logger.debug('Transaction {%s} is failed! Skipping data block downloading...'%transaction.get_id())
+                    data_block.remove()
+                    continue
+
+                w_db = data_block.clone()
                 self.fabnet_gateway.get(data_block.get_name(), transaction.get_replica_count(), w_db)
                 w_db.close()
+
+                self.transactions_manager.update_transaction(transaction.get_id(), seek, \
+                            is_failed=False, foreign_name=data_block.get_name())
             except Exception, err:
                 logger.error('[GetWorker][%s] %s'%(job, err))
+                try:
+                    if transaction:
+                        self.transactions_manager.update_transaction(transaction.get_id(), seek, \
+                                    is_failed=True, foreign_name=data_block.get_name())
+                    if w_db:
+                        w_db.remove()
+                except Exception, err:
+                    logger.error('[GetWorker.__on_error] %s'%err)
             finally:
                 if w_db:
                     w_db.close()

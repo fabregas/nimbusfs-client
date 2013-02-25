@@ -17,6 +17,8 @@ from nimbus_client.core.fri.fri_base import FabnetPacketResponse
 logger.setLevel(logging.WARNING)
 from nimbus_client.core import constants
 constants.MAX_DATA_BLOCK_SIZE = 100000
+constants.READ_TRY_COUNT = 10
+constants.READ_SLEEP_TIME = 0.2
 
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.transactions_manager import Transaction
@@ -32,10 +34,14 @@ PASSWD = 'qwerty123'
 TMP_FILE = '/tmp/test_file.out'
 
 class MockedFriClient:
-    def __init__(self, is_ssl=None, cert=None, session_id=None):
+    def __init__(self, is_ssl=None, cert=None, session_id=None, genfail=False):
         self.data_map = {}
+        self.genfail = genfail
 
     def call_sync(self, node_addr, packet, FRI_CLIENT_TIMEOUT):
+        if self.genfail:
+            return FabnetPacketResponse(ret_code=1, ret_message='test exception from backend')
+
         if packet.method == 'GetKeysInfo':
             ret_keys = []
             key = packet.parameters.get('key', None)
@@ -89,7 +95,6 @@ class TestDHTInitProcedure(unittest.TestCase):
             
         self.assertEqual(nibbler.is_registered(), False)
         nibbler.register_user()
-        #nibbler.fabnet_gateway.put('', key='ce86e852d68cf8e3eee83b8d453172fb3c4fefa6')
         nibbler.start()
 
     def test99_dht_stop(self):
@@ -227,7 +232,23 @@ class TestDHTInitProcedure(unittest.TestCase):
         with self.assertRaises(PathException):
             nibbler.listdir('/some/imagine/path')
 
-    def test07_remove_file(self):
+    def test07_failed_transactions(self):
+        os.system('rm -rf /tmp/dynamic_cache/*')
+        nibbler = TestDHTInitProcedure.NIBBLER_INST
+        cur_fri_client = nibbler.fabnet_gateway.fri_client
+        try:
+            nibbler.fabnet_gateway.fri_client = MockedFriClient(genfail=True)
+            f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
+            with self.assertRaises(IOException):
+                data = f_obj.read()
+            f_obj.close()
+            time.sleep(0.5)
+            data_blocks = os.listdir('/tmp/dynamic_cache/')
+            self.assertEqual(len(data_blocks), 0)
+        finally:
+            nibbler.fabnet_gateway.fri_client = cur_fri_client
+
+    def test08_remove_file(self):
         nibbler = TestDHTInitProcedure.NIBBLER_INST
 
         nibbler.remove_file('/my_first_dir/my_first_subdir/test_file.out')
@@ -237,7 +258,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         self.assertEqual(len(items), 1, items)
 
 
-    def test08_rmdir(self):
+    def test09_rmdir(self):
         nibbler = TestDHTInitProcedure.NIBBLER_INST
         with self.assertRaises(PathException):
             nibbler.rmdir('/some/imagine/path')
@@ -250,7 +271,6 @@ class TestDHTInitProcedure(unittest.TestCase):
         items = nibbler.listdir()
         self.assertEqual(len(items), 2, items)
         self.assertEqual(items[0].name, 'my_second_dir')
-
 
 
 if __name__ == '__main__':

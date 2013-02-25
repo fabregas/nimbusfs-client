@@ -56,3 +56,6 @@ class NoJournalFoundException(NimbusException):
 
 class ClosedFileException(NimbusException):
     pass
+
+class IOException(NimbusException):
+    pass
