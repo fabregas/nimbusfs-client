@@ -150,7 +150,9 @@ class DataBlockCache:
 
     def remove_data_block(self, db_hash):
         path = os.path.join(self.__dyn_cache, db_hash)
-        if os.path.exists(path) and os.path.islink(path):
+        if not os.path.exists(path):
+            return
+        if os.path.islink(path):
             r_path = os.readlink(path)
             if not os.path.exists(r_path):
                 r_path = os.path.join(self.__dyn_cache, r_path)

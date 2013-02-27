@@ -19,8 +19,10 @@ from nimbus_client.core import constants
 constants.MAX_DATA_BLOCK_SIZE = 100000
 constants.READ_TRY_COUNT = 10
 constants.READ_SLEEP_TIME = 0.2
+constants.FG_ERROR_TIMEOUT = 0.2
 
 from nimbus_client.core.nibbler import Nibbler
+from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.transactions_manager import Transaction
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core.exceptions import *
@@ -99,7 +101,12 @@ class TestDHTInitProcedure(unittest.TestCase):
 
     def test99_dht_stop(self):
         TestDHTInitProcedure.NIBBLER_INST.stop()
-        time.sleep(1)
+        try:
+            lock_list = DataBlock.LOCK_MANAGER.locks()
+            self.assertEqual(len(lock_list), 0, lock_list)
+        finally:
+
+            time.sleep(1)
 
     def test02_create_dir(self):
         nibbler = TestDHTInitProcedure.NIBBLER_INST
@@ -232,7 +239,7 @@ class TestDHTInitProcedure(unittest.TestCase):
         with self.assertRaises(PathException):
             nibbler.listdir('/some/imagine/path')
 
-    def test07_failed_transactions(self):
+    def test07_failed_read_transactions(self):
         os.system('rm -rf /tmp/dynamic_cache/*')
         nibbler = TestDHTInitProcedure.NIBBLER_INST
         cur_fri_client = nibbler.fabnet_gateway.fri_client
@@ -247,6 +254,57 @@ class TestDHTInitProcedure(unittest.TestCase):
             self.assertEqual(len(data_blocks), 0)
         finally:
             nibbler.fabnet_gateway.fri_client = cur_fri_client
+
+    def test07_failed_write_transactions(self):
+        os.system('rm -rf /tmp/dynamic_cache/*')
+        nibbler = TestDHTInitProcedure.NIBBLER_INST
+        cur_fri_client = nibbler.fabnet_gateway.fri_client
+        try:
+            nibbler.fabnet_gateway.fri_client = MockedFriClient(genfail=True)
+            f_obj = nibbler.open_file('/my_first_dir/new_file_with_up_fails')
+            f_obj.write('test data block')
+            f_obj.close()
+
+            time.sleep(0.2)
+            nibbler.fabnet_gateway.fri_client = cur_fri_client
+            for i in xrange(10):
+                time.sleep(.1)
+                op_list = nibbler.inprocess_operations()
+                for oper_info in op_list:
+                    if oper_info.file_path == '/my_first_dir/new_file_with_up_fails' \
+                            and oper_info.status == Transaction.TS_FINISHED:
+                        break
+                else:
+                    continue
+                break
+            else:
+                raise Exception('transaction does not finished')
+        finally:
+            nibbler.fabnet_gateway.fri_client = cur_fri_client
+
+
+        #fail on DB saving into local cache
+        os.system('rm -rf /tmp/dynamic_cache/*')
+        f_obj = nibbler.open_file('/my_first_dir/new_file.failed')
+        f_obj.write('*'*100100)
+        def mocked_write(data, finalize):
+            raise IOError('no free space mock')
+        f_obj._SmartFileObject__cur_data_block.write = mocked_write
+        with self.assertRaises(IOError):
+            f_obj.close()
+        time.sleep(0.2)
+
+        op_list = nibbler.inprocess_operations()
+        for oper_info in op_list:
+            print oper_info
+            if oper_info.file_path == '/my_first_dir/new_file.failed' \
+                    and oper_info.status == Transaction.TS_FAILED:
+                break
+        else:
+            raise Exception('Transaction for /my_first_dir/new_file.failed file is not failed!')
+
+        data_blocks = os.listdir('/tmp/dynamic_cache/')
+        self.assertEqual(len(data_blocks), 0)
 
     def test08_remove_file(self):
         nibbler = TestDHTInitProcedure.NIBBLER_INST

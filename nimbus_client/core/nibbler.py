@@ -37,6 +37,10 @@ class InprogressOperation:
         self.size = size
         self.progress_perc = progress_perc
 
+    def __repr__(self):
+        return '[%s][%s][%s perc] %s'%('UPLOAD' if self.is_upload else 'DOWNLOAD', \
+                Transaction.TS_MAP.get(self.status, 'unknown'), self.progress_perc, self.file_path)
+
 class FSItem:
     def __init__(self, item_name, is_dir, create_dt=None, modify_dt=None, size=0):
         self.name = item_name
@@ -121,6 +125,8 @@ class Nibbler:
             self.get_manager.stop()
         if self.metadata:
             self.metadata.close()
+        if self.journal:
+            self.journal.close()
         if self.transactions_manager:
             self.transactions_manager.close()
         self.db_cache.stop()

@@ -27,7 +27,8 @@ class SmartFileObject:
         self.__seek = 0
         self.__cur_data_block = None
         self.__cur_db_seek = 0
-        self.__transaction_id = None
+        self.__transaction_id = None #used for write()
+        self.__transaction = None #used for read()
         self.__unsync = False
         self.__closed = False
 
@@ -61,8 +62,8 @@ class SmartFileObject:
         if self.__closed:
             raise ClosedFileException('closed file!')
 
-        if not self.__transaction_id:
-            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_DOWNLOAD, self.__file_path)
+        if not self.__transaction:
+            self.__transaction = self.TRANSACTIONS_MANAGER.start_download_transaction(self.__file_path)
 
         try:
             ret_data = ''
@@ -70,7 +71,7 @@ class SmartFileObject:
                 if not self.__cur_data_block:
                     if self.__seek is None:
                         break
-                    self.__cur_data_block, self.__seek = self.TRANSACTIONS_MANAGER.get_data_block(self.__transaction_id, self.__seek)
+                    self.__cur_data_block, self.__seek = self.__transaction.get_data_block(self.__seek)
 
                 data = self.__cur_data_block.read(read_len)
                 if data:
@@ -92,9 +93,13 @@ class SmartFileObject:
             return
         try:
             if self.__unsync:
-                if self.__cur_data_block:
-                    self.__send_data_block()
-                self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
+                try:
+                    if self.__cur_data_block:
+                        self.__send_data_block()
+                    self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
+                except Exception, err: 
+                    self.__failed_transaction(err)
+                    raise err
             else:
                 if self.__cur_data_block:
                     self.__cur_data_block.close()
@@ -105,7 +110,7 @@ class SmartFileObject:
         self.__cur_data_block.finalize()
 
         if not self.__transaction_id:
-            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_transaction(Transaction.TT_UPLOAD, self.__file_path)
+            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_upload_transaction(self.__file_path)
 
         self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, self.__seek, self.__cur_db_seek, self.__cur_data_block)
 

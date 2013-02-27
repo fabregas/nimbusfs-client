@@ -12,6 +12,7 @@ This module contains the implementation of DataBlock class
 """
 import os
 import time
+import copy
 import hashlib
 import threading
 
@@ -52,6 +53,13 @@ class DBLocksManager:
         finally:
             self.__thrd_lock.release()
 
+    def locks(self):
+        self.__thrd_lock.acquire()
+        try:
+            return [copy.copy(lock_obj) for lock_obj in self.__locks]
+        finally:
+            self.__thrd_lock.release()
+
 
 
 class DataBlock:
@@ -64,7 +72,7 @@ class DataBlock:
             return cls.LOCK_MANAGER.locked(path)
         return False
 
-    def __init__(self, path, raw_len=None, actsize=False):
+    def __init__(self, path, raw_len=None, actsize=False, create_if_none=False):
         self.__path = path
         self.__checksum = hashlib.sha1()
         self.__f_obj = None
@@ -75,7 +83,7 @@ class DataBlock:
         self.__raw_len = raw_len
         self.__lock = threading.RLock()
 
-        if not os.path.exists(self.__path):
+        if create_if_none and not os.path.exists(self.__path):
             open(self.__path, 'wb').close()
 
         if self.SECURITY_MANAGER:
@@ -90,7 +98,12 @@ class DataBlock:
 
 
     def get_actual_size(self):
+        if not os.path.exists(self.__path):
+            return 0
         return os.path.getsize(self.__path)
+
+    def full(self):
+        return self.get_actual_size() == self.__expected_len
 
     def get_progress(self):
         self.__lock.acquire()

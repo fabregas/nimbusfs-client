@@ -30,10 +30,13 @@ class Journal:
         self.__journal_path = journal_path
         if os.path.exists(self.__journal_path):
             os.remove(self.__journal_path)
-        self.__journal = DataBlock(self.__journal_path)
+        self.__journal = DataBlock(self.__journal_path, create_if_none=True)
         self.__fabnet_gateway = fabnet_gateway
         self.__last_record_id = 0
         self.__no_foreign = True
+
+    def close(self):
+        self.__journal.close()
 
     def __recv_journal(self):
         is_recv = self.__fabnet_gateway.get(self.__journal_key, 2, self.__journal)

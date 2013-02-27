@@ -33,12 +33,13 @@ class PutWorker(threading.Thread):
         while True:
             job = self.queue.get()
             data_block = None
+            key = None
             try:
                 if job == QUIT_JOB:
                     break
                 
                 transaction, seek = job
-                data_block,_ = transaction.get_data_block(seek)
+                data_block,_ = transaction.get_data_block(seek, noclone=True)
 
                 try:
                     key = self.fabnet_gateway.put(data_block, replica_count=transaction.get_replica_count(), allow_rewrite=False)
@@ -52,6 +53,13 @@ class PutWorker(threading.Thread):
                 self.transactions_manager.update_transaction(transaction.get_id(), seek, is_failed=False, foreign_name=key)
             except Exception, err:
                 logger.error('[PutWorker][%s] %s'%(job, err))
+                try:
+                    if transaction and key:
+                        self.transactions_manager.update_transaction(transaction.get_id(), seek, \
+                                    is_failed=True, foreign_name=key)
+
+                except Exception, err:
+                    logger.error('[PutWorker.__on_error] %s'%err)
             finally:
                 if data_block:
                     data_block.close()
@@ -71,7 +79,7 @@ class GetWorker(threading.Thread):
         while True:
             out_streem = data = None
             job = self.queue.get()
-            w_db = None
+            data_block = None
             transaction = None
             seek = None
             try:
@@ -80,32 +88,29 @@ class GetWorker(threading.Thread):
 
                 transaction, seek = job
 
-                data_block,_ = transaction.get_data_block(seek)
+                data_block,_ = transaction.get_data_block(seek, noclone=True)
 
                 if transaction.is_failed():
                     logger.debug('Transaction {%s} is failed! Skipping data block downloading...'%transaction.get_id())
                     data_block.remove()
                     continue
 
-                w_db = data_block.clone()
-                self.fabnet_gateway.get(data_block.get_name(), transaction.get_replica_count(), w_db)
-                w_db.close()
+                self.fabnet_gateway.get(data_block.get_name(), transaction.get_replica_count(), data_block)
+                data_block.close()
 
                 self.transactions_manager.update_transaction(transaction.get_id(), seek, \
                             is_failed=False, foreign_name=data_block.get_name())
             except Exception, err:
                 logger.error('[GetWorker][%s] %s'%(job, err))
                 try:
-                    if transaction:
+                    if transaction and data_block:
                         self.transactions_manager.update_transaction(transaction.get_id(), seek, \
                                     is_failed=True, foreign_name=data_block.get_name())
-                    if w_db:
-                        w_db.remove()
+
+                        data_block.remove()
                 except Exception, err:
                     logger.error('[GetWorker.__on_error] %s'%err)
             finally:
-                if w_db:
-                    w_db.close()
                 self.queue.task_done()
 
 
