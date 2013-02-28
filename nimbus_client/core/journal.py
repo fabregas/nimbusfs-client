@@ -12,12 +12,26 @@ This module contains the implementation of Journal class
 """
 import os
 import struct
+import threading
+import time
 
 from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.encdec_provider import BLOCK_SIZE, PAD 
 from nimbus_client.core.metadata import AbstractMetadataObject, DirectoryMD
+from nimbus_client.core.base_safe_object import LockObject
+from nimbus_client.core.logger import logger
+from nimbus_client.core.constants import JOURNAL_SYNC_CHECK_TIME
+
+JLock = LockObject()
 
 class Journal:
+    #journal statuses
+    JS_SYNC = 0
+    JS_NOT_SYNC = 1
+    JS_NOT_INIT = 2
+    JS_SYNC_FAILED = 3
+
+    #types of operations for journaling
     OT_APPEND = 1
     OT_UPDATE = 2
     OT_REMOVE = 3
@@ -33,42 +47,75 @@ class Journal:
         self.__journal = DataBlock(self.__journal_path, create_if_none=True)
         self.__fabnet_gateway = fabnet_gateway
         self.__last_record_id = 0
-        self.__no_foreign = True
 
-    def close(self):
-        self.__journal.close()
+        self.__no_foreign = True
+        self.__is_sync = False
+        self.__sync_failed = False
+
+        self.__j_sync_thrd = JournalSyncThread(self)
+        self.__j_sync_thrd.start()
 
     def __recv_journal(self):
         is_recv = self.__fabnet_gateway.get(self.__journal_key, 2, self.__journal)
         if is_recv:
             self.__no_foreign = False
+            self.__is_sync = True
+            logger.info("Journal is received from NimbusFS backend")
         else:
+            logger.warning("Can't receive journal from NimbusFS backend")
             self.__no_foreign = True
 
-    def __send_journal(self):
-        self.__journal.finalize()
-        j_data = DataBlock(self.__journal_path, actsize=True)
-        return self.__fabnet_gateway.put(j_data, key=self.__journal_key)
+    def close(self):
+        self.__journal.close()
+        self.__j_sync_thrd.stop()
 
+    @JLock
+    def synchronized(self):
+        return self.__is_sync
+
+    @JLock
+    def status(self):
+        if self.__sync_failed:
+            return self.JS_SYNC_FAILED
+        if self.__no_foreign:
+            return self.JS_NOT_INIT
+        if  not self.__is_sync:
+            return self.JS_NOT_SYNC
+        return self.JS_SYNC
+
+    @JLock
+    def _synchronize(self):
+        try:
+            self.__journal.finalize()
+            j_data = DataBlock(self.__journal_path, actsize=True)
+            is_send = self.__fabnet_gateway.put(j_data, key=self.__journal_key)
+            if is_send:
+                self.__is_sync = True
+            self.__sync_failed = False
+        except Exception, err:
+            self.__sync_failed = True
+            raise err
+
+    @JLock
     def foreign_exists(self):
         if self.__no_foreign:
             self.__recv_journal()
         return not self.__no_foreign
 
+    @JLock
     def init(self):
         if self.__journal.get_actual_size() > 0:
             raise RuntimeError('Journal is already initialized')
 
         #append root directory
         self.__int_append(self.OT_APPEND, DirectoryMD(item_id=0, parent_dir_id=0, name='/'))
-        saved = self.__send_journal() #full initialized journal should be send
-        if saved:
-            self.__no_foreign = False
+        self._synchronize() #full initialized journal should be send
+        self.__no_foreign = False
 
-
+    @JLock
     def append(self, operation_type, item_md):
         self.__int_append(operation_type, item_md)
-        self.__send_journal() #TODO incremental journal changes should be send
+        self.__is_sync = False
 
     def __int_append(self, operation_type, item_md):
         if operation_type not in (self.OT_APPEND, self.OT_UPDATE, self.OT_REMOVE):
@@ -89,29 +136,62 @@ class Journal:
         unsync_j_data = self.__journal.write(''.join([record_h, item_dump, pad_string]))
 
     def iter(self, start_record_id=None):
-        j_data = DataBlock(self.__journal_path, actsize=True)
-        buf = ''
-        while True:
-            if len(buf) < self.RECORD_STRUCT_SIZE:
-                buf += j_data.read(1024)
-                if not buf:
+        JLock.lock()
+        try:
+            j_data = DataBlock(self.__journal_path, actsize=True)
+            buf = ''
+            while True:
+                if len(buf) < self.RECORD_STRUCT_SIZE:
+                    buf += j_data.read(1024)
+                    if not buf:
+                        break
+
+                item_dump_len, operation_type, record_id = struct.unpack(self.RECORD_STRUCT, buf[:self.RECORD_STRUCT_SIZE])
+
+                if len(buf) < (self.RECORD_STRUCT_SIZE + item_dump_len):
+                    buf += j_data.read(1024)
+
+                item_dump = buf[self.RECORD_STRUCT_SIZE:self.RECORD_STRUCT_SIZE+item_dump_len]
+
+                remaining_len = BLOCK_SIZE - self.RECORD_STRUCT_SIZE - item_dump_len
+                to_pad_len = remaining_len % BLOCK_SIZE
+                buf = buf[self.RECORD_STRUCT_SIZE+item_dump_len+to_pad_len:]
+
+                if (start_record_id is None) or (record_id >= start_record_id):
+                    if operation_type == self.OT_REMOVE:
+                        item_md = struct.unpack('<I', item_dump)
+                    else:
+                        item_md = AbstractMetadataObject.load_md(item_dump)
+                    yield record_id, operation_type, item_md
+        finally:
+            JLock.unlock()
+
+
+class JournalSyncThread(threading.Thread):
+    def __init__(self, journal):
+        threading.Thread.__init__(self)
+        self.__journal = journal
+        self.__stop_flag = threading.Event()
+        self.setName('JournalSyncThread')
+
+    def stop(self):
+        self.__stop_flag.set()
+        self.join()
+
+    def run(self):
+        logger.info('thread is started')
+        while not self.__stop_flag.is_set():
+            if self.__journal.status() == Journal.JS_NOT_SYNC:
+                try:
+                    self.__journal._synchronize()
+                except Exception, err:
+                    logger.error('journal synchronization is failed with message: %s'%err)
+
+            for i in xrange(JOURNAL_SYNC_CHECK_TIME):
+                if self.__stop_flag.is_set():
                     break
+                time.sleep(1)
+        logger.info('thread is stopped')
 
-            item_dump_len, operation_type, record_id = struct.unpack(self.RECORD_STRUCT, buf[:self.RECORD_STRUCT_SIZE])
 
-            if len(buf) < (self.RECORD_STRUCT_SIZE + item_dump_len):
-                buf += j_data.read(1024)
-
-            item_dump = buf[self.RECORD_STRUCT_SIZE:self.RECORD_STRUCT_SIZE+item_dump_len]
-
-            remaining_len = BLOCK_SIZE - self.RECORD_STRUCT_SIZE - item_dump_len
-            to_pad_len = remaining_len % BLOCK_SIZE
-            buf = buf[self.RECORD_STRUCT_SIZE+item_dump_len+to_pad_len:]
-
-            if (start_record_id is None) or (record_id >= start_record_id):
-                if operation_type == self.OT_REMOVE:
-                    item_md = struct.unpack('<I', item_dump)
-                else:
-                    item_md = AbstractMetadataObject.load_md(item_dump)
-                yield record_id, operation_type, item_md
-
+    

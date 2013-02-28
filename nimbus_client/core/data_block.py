@@ -97,6 +97,9 @@ class DataBlock:
             self.__expected_len = self.get_actual_size()
 
 
+    def exists(self):
+        return os.path.exists(self.__path)
+
     def get_actual_size(self):
         if not os.path.exists(self.__path):
             return 0

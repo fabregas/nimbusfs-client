@@ -130,6 +130,7 @@ class DataBlockCache:
                             
             del_lst = sorted(del_lst, lambda a,b: cmp(a[1].st_atime, b[1].st_atime))
             for path, stat in del_lst:
+                logger.debug('clearing data block at %s'%path)
                 os.remove(path)
                 removed_size += stat.st_size
                 if removed_size >= del_size:
@@ -157,8 +158,15 @@ class DataBlockCache:
             if not os.path.exists(r_path):
                 r_path = os.path.join(self.__dyn_cache, r_path)
             os.remove(r_path)
+
+        logger.debug('removing data block at %s'%path)
         os.remove(path)
 
+        #clear dead links...
+        for item in os.listdir(self.__dyn_cache):
+            path = os.path.join(self.__dyn_cache, item)
+            if os.path.islink(path) and not os.path.exists(path):
+                os.remove(path)
 
 
 class CheckCapacityThrd(threading.Thread):

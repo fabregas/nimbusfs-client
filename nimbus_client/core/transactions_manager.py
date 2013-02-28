@@ -16,6 +16,7 @@ import base64
 from datetime import datetime
 from Queue import Queue
 
+from nimbus_client.core.logger import logger
 from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.metadata import FileMD, ChunkMD
 from nimbus_client.core.base_safe_object import LockObject
@@ -309,8 +310,13 @@ class TransactionsManager:
         transaction = self.__get_transaction(transaction_id)
         if transaction.get_transaction_type() == Transaction.TT_UPLOAD:
             if status == Transaction.TS_FINISHED:
-                self.__mv_local_data_blocks(transaction)
-                self.__save_metadata(transaction)
+                try:
+                    self.__mv_local_data_blocks(transaction)
+                    self.__save_metadata(transaction)
+                except Exception, err:
+                    #FIXME log message...
+                    logger.error("Can't update metadata! Details: %s"%err)
+                    return self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
             elif status == Transaction.TS_FAILED:
                 #should be removed data block from backend
                 for _,_,data_block, foreign_name in transaction.iter_data_blocks():
@@ -404,7 +410,8 @@ class TransactionsManager:
                     base64.b64encode(transaction.get_file_path()), transaction.get_replica_count()))
         self.__tr_log.flush()
         self.__tr_log_items_count += 1
-        if self.__tr_log_items_count >= MAX_TR_LOG_ITEMS:
+        if (self.__tr_log_items_count >= MAX_TR_LOG_ITEMS) \
+                and (len(self.__transactions) <= self.__tr_window_len):
             self.__tr_log_items_count = 0
             self.__normalize_tr_log()
 

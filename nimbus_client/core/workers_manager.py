@@ -32,6 +32,7 @@ class PutWorker(threading.Thread):
     def run(self):
         while True:
             job = self.queue.get()
+            transaction = None
             data_block = None
             key = None
             try:
@@ -40,6 +41,9 @@ class PutWorker(threading.Thread):
                 
                 transaction, seek = job
                 data_block,_ = transaction.get_data_block(seek, noclone=True)
+
+                if not data_block.exists():
+                    raise Exception('Data block %s does not found at local cache!'%data_block.get_name())
 
                 try:
                     key = self.fabnet_gateway.put(data_block, replica_count=transaction.get_replica_count(), allow_rewrite=False)
@@ -54,7 +58,7 @@ class PutWorker(threading.Thread):
             except Exception, err:
                 logger.error('[PutWorker][%s] %s'%(job, err))
                 try:
-                    if transaction and key:
+                    if transaction:
                         self.transactions_manager.update_transaction(transaction.get_id(), seek, \
                                     is_failed=True, foreign_name=key)
 
