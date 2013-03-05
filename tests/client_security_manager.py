@@ -160,6 +160,16 @@ class TestSecManager(unittest.TestCase):
         raw = db.read()
         self.assertEqual(ret_data, raw)
 
+        app_db = DataBlock(DB_PATH)
+        app_db.write('The end!')
+        app_db.finalize()
+        app_db.close()
+
+        db = DataBlock(DB_PATH, actsize=True)
+        raw = db.read()
+        self.assertEqual(ret_data+'The end!', raw)
+        db.close()
+
     def test_parallel_read_write(self):
         writers = []
         readers = []

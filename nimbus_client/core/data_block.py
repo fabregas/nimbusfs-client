@@ -13,6 +13,7 @@ This module contains the implementation of DataBlock class
 import os
 import time
 import copy
+import shutil
 import hashlib
 import threading
 
@@ -83,7 +84,7 @@ class DataBlock:
         self.__raw_len = raw_len
         self.__lock = threading.RLock()
 
-        if create_if_none and not os.path.exists(self.__path):
+        if create_if_none and (not os.path.exists(self.__path)):
             open(self.__path, 'wb').close()
 
         if self.SECURITY_MANAGER:
@@ -137,13 +138,15 @@ class DataBlock:
         data block.
         NOTICE: file object will be not closed after this method call.
         """
+        if self.__is_closed():
+            self.__backup_db()
+            self.__f_obj = self.__open_file('wb')
+            self.__restore_db()
+
         if encrypt and self.__encdec:
             data = self.__encdec.encrypt(data, finalize)
 
         self.__checksum.update(data)
-
-        if self.__is_closed():
-            self.__f_obj = self.__open_file('ab')
 
         self.__f_obj.write(data)
         self.__lock.acquire()
@@ -160,6 +163,10 @@ class DataBlock:
         self.__expected_len = self.__seek
         self.__seek = 0
         self.__checksum = hashlib.sha1()
+
+    def flush(self):
+        if self.__f_obj:
+            self.__f_obj.flush()
 
     def close(self):
         if self.__f_obj and not self.__f_obj.closed:
@@ -262,3 +269,18 @@ class DataBlock:
         finally:
             self.__lock.release()
 
+    def __backup_db(self):
+        if os.path.exists(self.__path):
+            shutil.move(self.__path, self.__path+'.back')
+
+    def __restore_db(self):
+        if not os.path.exists(self.__path+'.back'):
+            return
+
+        bdb = DataBlock(self.__path+'.back', actsize=True)
+        while True:
+            data = bdb.read(BUF_LEN)
+            if not data:
+                break
+            self.write(data)
+        bdb.remove()

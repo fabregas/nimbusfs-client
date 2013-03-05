@@ -260,31 +260,40 @@ class TestMetadata(unittest.TestCase):
         DataBlock.SECURITY_MANAGER = ks
         os.system('rm /tmp/test_nimbusfs_journal')
         journal = Journal('%040x'%23453, '/tmp/test_nimbusfs_journal', MockedFabnetGateway())
+        try:
+            dir_name = 'Test directory'
+            dir_id = 235532
+            parent_dir_id = 345
+            dir_md = DirectoryMD(name=dir_name, item_id=dir_id, parent_dir_id=parent_dir_id)
+            journal.append(Journal.OT_APPEND, dir_md)
 
-        dir_name = 'Test directory'
-        dir_id = 235532
-        parent_dir_id = 345
-        dir_md = DirectoryMD(name=dir_name, item_id=dir_id, parent_dir_id=parent_dir_id)
-        journal.append(Journal.OT_APPEND, dir_md)
+            for record_id, operation_type, item_md in journal.iter():
+                self.assertEqual(record_id, 1)
+                self.assertEqual(operation_type, Journal.OT_APPEND)
+                self.assertEqual(item_md.item_id, dir_id)
+                self.assertEqual(item_md.parent_dir_id, parent_dir_id)
+                self.assertEqual(item_md.name, dir_name)
 
+            dir_name = 'new directory name'
+            dir_md.dir_name = dir_name
+            journal.append(Journal.OT_UPDATE, dir_md)
+            for record_id, operation_type, item_md in journal.iter(2):
+                self.assertEqual(record_id, 2)
+                self.assertEqual(operation_type, Journal.OT_UPDATE)
+                self.assertEqual(item_md.item_id, dir_id)
+                self.assertEqual(item_md.parent_dir_id, parent_dir_id)
+                self.assertEqual(item_md.name, dir_name)
+
+            journal.append(Journal.OT_REMOVE, dir_md)
+        finally:
+            journal.close()
+        
+        journal = Journal('%040x'%23453, '/tmp/test_nimbusfs_journal', MockedFabnetGateway())
+        cnt = 0
         for record_id, operation_type, item_md in journal.iter():
-            self.assertEqual(record_id, 1)
-            self.assertEqual(operation_type, Journal.OT_APPEND)
-            self.assertEqual(item_md.item_id, dir_id)
-            self.assertEqual(item_md.parent_dir_id, parent_dir_id)
-            self.assertEqual(item_md.name, dir_name)
-
-        dir_name = 'new directory name'
-        dir_md.dir_name = dir_name
-        journal.append(Journal.OT_UPDATE, dir_md)
-        for record_id, operation_type, item_md in journal.iter(2):
-            self.assertEqual(record_id, 2)
-            self.assertEqual(operation_type, Journal.OT_UPDATE)
-            self.assertEqual(item_md.item_id, dir_id)
-            self.assertEqual(item_md.parent_dir_id, parent_dir_id)
-            self.assertEqual(item_md.name, dir_name)
-
-        journal.append(Journal.OT_REMOVE, dir_md)
+            cnt += 1
+        journal.close()
+        self.assertEqual(cnt, 3)
 
 
 class MockedFabnetGateway:

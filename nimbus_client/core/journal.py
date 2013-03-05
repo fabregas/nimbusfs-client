@@ -16,13 +16,15 @@ import threading
 import time
 
 from nimbus_client.core.data_block import DataBlock
-from nimbus_client.core.encdec_provider import BLOCK_SIZE, PAD 
+from nimbus_client.core.encdec_provider import BLOCK_SIZE
 from nimbus_client.core.metadata import AbstractMetadataObject, DirectoryMD
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.logger import logger
 from nimbus_client.core.constants import JOURNAL_SYNC_CHECK_TIME
 
 JLock = LockObject()
+
+PAD = '\x44'
 
 class Journal:
     #journal statuses
@@ -42,8 +44,8 @@ class Journal:
     def __init__(self, journal_key, journal_path, fabnet_gateway):
         self.__journal_key = journal_key
         self.__journal_path = journal_path
-        if os.path.exists(self.__journal_path):
-            os.remove(self.__journal_path)
+        #if os.path.exists(self.__journal_path):
+        #    os.remove(self.__journal_path)
         self.__journal = DataBlock(self.__journal_path, create_if_none=True)
         self.__fabnet_gateway = fabnet_gateway
         self.__last_record_id = 0
@@ -86,7 +88,7 @@ class Journal:
     @JLock
     def _synchronize(self):
         try:
-            self.__journal.finalize()
+            self.__journal.flush()
             j_data = DataBlock(self.__journal_path, actsize=True)
             is_send = self.__fabnet_gateway.put(j_data, key=self.__journal_key)
             if is_send:

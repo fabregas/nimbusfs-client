@@ -62,7 +62,7 @@ class EncDecProvider:
         if not self.__cipher:
             enc_data_len = struct.unpack('<H', data[:2])[0]
             if data_len < enc_data_len+2:
-                raise Exception('Unexpected encrypted header size: %s'%data_len)
+                raise Exception('Unexpected encrypted header size: %s < %s'%(data_len, enc_data_len+2))
 
             header = data[2:2+enc_data_len]
             data = data[enc_data_len+2:]
