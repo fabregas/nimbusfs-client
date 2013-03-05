@@ -15,6 +15,8 @@ from Crypto.Cipher import AES
 from Crypto import Random
 from Crypto.PublicKey import RSA as CRSA
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Util.asn1 import DerSequence
+from binascii import a2b_base64
 
 BLOCK_SIZE = 16
 INTERRUPT = '\x00\x01'
@@ -39,6 +41,17 @@ class PythonCryptoEngine:
         size = cls.__KEY.size()
         to_pad_len = (8 - size) % 8
         return (size+to_pad_len)/8
+
+    @classmethod
+    def load_serial_number(cls, cert):
+        lines = cert.replace(" ",'').split()
+        der = a2b_base64(''.join(lines[1:-1]))
+        # Extract subjectPublicKeyInfo field from X.509 certificate (see RFC3280)
+        cert = DerSequence()
+        cert.decode(der)
+        tbsCertificate = DerSequence()
+        tbsCertificate.decode(cert[0])
+        return int(tbsCertificate[1])
 
 
     def __init__(self, encrypted_header=None):

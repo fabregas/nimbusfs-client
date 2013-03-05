@@ -11,9 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of FriClient class.
 """
 import socket
-
-import M2Crypto.SSL
-from M2Crypto.SSL import Context, Connection
+import ssl
 
 from constants import RC_ERROR, RC_UNEXPECTED, FRI_CLIENT_TIMEOUT, FRI_CLIENT_READ_TIMEOUT
 
@@ -49,29 +47,22 @@ class FriClient:
 
             packet.session_id = self.session_id
 
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(conn_timeout)
+
             if self.is_ssl:
-                context = Context()
-                context.set_verify(0, depth = 0)
-                sock = Connection(context)
-                sock.set_post_connection_check_callback(None)
-                sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=conn_timeout))
-            else:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(conn_timeout)
+                sock = ssl.wrap_socket(sock)
 
             sock.connect((hostname, port))
 
             proc = SocketProcessor(sock, self.certificate)
 
+            if read_timeout:
+                sock.settimeout(read_timeout)
+
             proc.send_packet(packet)
 
-            if read_timeout:
-                if self.is_ssl:
-                    sock.set_socket_read_timeout(M2Crypto.SSL.timeout(sec=read_timeout))
-                else:
-                    sock.settimeout(read_timeout)
-
-            return proc.get_packet()
+            return proc.recv_packet()
         finally:
             if proc:
                 proc.close_socket()
@@ -88,6 +79,7 @@ class FriClient:
 
     def call_sync(self, node_address, packet, timeout=FRI_CLIENT_TIMEOUT):
         try:
+            packet.sync = True
             packet = self.__int_call(node_address, packet, timeout, FRI_CLIENT_READ_TIMEOUT)
 
             return packet

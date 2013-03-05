@@ -21,8 +21,6 @@ from nimbus_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 from nimbus_client.core.encdec_provider import EncDecProvider
 from nimbus_client.core import pycrypto_enc_engine
 
-from M2Crypto import X509
-
 CLIENT_CERT_FILENAME = 'client_certificate.pem'
 CLIENT_PRIKEY_FILENAME = 'client_prikey'
 
@@ -43,9 +41,7 @@ class AbstractSecurityManager:
         return self._client_cert
 
     def get_client_cert_key(self):
-        cert = X509.load_cert_string(self._client_cert)
-        user_key = cert.get_serial_number()
-        return user_key
+        return Cipher.load_serial_number(self._client_cert)
 
     def get_prikey(self):
         return self._client_prikey
