@@ -17,7 +17,7 @@ from nimbus_client.core.metadata_file import *
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core.data_block import DataBlock
 
-CLIENT_KS_PATH = './tests/cert/test_client_ks.zip'
+CLIENT_KS_PATH = './tests/cert/test_cl_1024.zip'
 PASSWD = 'qwerty123'
 
 

@@ -19,12 +19,14 @@ from base64 import b64encode, b64decode
 
 from nimbus_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 from nimbus_client.core.encdec_provider import EncDecProvider
+from nimbus_client.core import pycrypto_enc_engine
 
 from M2Crypto import X509
-from Crypto.PublicKey import RSA
 
 CLIENT_CERT_FILENAME = 'client_certificate.pem'
 CLIENT_PRIKEY_FILENAME = 'client_prikey'
+
+Cipher = pycrypto_enc_engine.PythonCryptoEngine
 
 class AbstractSecurityManager:
     def __init__(self, ks_path, passwd):
@@ -32,6 +34,7 @@ class AbstractSecurityManager:
         self._client_prikey = None
 
         self._load_key_storage(ks_path, passwd)
+        Cipher.init_key_cipher(self._client_prikey)
 
     def _load_key_storage(self, ks_path, passwd):
         pass
@@ -48,7 +51,7 @@ class AbstractSecurityManager:
         return self._client_prikey
 
     def get_encoder(self, raw_len):
-        return EncDecProvider(self._client_prikey, raw_len)
+        return EncDecProvider(Cipher, raw_len)
 
 
 
@@ -68,7 +71,6 @@ class FileBasedSecurityManager(AbstractSecurityManager):
 
         self._client_cert = read_file(CLIENT_CERT_FILENAME)
         self._client_prikey = read_file(CLIENT_PRIKEY_FILENAME)
-        self._client_prikey = RSA.importKey(self._client_prikey)
 
         storage.close()
 

@@ -32,7 +32,7 @@ from nimbus_client.core.exceptions import *
 
 DEBUG=False
 
-CLIENT_KS_PATH = './tests/cert/test_client_ks.zip'
+CLIENT_KS_PATH = './tests/cert/test_cl_1024.zip'
 VALID_STORAGE = './tests/cert/test_keystorage.zip'
 PASSWD = 'qwerty123'
 
@@ -391,6 +391,40 @@ class BaseNibblerTest(unittest.TestCase):
         items = nibbler.listdir()
         self.assertEqual(len(items), 2, items)
         self.assertEqual(items[0].name, 'my_second_dir')
+
+    def DISABLED_test10_profile(self):
+        nibbler = BaseNibblerTest.NIBBLER_INST
+        data = ''.join(random.choice(string.letters) for i in xrange(100))
+        FILES_CNT = 100
+        def put_files():
+            for i in xrange(FILES_CNT):
+                f_name = '/test_profile_%s.file'%i
+                f_obj = nibbler.open_file(f_name)
+                f_obj.write(data)
+                f_obj.close()
+
+        def get_files():
+            for i in xrange(FILES_CNT):
+                f_name = '/test_profile_%s.file'%i
+                f_obj = nibbler.open_file(f_name)
+                data = f_obj.read()
+                f_obj.close()
+                if len(data) != 100:
+                    raise Exception('Infalid data in %s'%f_name)
+
+        import cProfile
+        import pstats
+        cProfile.runctx('put_files()', globals(), locals(), 'put_files')
+        cProfile.runctx('get_files()', globals(), locals(), 'get_files')
+
+        print '========= put files stat ======='
+        p = pstats.Stats('put_files')  
+        p.strip_dirs().sort_stats('cumulative').print_stats()
+
+        print '========= get files stat ======='
+        p = pstats.Stats('get_files')  
+        p.strip_dirs().sort_stats('cumulative').print_stats()
+
 
     def DISABLED_test10_stress(self):
         nibbler = BaseNibblerTest.NIBBLER_INST

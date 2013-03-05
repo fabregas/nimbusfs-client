@@ -19,8 +19,9 @@ constants.READ_SLEEP_TIME = 0.2
 from nimbus_client.core.data_block import DataBlock
 
 
+CLIENT_KS_1024_PATH = './tests/cert/test_cl_1024.zip'
+CLIENT_KS_4096_PATH = './tests/cert/test_client_ks.zip'
 
-CLIENT_KS_PATH = './tests/cert/test_client_ks.zip'
 PASSWD = 'qwerty123'
 
 
@@ -81,11 +82,11 @@ class DBReader(threading.Thread):
 class TestSecManager(unittest.TestCase):
     def test_enc_dec(self):
         for i in xrange(10):
-            self.iter_encr(1000+random.randint(0, 500))
+            self.iter_encr(1000+random.randint(0, 500), CLIENT_KS_4096_PATH)
 
-    def iter_encr(self, data_len):
+    def iter_encr(self, data_len, key_storage):
         data = ''.join(random.choice(string.letters) for i in xrange(data_len))
-        ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
+        ks = FileBasedSecurityManager(key_storage, PASSWD)
 
         print 'Data block len: %s'%len(data)
 
@@ -100,7 +101,7 @@ class TestSecManager(unittest.TestCase):
         self.assertEqual(decrypted, data)
 
     def test_inc_encode_decode(self):
-        ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
+        ks = FileBasedSecurityManager(CLIENT_KS_1024_PATH, PASSWD)
         data = ''.join(random.choice(string.letters) for i in xrange(1024))
         TEST_LEN = 10000
         encdec = ks.get_encoder(TEST_LEN)
@@ -122,7 +123,7 @@ class TestSecManager(unittest.TestCase):
         self.assertEqual(data, or_data)
 
     def test_data_block(self):
-        ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
+        ks = FileBasedSecurityManager(CLIENT_KS_1024_PATH, PASSWD)
         DataBlock.SECURITY_MANAGER = ks
         DB_PATH = '/tmp/test_data_block.kst'
 
