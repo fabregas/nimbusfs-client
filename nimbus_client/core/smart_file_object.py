@@ -58,6 +58,10 @@ class SmartFileObject:
             self.__failed_transaction(err)
             raise err
 
+    def seek(self, seek_v):
+        #TODO: make me smarter...
+        pass
+
     def read(self, read_len=None):
         if self.__closed:
             raise ClosedFileException('closed file!')

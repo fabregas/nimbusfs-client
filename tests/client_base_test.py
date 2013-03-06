@@ -38,6 +38,20 @@ PASSWD = 'qwerty123'
 
 TMP_FILE = '/tmp/test_file.out'
 
+def wait_oper_status(inprocess_operations_func, file_path, status):
+    for i in xrange(20):
+        time.sleep(.1)
+        op_list = inprocess_operations_func()
+        for oper_info in op_list:
+            if oper_info.status == status and oper_info.file_path == file_path:
+                return
+    else:
+        op_list = inprocess_operations_func()
+        for oper_info in op_list:
+            print oper_info
+        raise Exception('wait_oper_status(%s, %s) failed!'%(file_path, status))
+
+
 class PutGetWorker(threading.Thread):
     def __init__(self, nibbler, queue, errors_q):
         threading.Thread.__init__(self)
@@ -357,17 +371,7 @@ class BaseNibblerTest(unittest.TestCase):
 
     def __wait_oper_status(self, file_path, status):
         nibbler = BaseNibblerTest.NIBBLER_INST
-        for i in xrange(20):
-            time.sleep(.1)
-            op_list = nibbler.inprocess_operations()
-            for oper_info in op_list:
-                if oper_info.status == status and oper_info.file_path == file_path:
-                    return
-        else:
-            op_list = nibbler.inprocess_operations()
-            for oper_info in op_list:
-                print oper_info
-            raise Exception('__wait_oper_status(%s, %s) failed!'%(file_path, status))
+        wait_oper_status(nibbler.inprocess_operations, file_path, status)
 
     def test08_remove_file(self):
         nibbler = BaseNibblerTest.NIBBLER_INST

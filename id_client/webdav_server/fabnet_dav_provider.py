@@ -11,6 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of fabner DAV provider
 """
 from datetime import datetime
+import time
 import wsgidav.util as util
 import os
 import tempfile
@@ -47,7 +48,7 @@ class FileResource(DAVNonCollection):
         self.name = os.path.basename(file_obj.name)
         self.name = self.name
 
-        self._filePath = None
+        self._file_obj = None
 
     # Getter methods for standard live properties     
     def getContentLength(self):
@@ -57,7 +58,7 @@ class FileResource(DAVNonCollection):
         return 'application/octet-stream'
 
     def _to_unix_time(self, date):
-        return float(datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ').strftime("%s"))
+        return time.mktime(date.timetuple())
 
     def getCreationDate(self):
         return self._to_unix_time(self.file_obj.create_dt)
@@ -82,14 +83,8 @@ class FileResource(DAVNonCollection):
 
         See DAVResource.getContent()
         """
-        cached_file = self.provider.cache_fs.get(self.path)
-        if cached_file:
-            return open(cached_file, 'rb')
-
-        out_file = self.provider.cache_fs.make_cache_file(self.path)
-        op_id = self.nibbler.load_file(self.path, out_file)
-        self.nibbler.wait_async_operation(op_id)
-        return open(out_file, 'rb')
+        f_obj = self.nibbler.open_file(self.path)
+        return f_obj
 
     def beginWrite(self, contentType=None):
         """Open content as a stream for writing.
@@ -99,29 +94,20 @@ class FileResource(DAVNonCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        self._filePath = self.provider.cache_fs.make_cache_file(self.path)
-        f_obj = open(self._filePath, "wb")
-        return f_obj
+        self._file_obj = self.nibbler.open_file(self.path)
+        return self._file_obj
 
     def endWrite(self, withErrors):
         """Called when PUT has finished writing.
 
         This is only a notification. that MAY be handled.
         """
-        def callback(error):
-            if self._filePath:
-                self.provider.cache_fs.remove(self.path)
-                self._filePath = None
-
+        self.provider.cache_fs.remove(self.path)
         if not withErrors:
-            f_size =  os.path.getsize(self._filePath)
-            if f_size == 0 or self.file_obj.name.startswith('.'):
-                return
-
-            self.nibbler.save_file(self._filePath, self.file_obj.name, \
-                        os.path.dirname(self.path), callback)
+            self._file_obj.close()
         else:
-            callback(None)
+            #TODO maybe some kind of error message should be provided...
+            pass
 
 
     def delete(self):
@@ -188,9 +174,8 @@ class FolderResource(DAVCollection):
 
 
     # Getter methods for standard live properties     
-
     def _to_unix_time(self, date):
-        return float(datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ').strftime("%s"))
+        return time.mktime(date.timetuple())
 
     def getCreationDate(self):
         return self._to_unix_time(self.dir_obj.create_dt)
@@ -244,13 +229,6 @@ class FolderResource(DAVCollection):
         See DAVCollection.getMember()
         """
         path = util.joinUri(self.path, name)
-        f_path = self.provider.cache_fs.get(path)
-        #this magic does not allow load the whole content for crazy Finder on MacOS
-        if not f_path and name in ['.ql_disablecache', '.ql_disablethumbnails']:
-            if (not self.nibbler.listdir(self.path)) and \
-                    (not self.provider.cache_fs.get_dir_content(self.path)):
-                return None
-            self.provider.cache_fs.make_cache_file(path)
 
         return self.provider.getResourceInst(path, self.environ)
 
@@ -268,7 +246,8 @@ class FolderResource(DAVCollection):
         #    raise DAVError(HTTP_FORBIDDEN)
 
         path = util.joinUri(self.path, name)
-        self.provider.cache_fs.make_cache_file(path)
+        f_obj = FSItem(name, is_dir=False) 
+        self.provider.cache_fs.put(path, f_obj)
         return self.provider.getResourceInst(path, self.environ)
 
 
@@ -333,7 +312,7 @@ class FabnetProvider(DAVProvider):
     def __init__(self, nibbler):
         super(FabnetProvider, self).__init__()
         self.nibbler = nibbler
-        self.cache_fs = CacheFS('/tmp')
+        self.cache_fs = CacheFS()
         self.readonly = False
         self.__lock = threading.Lock()
         self.__virtual_resources = {}
@@ -347,12 +326,12 @@ class FabnetProvider(DAVProvider):
         #fp = util.toUnicode(path.rstrip("/"))
 
         name = os.path.basename(path)
+        if name in ['.ql_disablecache', '.ql_disablethumbnails']:
+            r_obj = FSItem(name, is_dir=False) 
+            return FileResource(self.nibbler, path, environ, r_obj)
 
-        f_path = self.cache_fs.get(path)
-        if f_path:
-            f_size =  os.path.getsize(f_path)
-            r_obj = FSItem(name, False, size=f_size)
-        else:
+        r_obj = self.cache_fs.get(path)
+        if not r_obj:
             r_obj = self.nibbler.find(path)
             if r_obj is None:
                 return None

@@ -46,7 +46,7 @@ class PythonCryptoEngine:
     def load_serial_number(cls, cert):
         lines = cert.replace(" ",'').split()
         der = a2b_base64(''.join(lines[1:-1]))
-        # Extract subjectPublicKeyInfo field from X.509 certificate (see RFC3280)
+
         cert = DerSequence()
         cert.decode(der)
         tbsCertificate = DerSequence()

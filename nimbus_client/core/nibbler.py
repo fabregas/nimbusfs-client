@@ -67,12 +67,13 @@ class FSItem:
 
 
 class Nibbler:
-    def __init__(self, fabnet_host, security_provider, parallel_put_count=3, parallel_get_count=3, cache_dir='/tmp'):
+    def __init__(self, fabnet_host, security_provider, parallel_put_count=3, \
+            parallel_get_count=3, cache_dir='/tmp', cache_size=None):
         self.__parallel_put_count = parallel_put_count
         self.__parallel_get_count = parallel_get_count
         self.security_provider = security_provider
         self.fabnet_gateway = FabnetGateway(fabnet_host, security_provider)
-        self.db_cache = DataBlockCache(cache_dir)
+        self.db_cache = DataBlockCache(cache_dir, cache_size)
 
         user_id = self.security_provider.get_client_cert()
         self.metadata_key = hashlib.sha1(user_id).hexdigest()
