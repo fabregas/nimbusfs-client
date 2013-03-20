@@ -59,3 +59,6 @@ class ClosedFileException(NimbusException):
 
 class IOException(NimbusException):
     pass
+
+class NotFoundException(NimbusException):
+    pass

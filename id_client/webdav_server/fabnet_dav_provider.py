@@ -30,6 +30,19 @@ __docformat__ = "reStructuredText"
 
 BUFFER_SIZE = 8192
 
+class EmptyFileObject:
+    def write(self, data):
+        raise RuntimeError('EmptyFileObject can not provide write() method')
+
+    def read(self, dummy):
+        return ''
+
+    def seek(self, dummy):
+        pass
+
+    def close(self):
+        pass
+
 
 #===============================================================================
 # FileResource
@@ -39,12 +52,13 @@ class FileResource(DAVNonCollection):
 
     See also _DAVResource, DAVNonCollection, and FilesystemProvider.
     """
-    def __init__(self, nibbler, path, environ, file_obj):
+    def __init__(self, nibbler, path, environ, file_obj, virtual=False):
         super(FileResource, self).__init__(path, environ)
         self.nibbler = nibbler
         self.file_obj = file_obj
 
         # Setting the name from the file path should fix the case on Windows
+        self.virtual_res = virtual
         self.name = os.path.basename(file_obj.name)
         self.name = self.name
 
@@ -83,8 +97,9 @@ class FileResource(DAVNonCollection):
 
         See DAVResource.getContent()
         """
-        f_obj = self.nibbler.open_file(self.path)
-        return f_obj
+        if self.virtual_res:
+            return EmptyFileObject()
+        return self.nibbler.open_file(self.path)
 
     def beginWrite(self, contentType=None):
         """Open content as a stream for writing.
@@ -102,13 +117,8 @@ class FileResource(DAVNonCollection):
 
         This is only a notification. that MAY be handled.
         """
-        self.provider.cache_fs.remove(self.path)
-        if not withErrors:
-            self._file_obj.close()
-        else:
-            #TODO maybe some kind of error message should be provided...
-            pass
-
+        if withErrors or self._file_obj.get_seek()>0:
+            self.provider.cache_fs.remove(self.path)
 
     def delete(self):
         """Remove this resource or collection (recursive).
@@ -328,17 +338,18 @@ class FabnetProvider(DAVProvider):
         name = os.path.basename(path)
         if name in ['.ql_disablecache', '.ql_disablethumbnails']:
             r_obj = FSItem(name, is_dir=False) 
-            return FileResource(self.nibbler, path, environ, r_obj)
+            return FileResource(self.nibbler, path, environ, r_obj, virtual=True)
 
+        is_virt = True
         r_obj = self.cache_fs.get(path)
         if not r_obj:
             r_obj = self.nibbler.find(path)
             if r_obj is None:
                 return None
-                #raise Exception('Member "%s" does not found in %s'%(name, path))
+            is_virt = False
 
         if r_obj.is_dir:
             return FolderResource(self.nibbler, path, environ, r_obj)
 
-        return FileResource(self.nibbler, path, environ, r_obj)
+        return FileResource(self.nibbler, path, environ, r_obj, is_virt)
 

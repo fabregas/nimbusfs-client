@@ -96,6 +96,7 @@ class DataBlock:
 
         if actsize:
             self.__expected_len = self.get_actual_size()
+            self.__encdec.set_expected_data_len(self.__expected_len)
 
 
     def exists(self):

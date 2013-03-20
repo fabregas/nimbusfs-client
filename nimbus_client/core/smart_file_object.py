@@ -58,16 +58,28 @@ class SmartFileObject:
             self.__failed_transaction(err)
             raise err
 
+    def get_seek(self):
+        return self.__seek
+
     def seek(self, seek_v):
-        #TODO: make me smarter...
-        pass
+        if not self.__transaction:
+            self.__transaction = self.TRANSACTIONS_MANAGER.start_download_transaction(self.__file_path)
+
+        while True:
+            cur_seek = self.__seek
+            self.__cur_data_block, self.__seek = self.__transaction.get_data_block(self.__seek)
+            if self.__cur_data_block is None:
+                return
+
+            if (not self.__seek) or (seek_v <= self.__seek and seek_v >= cur_seek):
+                return
+
 
     def read(self, read_len=None):
         if self.__closed:
             raise ClosedFileException('closed file!')
 
-        if not self.__transaction:
-            self.__transaction = self.TRANSACTIONS_MANAGER.start_download_transaction(self.__file_path)
+        self.seek(0)
 
         try:
             ret_data = ''
@@ -112,11 +124,11 @@ class SmartFileObject:
             
     def __send_data_block(self):
         self.__cur_data_block.finalize()
+        if self.__cur_data_block.get_actual_size():
+            if not self.__transaction_id:
+                self.__transaction_id = self.TRANSACTIONS_MANAGER.start_upload_transaction(self.__file_path)
 
-        if not self.__transaction_id:
-            self.__transaction_id = self.TRANSACTIONS_MANAGER.start_upload_transaction(self.__file_path)
-
-        self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, self.__seek, self.__cur_db_seek, self.__cur_data_block)
+            self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, self.__seek, self.__cur_db_seek, self.__cur_data_block)
 
         self.__seek += self.__cur_db_seek
         self.__cur_db_seek = 0

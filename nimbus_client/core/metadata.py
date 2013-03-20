@@ -5,6 +5,7 @@ import zlib
 from datetime import datetime
 
 from nimbus_client.core.exceptions import *
+from nimbus_client.core.utils import to_str
 
 MAX_B = pow(2, struct.calcsize('<B')*8)-1
 MAX_L = pow(2, struct.calcsize('<L')*8)-1
@@ -198,7 +199,7 @@ class FileMD(AbstractMetadataObject):
 
     def dump(self, is_local=False, recursive=False):
         self.validate()
-        fname = self.name.encode('utf8')
+        fname = to_str(self.name)
         fname_len = len(fname)
         if fname_len < 1 or fname_len > MAX_B:
             raise MDValidationError('File name length should be in range [1..%s], but "%s" occured'%(MAX_B, fname))
@@ -220,7 +221,7 @@ class FileMD(AbstractMetadataObject):
             struct.unpack(self.HDR_STRUCT, dumped[:self.HDR_LEN])
 
         f_name = dumped[self.HDR_LEN: self.HDR_LEN+f_name_len]
-        self.name = f_name.decode('utf8')
+        self.name = f_name
         seek = self.HDR_LEN+f_name_len
         while seek < len(dumped):
             chunk_len = ord(dumped[seek])
@@ -291,7 +292,7 @@ class DirectoryMD(AbstractMetadataObject):
 
     def dump(self, is_local=False, recursive=False):
         self.validate()
-        dname = self.name.encode('utf8')
+        dname = to_str(self.name)
         dname_len = len(dname)
         if dname_len < 1 or dname_len > MAX_B:
             raise MDValidationError('Directory name length should be in range [1..%s], but "%s" occured'%(MAX_B, dname))
@@ -315,7 +316,7 @@ class DirectoryMD(AbstractMetadataObject):
             self.create_date, self.last_modify_date = \
             struct.unpack(self.HDR_STRUCT, dumped[:self.HDR_LEN])
         d_name = dumped[self.HDR_LEN: self.HDR_LEN+d_name_len]
-        self.name = d_name.decode('utf8')
+        self.name = d_name
 
         seek = self.HDR_LEN+d_name_len
         ss = self.ITEM_HDR_LEN

@@ -28,6 +28,9 @@ class EncDecProvider:
     def get_expected_data_len(self):
         return self.__expected_len
 
+    def set_expected_data_len(self, expected_len):
+        return self.__expected_len
+
     def __calculate_expected_len(self, raw_data_len):
         if raw_data_len is None:
             return None

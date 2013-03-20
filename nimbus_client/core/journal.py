@@ -44,8 +44,6 @@ class Journal:
     def __init__(self, journal_key, journal_path, fabnet_gateway):
         self.__journal_key = journal_key
         self.__journal_path = journal_path
-        #if os.path.exists(self.__journal_path):
-        #    os.remove(self.__journal_path)
         self.__journal = DataBlock(self.__journal_path, create_if_none=True)
         self.__fabnet_gateway = fabnet_gateway
         self.__last_record_id = 0
@@ -58,6 +56,10 @@ class Journal:
         self.__j_sync_thrd.start()
 
     def __recv_journal(self):
+        if os.path.exists(self.__journal_path):
+            os.remove(self.__journal_path)
+        self.__journal = DataBlock(self.__journal_path, create_if_none=True)
+
         is_recv = self.__fabnet_gateway.get(self.__journal_key, 2, self.__journal)
         if is_recv:
             self.__no_foreign = False
@@ -116,8 +118,9 @@ class Journal:
 
     @JLock
     def append(self, operation_type, item_md):
-        self.__int_append(operation_type, item_md)
+        j_id = self.__int_append(operation_type, item_md)
         self.__is_sync = False
+        return j_id
 
     def __int_append(self, operation_type, item_md):
         if operation_type not in (self.OT_APPEND, self.OT_UPDATE, self.OT_REMOVE):
@@ -136,6 +139,7 @@ class Journal:
         pad_string = PAD * to_pad_len
 
         unsync_j_data = self.__journal.write(''.join([record_h, item_dump, pad_string]))
+        return self.__last_record_id
 
     def iter(self, start_record_id=None):
         JLock.lock()
@@ -164,6 +168,7 @@ class Journal:
                         item_md = struct.unpack('<I', item_dump)
                     else:
                         item_md = AbstractMetadataObject.load_md(item_dump)
+                    logger.debug('J_ITER: record_id=%s, operation_type=%s, item_md=%s'%(record_id, operation_type, item_md))
                     yield record_id, operation_type, item_md
         finally:
             JLock.unlock()

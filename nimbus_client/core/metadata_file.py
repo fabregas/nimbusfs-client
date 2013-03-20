@@ -15,6 +15,7 @@ import anydbm
 from nimbus_client.core.metadata import *
 from nimbus_client.core.journal import Journal
 from nimbus_client.core.base_safe_object import LockObject
+from nimbus_client.core.utils import to_str
 
 MDLock = LockObject()
 
@@ -210,8 +211,11 @@ class MetadataFile:
                 elif operation_type == Journal.OT_UPDATE:
                     self.update(item_md)
                 elif operation_type == Journal.OT_REMOVE:
-                    item_md = self.__get_item_md(item_md)
-                    self.remove(item_md)
+                    try:
+                        item_md = self.__get_item_md(item_md)
+                        self.remove(item_md)
+                    except NotFoundException, err:
+                        pass
                 self.__last_journal_rec_id = record_id
         else:
             self.append(None, DirectoryMD(name='/', item_id=0, parent_dir_id=0))
@@ -236,11 +240,6 @@ class MetadataFile:
     def __remove_key(self, key):
         del self.db[key.dump()]
 
-    def to_str(self, val):
-        if type(val) == unicode:
-            return val.encode('utf8')
-        return val
-
     def __get_child_id(self, dir_id, item_name):
         ikey = Key(Key.KT_ADDR, dir_id, self.__hash(item_name))
         i_ids = []
@@ -258,7 +257,7 @@ class MetadataFile:
         if len(i_ids) > 1:
             for i_id in i_ids:
                 item_md = self.__get_item_md(i_id)
-                if self.to_str(item_md.name) == self.to_str(item_name):
+                if to_str(item_md.name) == to_str(item_name):
                     ret_id = i_id
                     break
         else:
@@ -306,7 +305,7 @@ class MetadataFile:
         return raw_item_md[self.ITEM_HDR_SIZE:i_size], i_type
 
     def __update_addr_item(self, old_item_md, new_item_md):
-        if self.to_str(old_item_md.name) != self.to_str(new_item_md.name):
+        if to_str(old_item_md.name) != to_str(new_item_md.name):
             new_key = Key(Key.KT_ADDR, new_item_md.parent_dir_id, self.__hash(new_item_md.name))
             old_key = Key(Key.KT_ADDR, old_item_md.parent_dir_id, self.__hash(old_item_md.name))
             self.__update_addr(old_key, old_item_md.item_id, new_key)
@@ -380,7 +379,7 @@ class MetadataFile:
 
         for i_id in AddressItems.iter_item_ids(addr_st_raw):
             i_md = self.__get_item_md(i_id)
-            if self.to_str(i_md.name) == self.to_str(item_md.name):
+            if to_str(i_md.name) == to_str(item_md.name):
                 return True
 
         return False

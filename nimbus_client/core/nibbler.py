@@ -27,6 +27,7 @@ from nimbus_client.core.transactions_manager import TransactionsManager, Transac
 from nimbus_client.core.workers_manager import WorkersManager, PutWorker, GetWorker 
 from nimbus_client.core.smart_file_object import SmartFileObject
 from nimbus_client.core.data_block import DataBlock, DBLocksManager
+from nimbus_client.core.utils import to_str
 
 
 class InprogressOperation:
@@ -43,6 +44,8 @@ class InprogressOperation:
 
 class FSItem:
     def __init__(self, item_name, is_dir, create_dt=None, modify_dt=None, size=0):
+        if type(item_name) == str:
+            item_name = item_name.decode('utf8')
         self.name = item_name
         self.is_dir = is_dir
         self.is_file = not is_dir
@@ -136,7 +139,7 @@ class Nibbler:
         return FSItem(item_md.name, item_md.is_dir(), item_md.create_date, item_md.last_modify_date, item_md.size)
 
     def find(self, path):
-        path = path.decode('utf8')
+        path = to_str(path)
         try:
             path_obj = self.metadata.find(path)
         except PathException, err:
@@ -147,7 +150,7 @@ class Nibbler:
             return self.__make_item_fs(path_obj)
 
     def listdir(self, path='/'):
-        path = path.decode('utf8')
+        path = to_str(path)
         items = self.metadata.listdir(path)
         ret_lst = [self.__make_item_fs(i) for i in items]
  
@@ -164,7 +167,8 @@ class Nibbler:
 
 
     def mkdir(self, path, recursive=False):
-        path = path.decode('utf8')
+        path = to_str(path)
+        logger.debug('mkdir %s ...'%path)
         mdf = self.metadata
         if mdf.exists(path):
             raise AlreadyExistsException('Directory "%s" is already exists!'%path)
@@ -182,7 +186,8 @@ class Nibbler:
 
 
     def rmdir(self, path, recursive=False):
-        path = path.decode('utf8')
+        path = to_str(path)
+        logger.debug('rmdir %s ...'%path)
         mdf = self.metadata
 
         dir_obj = mdf.find(path)
@@ -203,8 +208,9 @@ class Nibbler:
         mdf.remove(dir_obj)
 
     def move(self, s_path, d_path):
-        s_path = s_path.decode('utf8')
-        d_path = d_path.decode('utf8')
+        s_path = to_str(s_path)
+        d_path = to_str(d_path)
+        logger.debug('moving %s to %s ...'%(s_path, d_path))
 
         mdf = self.metadata
         source = mdf.find(s_path)
@@ -224,7 +230,8 @@ class Nibbler:
         mdf.append(dst_path, source)
 
     def remove_file(self, file_path):
-        file_path = file_path.decode('utf8')
+        file_path = to_str(file_path)
+        logger.debug('removing file %s ...'%file_path)
         file_md = self.metadata.find(file_path)
         if not file_md.is_file():
             raise NotFileException('%s is not a file!'%dest_dir)
@@ -232,7 +239,8 @@ class Nibbler:
         #TODO: remove file from NimbusFS should be implemented!
 
     def open_file(self, file_path):
-        file_path = file_path.decode('utf8')
+        file_path = to_str(file_path)
+        logger.debug('opening file %s ...'%file_path)
         return SmartFileObject(file_path)
 
     def inprocess_operations(self):
