@@ -16,7 +16,7 @@ import threading
 import time
 
 from nimbus_client.core.data_block import DataBlock
-from nimbus_client.core.encdec_provider import BLOCK_SIZE
+from nimbus_client.core.pycrypto_enc_engine import BLOCK_SIZE
 from nimbus_client.core.metadata import AbstractMetadataObject, DirectoryMD
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.logger import logger
@@ -56,14 +56,14 @@ class Journal:
         self.__j_sync_thrd.start()
 
     def __recv_journal(self):
-        if os.path.exists(self.__journal_path):
-            os.remove(self.__journal_path)
+        self.__journal.remove()
         self.__journal = DataBlock(self.__journal_path, create_if_none=True)
 
         is_recv = self.__fabnet_gateway.get(self.__journal_key, 2, self.__journal)
         if is_recv:
             self.__no_foreign = False
             self.__is_sync = True
+            self.__journal.close() #next __journal.write reopen data block
             logger.info("Journal is received from NimbusFS backend")
         else:
             logger.warning("Can't receive journal from NimbusFS backend")
@@ -149,10 +149,16 @@ class Journal:
             while True:
                 if len(buf) < self.RECORD_STRUCT_SIZE:
                     buf += j_data.read(1024)
+                    #logger.debug('J_ITER: buf=%s'%buf.encode('hex').upper())
                     if not buf:
                         break
 
+                #logger.debug('J_ITER: header=%s'%buf[:self.RECORD_STRUCT_SIZE].encode('hex').upper())
                 item_dump_len, operation_type, record_id = struct.unpack(self.RECORD_STRUCT, buf[:self.RECORD_STRUCT_SIZE])
+                #logger.debug('J_ITER: buf_len=%s, item_dump_len=%s, operation_type=%s, record_id=%s'%(len(buf), item_dump_len, operation_type, record_id))
+                if operation_type not in (self.OT_APPEND, self.OT_UPDATE, self.OT_REMOVE):
+                    #logger.debug('J_ITER: buf=%s'%buf.encode('hex').upper())
+                    raise RuntimeError('Invalid journal!!! Unknown operation type: %s'%operation_type)
 
                 if len(buf) < (self.RECORD_STRUCT_SIZE + item_dump_len):
                     buf += j_data.read(1024)
@@ -161,11 +167,12 @@ class Journal:
 
                 remaining_len = BLOCK_SIZE - self.RECORD_STRUCT_SIZE - item_dump_len
                 to_pad_len = remaining_len % BLOCK_SIZE
+                #logger.debug('J_ITER: record=%s'%buf[:self.RECORD_STRUCT_SIZE+item_dump_len+to_pad_len].encode('hex').upper())
                 buf = buf[self.RECORD_STRUCT_SIZE+item_dump_len+to_pad_len:]
 
-                if (start_record_id is None) or (record_id >= start_record_id):
+                if (start_record_id is None) or (record_id > start_record_id):
                     if operation_type == self.OT_REMOVE:
-                        item_md = struct.unpack('<I', item_dump)
+                        item_md = struct.unpack('<I', item_dump)[0]
                     else:
                         item_md = AbstractMetadataObject.load_md(item_dump)
                     logger.debug('J_ITER: record_id=%s, operation_type=%s, item_md=%s'%(record_id, operation_type, item_md))

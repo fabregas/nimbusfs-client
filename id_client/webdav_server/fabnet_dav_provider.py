@@ -119,6 +119,7 @@ class FileResource(DAVNonCollection):
         """
         if withErrors or self._file_obj.get_seek()>0:
             self.provider.cache_fs.remove(self.path)
+        
 
     def delete(self):
         """Remove this resource or collection (recursive).

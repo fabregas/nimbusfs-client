@@ -19,6 +19,7 @@ import threading
 
 from nimbus_client.core.exceptions import TimeoutException, IOException
 from nimbus_client.core.constants import BUF_LEN, READ_TRY_COUNT, READ_SLEEP_TIME
+from nimbus_client.core.logger import logger
 
 class DBLocksManager:
     def __init__(self):

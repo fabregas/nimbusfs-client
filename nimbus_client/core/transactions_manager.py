@@ -270,6 +270,7 @@ class TransactionsManager:
                                 chunk.size, data_block, chunk.key, no_transfer=True)
                         continue
                     else:
+                        logger.error('Removing corrupted data block: %s'% data_block.get_name())
                         data_block.remove()
 
                 if not stored_transaction:

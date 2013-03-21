@@ -15,6 +15,7 @@ import anydbm
 from nimbus_client.core.metadata import *
 from nimbus_client.core.journal import Journal
 from nimbus_client.core.base_safe_object import LockObject
+from nimbus_client.core.logger import logger
 from nimbus_client.core.utils import to_str
 
 MDLock = LockObject()
@@ -207,7 +208,7 @@ class MetadataFile:
                     try:
                         self.append(None, item_md)
                     except AlreadyExistsException, err:
-                        pass
+                        logger.warning('Can not append item %s, bcs it is already exists!'%item_md)
                 elif operation_type == Journal.OT_UPDATE:
                     self.update(item_md)
                 elif operation_type == Journal.OT_REMOVE:
@@ -215,7 +216,7 @@ class MetadataFile:
                         item_md = self.__get_item_md(item_md)
                         self.remove(item_md)
                     except NotFoundException, err:
-                        pass
+                        logger.warning('Can not remove item with ID=%s, bcs it does not found!'%item_md)
                 self.__last_journal_rec_id = record_id
         else:
             self.append(None, DirectoryMD(name='/', item_id=0, parent_dir_id=0))
@@ -272,7 +273,7 @@ class MetadataFile:
         ikey = Key(Key.KT_ITEM, item_id)
         raw_item = self.__get_raw_value(ikey)
         if raw_item is None:
-            raise Exception('Item metadata no found for key %s'%ikey)
+            raise NotFoundException('Item metadata no found for key %s'%ikey)
         raw_item, item_type = self.__get_item_raw_padding(raw_item)
         item = None
         if item_type == self.IT_DIRECTORY:
@@ -407,6 +408,8 @@ class MetadataFile:
         self.__last_item_id += 1
         if path:
             dir_md = self.find(path)
+            item_md.item_id = self.__last_item_id
+            item_md.parent_dir_id = dir_md.item_id
         else:
             if item_md.parent_dir_id is None:
                 raise Exception('Parent ID does not found for item {%s}'%item_md)
@@ -417,24 +420,19 @@ class MetadataFile:
                 self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
                 return
 
-            if item_md.parent_dir_id:
-                dir_md = self.__get_item_md(item_md.parent_dir_id)
+            dir_md = self.__get_item_md(item_md.parent_dir_id)
 
-
-        item_md.item_id = self.__last_item_id
-        item_md.parent_dir_id = dir_md.item_id
-
-        i_key = Key(Key.KT_ITEM, self.__last_item_id)
+        i_key = Key(Key.KT_ITEM, item_md.item_id)
         a_key = Key(Key.KT_ADDR, dir_md.item_id, self.__hash(item_md.name))
         par_a_key = Key(Key.KT_ADDR, dir_md.parent_dir_id, self.__hash(dir_md.name))
 
         if self.__exists(item_md):
             raise AlreadyExistsException('Item "%s" alredy exists in %s'%(item_md.name, path))
         if self.__key_exists(i_key):
-            raise AlreadyExistsException('Item with ID=%s is already exists!'%self.__last_item_id)
+            raise AlreadyExistsException('Item with ID=%s is already exists!'%item_md.item_id)
 
-        self.__append_addr_child(dir_md, self.__last_item_id)
-        self.__update_addr(a_key, self.__last_item_id)
+        self.__append_addr_child(dir_md, item_md.item_id)
+        self.__update_addr(a_key, item_md.item_id)
         self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
 
         if dir_md.item_id > 0:

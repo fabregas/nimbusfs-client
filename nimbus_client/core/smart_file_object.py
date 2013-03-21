@@ -65,6 +65,9 @@ class SmartFileObject:
         if not self.__transaction:
             self.__transaction = self.TRANSACTIONS_MANAGER.start_download_transaction(self.__file_path)
 
+        if not seek_v:
+            return
+
         while True:
             cur_seek = self.__seek
             self.__cur_data_block, self.__seek = self.__transaction.get_data_block(self.__seek)
@@ -72,7 +75,9 @@ class SmartFileObject:
                 return
 
             if (not self.__seek) or (seek_v <= self.__seek and seek_v >= cur_seek):
+                self.read(seek_v - cur_seek)
                 return
+            
 
 
     def read(self, read_len=None):

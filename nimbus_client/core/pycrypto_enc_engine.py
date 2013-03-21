@@ -11,6 +11,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 This module contains the implementation of encode/decode class
 based in Crypto module
 """
+import re
 from Crypto.Cipher import AES
 from Crypto import Random
 from Crypto.PublicKey import RSA as CRSA
@@ -21,6 +22,8 @@ from binascii import a2b_base64
 BLOCK_SIZE = 16
 INTERRUPT = '\x00\x01'
 PAD = '\x00'
+INTERRUPT_LEN = len(INTERRUPT)
+EOF_PATTERN = re.compile('%s%s*$'%(INTERRUPT, PAD))
 
 
 class PythonCryptoEngine:
@@ -53,6 +56,11 @@ class PythonCryptoEngine:
         tbsCertificate.decode(cert[0])
         return int(tbsCertificate[1])
 
+    @classmethod
+    def calculate_expected_len(cls, raw_data_len):
+        remaining_len = BLOCK_SIZE - raw_data_len - INTERRUPT_LEN
+        to_pad_len = remaining_len % BLOCK_SIZE
+        return cls.key_size() + raw_data_len + INTERRUPT_LEN + to_pad_len
 
     def __init__(self, encrypted_header=None):
         if encrypted_header:
@@ -96,8 +104,10 @@ class PythonCryptoEngine:
         return ret_data
 
     def __strip_padding(self, data):
-        ret_data = data.rstrip(PAD).rstrip(INTERRUPT)
-        return ret_data
+        found = re.search(EOF_PATTERN, data)
+        if found:
+            return data[:found.start()]
+        return data
 
     def _get_random(self, cnt):
         while True:

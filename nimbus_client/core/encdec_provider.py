@@ -12,15 +12,13 @@ This module contains the implementation of EncDecProvider class
 """
 import struct
 
-BLOCK_SIZE = 16
-INTERRUPT_LEN = 1
-PAD = '\x00'
-
 class EncDecProvider:
     def __init__(self, cipher_class, raw_data_len=None):
+        if raw_data_len is None:
+            self.__expected_len = None
+        else:
+            self.__expected_len = 2 + cipher_class.calculate_expected_len(raw_data_len)
         self.__cipher_class = cipher_class
-        self.__header_len = cipher_class.key_size()
-        self.__expected_len = self.__calculate_expected_len(raw_data_len)
         self.__raw_data_len = raw_data_len
         self.__processed_len = 0
         self.__cipher = None
@@ -30,13 +28,6 @@ class EncDecProvider:
 
     def set_expected_data_len(self, expected_len):
         return self.__expected_len
-
-    def __calculate_expected_len(self, raw_data_len):
-        if raw_data_len is None:
-            return None
-        remaining_len = BLOCK_SIZE - raw_data_len - INTERRUPT_LEN
-        to_pad_len = remaining_len % BLOCK_SIZE
-        return 2 + self.__header_len + raw_data_len + INTERRUPT_LEN + to_pad_len
 
     def encrypt(self, data, finalize=False):
         self.__processed_len += len(data) 
