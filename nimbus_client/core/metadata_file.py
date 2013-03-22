@@ -202,22 +202,25 @@ class MetadataFile:
 
     def __init_from_journal(self, start_rec_id):
         if self.__journal:
+            logger.info('Restoring journal from ID=%s ...'%start_rec_id)
             for record_id, operation_type, item_md in self.__journal.iter(start_rec_id):
-                if operation_type == Journal.OT_APPEND:
-                    self.__last_item_id = item_md.item_id 
-                    try:
-                        self.append(None, item_md)
-                    except AlreadyExistsException, err:
-                        logger.warning('Can not append item %s, bcs it is already exists!'%item_md)
-                elif operation_type == Journal.OT_UPDATE:
-                    self.update(item_md)
-                elif operation_type == Journal.OT_REMOVE:
-                    try:
-                        item_md = self.__get_item_md(item_md)
-                        self.remove(item_md)
-                    except NotFoundException, err:
-                        logger.warning('Can not remove item with ID=%s, bcs it does not found!'%item_md)
-                self.__last_journal_rec_id = record_id
+                try:
+                    if operation_type == Journal.OT_APPEND:
+                         self.append(None, item_md)
+                    elif operation_type == Journal.OT_UPDATE:
+                        self.update(item_md)
+                    elif operation_type == Journal.OT_REMOVE:
+                        try:
+                            item_md = self.__get_item_md(item_md)
+                            self.remove(item_md)
+                        except NotFoundException, err:
+                            logger.warning('Can not remove item with ID=%s, bcs it does not found!'%item_md)
+                except AlreadyExistsException, err:
+                    logger.warning('Can not append/update item %s, bcs it is already exists!'%item_md)
+
+            self.__last_journal_rec_id = self.__journal.get_last_id()
+            self.__last_item_id = self.__last_journal_rec_id
+            logger.info('Metadata is restored from journal. Last journal record ID=%s'%self.__last_journal_rec_id)
         else:
             self.append(None, DirectoryMD(name='/', item_id=0, parent_dir_id=0))
         self.__valid = True

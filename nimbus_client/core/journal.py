@@ -122,6 +122,10 @@ class Journal:
         self.__is_sync = False
         return j_id
 
+    @JLock
+    def get_last_id(self):
+        return self.__last_record_id
+
     def __int_append(self, operation_type, item_md):
         if operation_type not in (self.OT_APPEND, self.OT_UPDATE, self.OT_REMOVE):
             raise RuntimeError('Unsupported journal operation type: %s'%operation_type)
@@ -170,6 +174,7 @@ class Journal:
                 #logger.debug('J_ITER: record=%s'%buf[:self.RECORD_STRUCT_SIZE+item_dump_len+to_pad_len].encode('hex').upper())
                 buf = buf[self.RECORD_STRUCT_SIZE+item_dump_len+to_pad_len:]
 
+                self.__last_record_id = record_id
                 if (start_record_id is None) or (record_id > start_record_id):
                     if operation_type == self.OT_REMOVE:
                         item_md = struct.unpack('<I', item_dump)[0]
