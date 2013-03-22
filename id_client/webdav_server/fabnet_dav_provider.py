@@ -26,7 +26,7 @@ from cache_fs import CacheFS
 
 __docformat__ = "reStructuredText"
 
-#logger = util.getModuleLogger(__name__)
+logger = util.getModuleLogger(__name__)
 
 BUFFER_SIZE = 8192
 
@@ -119,7 +119,6 @@ class FileResource(DAVNonCollection):
         """
         if withErrors or self._file_obj.get_seek()>0:
             self.provider.cache_fs.remove(self.path)
-        
 
     def delete(self):
         """Remove this resource or collection (recursive).
@@ -226,11 +225,13 @@ class FolderResource(DAVCollection):
                 nameList.append(item)
 
         #this magic does not allow load the whole content for crazy Finder on MacOS
+        magic_files = ['.ql_disablecache', '.ql_disablethumbnails']
         if nameList:
-            if '.ql_disablecache' not in nameList:
-                nameList.append('.ql_disablecache')
-            if '.ql_disablethumbnails' not in nameList:
-                nameList.append('.ql_disablethumbnails')
+            for magic_file in magic_files:
+                if magic_file not in nameList:
+                    f_obj = FSItem(magic_file, is_dir=False) 
+                    self.provider.cache_fs.put(os.path.join(self.path, magic_file), f_obj)
+                    nameList.append(magic_file)
 
         return nameList
 
@@ -312,7 +313,10 @@ class FolderResource(DAVCollection):
 
         assert not util.isEqualOrChildUri(self.path, destPath)
 
-        self.nibbler.move(self.path.rstrip('/'), destPath.rstrip('/'))
+        try:
+            self.nibbler.move(self.path.rstrip('/'), destPath.rstrip('/'))
+        except Exception, err:
+            logger.error('copyMoveSingle %s %s : %s'%(self.path, destPath, err))
 
 
 
@@ -334,12 +338,6 @@ class FabnetProvider(DAVProvider):
         See DAVProvider.getResourceInst()
         """
         self._count_getResourceInst += 1
-        #fp = util.toUnicode(path.rstrip("/"))
-
-        name = os.path.basename(path)
-        if name in ['.ql_disablecache', '.ql_disablethumbnails']:
-            r_obj = FSItem(name, is_dir=False) 
-            return FileResource(self.nibbler, path, environ, r_obj, virtual=True)
 
         is_virt = True
         r_obj = self.cache_fs.get(path)

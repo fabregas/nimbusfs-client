@@ -20,7 +20,7 @@ from Crypto.Util.asn1 import DerSequence
 from binascii import a2b_base64
 
 BLOCK_SIZE = 16
-INTERRUPT = '\x00\x01'
+INTERRUPT = '\x0F\x01'
 PAD = '\x00'
 INTERRUPT_LEN = len(INTERRUPT)
 EOF_PATTERN = re.compile('%s%s*$'%(INTERRUPT, PAD))

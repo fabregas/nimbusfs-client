@@ -405,8 +405,8 @@ class MetadataFile:
 
     @MDLock
     def append(self, path, item_md):
-        self.__last_item_id += 1
         if path:
+            self.__last_item_id += 1
             dir_md = self.find(path)
             item_md.item_id = self.__last_item_id
             item_md.parent_dir_id = dir_md.item_id
@@ -452,7 +452,7 @@ class MetadataFile:
         self.__update_addr_item(old_md, item_md)
         i_key = Key(Key.KT_ITEM, item_md.item_id)
         if item_md.is_dir():
-            dir_md.update_datetime()
+            item_md.update_datetime()
         self.__set_raw_value(i_key, self.__do_item_raw_padding(item_md))
 
         self.__update_journal(Journal.OT_UPDATE, item_md)

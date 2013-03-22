@@ -140,11 +140,13 @@ class Nibbler:
 
     def find(self, path):
         path = to_str(path)
-        try:
-            path_obj = self.metadata.find(path)
-        except PathException, err:
-            #logger.debug('[get_resource] %s'%str(err))
-            path_obj = self.transactions_manager.find_inprogress_file(path)
+        path_obj = self.transactions_manager.find_inprogress_file(path)
+        if not path_obj:
+            try:
+                path_obj = self.metadata.find(path)
+            except PathException, err:
+                #logger.debug('[get_resource] %s'%str(err))
+                return
 
         if path_obj:
             return self.__make_item_fs(path_obj)
@@ -215,19 +217,16 @@ class Nibbler:
         mdf = self.metadata
         source = mdf.find(s_path)
         if mdf.exists(d_path):
-            new_name = None
-            dst_path = d_path
             d_obj = mdf.find(d_path)
             if d_obj.is_file():
                 raise AlreadyExistsException('File %s is already exists!'%d_path)
+            source.parent_dir_id = d_obj.item_id
         else:
             dst_path, new_name = os.path.split(d_path)
+            source.name = new_name
             mdf.find(dst_path) #check existance
 
-        mdf.remove(source)
-        if new_name:
-            source.name = new_name
-        mdf.append(dst_path, source)
+        mdf.update(source)
 
     def remove_file(self, file_path):
         file_path = to_str(file_path)
