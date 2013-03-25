@@ -232,16 +232,35 @@ class TransactionsManager:
 
         return self.__find_inprogress_file(file_path)
 
+    def __find_file_from_inprogress(self, file_path):
+        file_md = self.__find_inprogress_file(file_path)
+        if file_md:
+            return file_md
+        try:
+            file_md = self.__metadata.find(file_path)
+            return file_md
+        except PathException:
+            return
+
+    def __construct_file_md(self, transaction, file_md):
+        for seek, size, data_block, block_hash in transaction.iter_data_blocks():
+            if block_hash:
+                d_key = block_hash
+            else:
+                d_key = data_block.get_name()
+            chunk = ChunkMD(size=size, seek=seek, key=d_key, checksum=data_block.checksum())
+            file_md.append_chunk(chunk)
+
     def __find_inprogress_file(self, file_path):
         for transaction in self.__transactions.values():
             if (not transaction.is_uploading()) or (transaction.get_file_path() != file_path) \
                     or (transaction.get_status() != Transaction.TS_LOCAL_SAVED):
                 continue
+
             file_md = FileMD(name=os.path.basename(file_path), \
                     replica_count=transaction.get_replica_count(), size=transaction.total_size())
-            for seek, size, data_block, block_hash in transaction.iter_data_blocks():
-                chunk = ChunkMD(size=size, seek=seek, key=data_block.get_name())
-                file_md.append_chunk(chunk)
+
+            self.__construct_file_md(transaction, file_md)
 
             return file_md
 
@@ -251,7 +270,7 @@ class TransactionsManager:
 
     @GTLock
     def start_download_transaction(self, file_path):
-        file_md = self.__find_file(file_path)
+        file_md = self.__find_file_from_inprogress(file_path)
 
         if (not file_md) or (not file_md.is_file()):
             raise PathException('No file found at %s'%file_path)
@@ -287,24 +306,29 @@ class TransactionsManager:
 
         return transaction
 
-    @GTLock
-    def start_upload_transaction(self, file_path):
+    def __create_upload_transaction(self, file_path):
         save_path, file_name = os.path.split(file_path)
         parent_dir = self.__metadata.find(save_path)
         if not parent_dir.is_dir():
             raise NotDirectoryException('Directory "%s" does not found!'%save_path)
 
-        if self.__find_file(file_path):
-            raise AlreadyExistsException('File %s already exists!'%file_path)
-
         replica_count = 2 #FIXME ... replica_count = parent_dir.replica_count
         transaction = Transaction(Transaction.TT_UPLOAD, file_path, replica_count)
+        return transaction
+
+    @GTLock
+    def start_upload_transaction(self, file_path):
+        transaction = self.__create_upload_transaction(file_path)
         transaction_id = transaction.get_id()
         self.__transactions[transaction_id] = transaction
         self.__tr_log_start_transaction(transaction)
 
         return transaction_id
 
+    @GTLock
+    def save_empty_file(self, file_path):
+        transaction = self.__create_upload_transaction(file_path)
+        self.__save_metadata(transaction)
 
     @GTLock
     def update_transaction_state(self, transaction_id, status):
@@ -326,6 +350,7 @@ class TransactionsManager:
         transaction.change_status(status)
 
         self.__tr_log_update_state(transaction.get_id(), status)
+
 
     @GTLock
     def update_transaction(self, transaction_id, seek, is_failed=False, foreign_name=None):
@@ -375,14 +400,20 @@ class TransactionsManager:
         file_path = transaction.get_file_path()
         save_path, file_name = os.path.split(file_path)
 
-        file_md = FileMD(name=file_name, size=transaction.total_size(), \
-                    replica_count=transaction.get_replica_count())
+        file_md = self.__find_file(file_path)
 
-        for seek, size, data_block, block_hash in transaction.iter_data_blocks():
-            chunk = ChunkMD(checksum=data_block.checksum(), size=size, seek=seek, key=block_hash)
-            file_md.append_chunk(chunk)
+        if not file_md:
+            file_md = FileMD(name=file_name, replica_count=transaction.get_replica_count(), \
+                    size=transaction.total_size())
 
-        self.__metadata.append(save_path, file_md)
+        if file_md.item_id:
+            old_chunks = file_md.clear_chunks()
+            #FIXME remove old chunks from backend and cache!!!
+            self.__construct_file_md(transaction, file_md)
+            file_md.size = transaction.total_size()
+            self.__metadata.update(file_md)
+        else:
+            self.__metadata.append(save_path, file_md)
 
     def __remove_oldest_stransaction(self):
         oldest_tr_list = sorted(self.__transactions.values(), \

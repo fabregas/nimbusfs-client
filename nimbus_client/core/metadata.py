@@ -171,14 +171,12 @@ class FileMD(AbstractMetadataObject):
         return True
 
     def validate(self):
-        if not self.size:
+        if self.size is None:
             raise MDValidationError('FileMD: Size is empty')
         if self.parent_dir_id is None:
             raise MDValidationError('ParentDirID is empty')
         if not self.name:
             raise MDValidationError('FileName is empty')
-        if not self.chunks:
-            raise MDValidationError('Chunks is empty')
 
         if self.item_id < 0 or self.item_id > MAX_L:
             raise MDValidationError('File id %s is out of supported range [0..%s]'%(self.item_id, MAX_L))
@@ -235,6 +233,13 @@ class FileMD(AbstractMetadataObject):
         if self.chunks is None:
             self.chunks = []
         self.chunks.append(chunk)
+
+    def clear_chunks(self):
+        if self.chunks is None:
+            self.chunks = []
+        ret_chunks = self.chunks
+        self.chunks = []
+        return ret_chunks
 
     def chunks_stat(self):
         foreign_chunks = local_chunks = 0

@@ -109,7 +109,7 @@ class FileResource(DAVNonCollection):
         if self.provider.readonly:
             raise DAVError(HTTP_FORBIDDEN)
 
-        self._file_obj = self.nibbler.open_file(self.path)
+        self._file_obj = self.nibbler.open_file(self.path, for_write=True)
         return self._file_obj
 
     def endWrite(self, withErrors):
@@ -117,8 +117,8 @@ class FileResource(DAVNonCollection):
 
         This is only a notification. that MAY be handled.
         """
-        if withErrors or self._file_obj.get_seek()>0:
-            self.provider.cache_fs.remove(self.path)
+        #if withErrors or self._file_obj.get_seek()>0:
+        self.provider.cache_fs.remove(self.path)
 
     def delete(self):
         """Remove this resource or collection (recursive).

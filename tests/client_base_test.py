@@ -67,7 +67,7 @@ class PutGetWorker(threading.Thread):
                     break
 
                 is_upload, f_name = task
-                f_obj = self.nibbler.open_file(f_name)
+                f_obj = self.nibbler.open_file(f_name, for_write=True)
                 if is_upload:
                     data = ''.join(random.choice(string.letters) for i in xrange(100))
                     f_obj.write(data)
@@ -181,30 +181,37 @@ class BaseNibblerTest(unittest.TestCase):
         checksum = hashlib.sha1(data).hexdigest()
     
         with self.assertRaises(PathException):
-            f_obj = nibbler.open_file('/some/dir/file.fake')
+            f_obj = nibbler.open_file('/some/dir/file.fake', for_write=True)
             f_obj.write('test')
             f_obj.close()
 
         with self.assertRaises(ClosedFileException):
             f_obj.write('test')
 
+        with self.assertRaises(PermissionsException):
+            f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
+            f_obj.write('test data')
+
         print 'writing data to NimbusFS...'
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out', for_write=True)
+        f_obj.write('')
+        f_obj.close()
         f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
+        e_data = f_obj.read()
+        f_obj.close()
+        self.assertEqual(e_data, '')
+
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out', for_write=True)
         f_obj.write(data[:100])
         f_obj.write(data[100:])
         f_obj.close()
-
-        with self.assertRaises(AlreadyExistsException):
-            f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
-            f_obj.write('test')
-            f_obj.close()
 
         op_list = nibbler.inprocess_operations()
         self.assertEqual(len(op_list), 1)
         oper_info = op_list[0]
         self.assertEqual(oper_info.is_upload, True)
         self.assertEqual(oper_info.file_path, '/my_first_dir/my_first_subdir/test_file.out')
-        self.assertEqual(oper_info.status, Transaction.TS_LOCAL_SAVED)
+        self.assertEqual(oper_info.status, Transaction.TS_LOCAL_SAVED, oper_info)
         self.assertEqual(oper_info.size, len(data))
         self.assertEqual(oper_info.progress_perc > 0, True)
         self.assertEqual(oper_info.progress_perc < 100, True)
@@ -227,11 +234,11 @@ class BaseNibblerTest(unittest.TestCase):
             raise Exception('transaction does not finished')
 
         with self.assertRaises(NotDirectoryException):
-            f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out/subfile.lol')
+            f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out/subfile.lol', for_write=True)
             f_obj.write('test')
             f_obj.close()
 
-        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/small_file')
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/small_file', for_write=True)
         f_obj.write('test message')
         f_obj.close()
 
@@ -258,6 +265,14 @@ class BaseNibblerTest(unittest.TestCase):
         data = f_obj.read()
         self.assertEqual(len(data), s_data_len)
         self.assertEqual(hashlib.sha1(data).hexdigest(), checksum)
+
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out', for_write=True)
+        f_obj.write('test')
+        f_obj.close()
+        time.sleep(0.2)
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
+        self.assertEqual(f_obj.read(), 'test')
+        f_obj.close()
 
         with self.assertRaises(PathException):
             f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out11111')
@@ -312,7 +327,7 @@ class BaseNibblerTest(unittest.TestCase):
         cur_fri_client = nibbler.fabnet_gateway.fri_client
         try:
             nibbler.fabnet_gateway.fri_client = MockedFriClient(genfail=True)
-            f_obj = nibbler.open_file('/my_first_dir/new_file_with_up_fails')
+            f_obj = nibbler.open_file('/my_first_dir/new_file_with_up_fails', for_write=True)
             f_obj.write('test data block')
             f_obj.close()
 
@@ -325,7 +340,7 @@ class BaseNibblerTest(unittest.TestCase):
 
         #fail on DB saving into local cache
         os.system('rm -rf /tmp/dynamic_cache/*')
-        f_obj = nibbler.open_file('/my_first_dir/new_file.failed')
+        f_obj = nibbler.open_file('/my_first_dir/new_file.failed', for_write=True)
         f_obj.write('*'*100100)
         def mocked_write(data, finalize):
             raise IOError('no free space mock')
@@ -342,7 +357,7 @@ class BaseNibblerTest(unittest.TestCase):
         f_obj._SmartFileObject__cur_data_block.write = db_write_routine
 
         #fail on Metadata update
-        f_obj = nibbler.open_file('/my_first_dir/new_file_2.failed')
+        f_obj = nibbler.open_file('/my_first_dir/new_file_2.failed', for_write=True)
         f_obj.write('*'*100100)
         def md_append_mocked(save_path, file_md):
             raise Exception('Oh! this is some exception from metadata ;(')
@@ -359,7 +374,7 @@ class BaseNibblerTest(unittest.TestCase):
             raise Exception('This is mocked exception')
         sync_journal_func = nibbler.journal._synchronize
         nibbler.journal._synchronize = sync_journal_mock
-        f_obj = nibbler.open_file('/my_first_dir/new_file.saved')
+        f_obj = nibbler.open_file('/my_first_dir/new_file.saved', for_write=True)
         f_obj.write('*'*100100)
         f_obj.close()
         self.__wait_oper_status('/my_first_dir/new_file.saved', Transaction.TS_FINISHED)
@@ -403,7 +418,7 @@ class BaseNibblerTest(unittest.TestCase):
         def put_files():
             for i in xrange(FILES_CNT):
                 f_name = '/test_profile_%s.file'%i
-                f_obj = nibbler.open_file(f_name)
+                f_obj = nibbler.open_file(f_name, for_write=True)
                 f_obj.write(data)
                 f_obj.close()
 

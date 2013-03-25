@@ -74,19 +74,15 @@ class TestIdepositbox(unittest.TestCase):
 
         TestIdepositbox.CHECKSUM = hashlib.sha1(data).hexdigest()
         client = WebDAVClient("127.0.0.1", 8080)
+
         with open(TEST_FILE) as fd:
             response = client.put('/foo/test.out', fd, "text/plain")
             self.assertEqual(response.statusline, 'HTTP/1.1 201 Created')
 
-        wait_oper_status(TestIdepositbox.CLIENT.nibbler.inprocess_operations, '/foo/test.out', Transaction.TS_FINISHED)
-
         response = client.propfind("/foo", depth=1)
         self.assertTrue('displayname>test.out<' in response.content)
 
-        with self.assertRaises(HTTPServerError):
-            with open(TEST_FILE) as fd:
-                response = client.put('/foo/test.out', fd, "text/plain")
-                self.assertEqual(response.statusline, 'HTTP/1.1 201 Created')
+        wait_oper_status(TestIdepositbox.CLIENT.nibbler.inprocess_operations, '/foo/test.out', Transaction.TS_FINISHED)
 
 
     def test04_get(self):

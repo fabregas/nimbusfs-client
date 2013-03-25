@@ -57,7 +57,15 @@ class TestSmartFileObject(unittest.TestCase):
             g_queue = tr_manager.get_download_queue()
             SmartFileObject.setup_transaction_manager(tr_manager)
 
-            test_file = SmartFileObject('/test.file')
+            e_file = SmartFileObject('/empty_file', for_write=True)
+            e_file.close()
+
+            e_file = SmartFileObject('/empty_file')
+            data = e_file.read()
+            self.assertEqual(data, '')
+            e_file.close()
+
+            test_file = SmartFileObject('/test.file', for_write=True)
             test_file.write('this is test message for one data block!')
             test_file.close()
             put_obj = p_queue.get(False)
@@ -102,7 +110,6 @@ class TestSmartFileObject(unittest.TestCase):
             g_queue.put((None,None))
 
             self.assertFalse(DataBlock.is_locked(db_cache.get_cache_path('%040x'%123456)))
-
 
             tr_manager.close()
         finally:

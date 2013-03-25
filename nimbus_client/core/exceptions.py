@@ -62,3 +62,6 @@ class IOException(NimbusException):
 
 class NotFoundException(NimbusException):
     pass
+
+class PermissionsException(NimbusException):
+    pass

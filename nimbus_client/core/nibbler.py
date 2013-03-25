@@ -237,10 +237,10 @@ class Nibbler:
         self.metadata.remove(file_md)
         #TODO: remove file from NimbusFS should be implemented!
 
-    def open_file(self, file_path):
+    def open_file(self, file_path, for_write=False):
         file_path = to_str(file_path)
-        logger.debug('opening file %s ...'%file_path)
-        return SmartFileObject(file_path)
+        logger.debug('opening file %s for %s...'%(file_path, 'write' if for_write else 'read'))
+        return SmartFileObject(file_path, for_write)
 
     def inprocess_operations(self):
         ret_list = []

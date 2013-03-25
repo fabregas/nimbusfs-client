@@ -12,7 +12,8 @@ This module contains the implementation of SmartFileObject class
 """
 from nimbus_client.core.transactions_manager import TransactionsManager, Transaction
 from nimbus_client.core.constants import MAX_DATA_BLOCK_SIZE
-from nimbus_client.core.exceptions import ClosedFileException
+from nimbus_client.core.exceptions import ClosedFileException, PermissionsException
+from nimbus_client.core.logger import logger
 
 class SmartFileObject:
     TRANSACTIONS_MANAGER = None
@@ -22,7 +23,7 @@ class SmartFileObject:
             raise RuntimeError('Unknown type of transactions manager: %s'%type(transaction_manager))
         cls.TRANSACTIONS_MANAGER = transactions_manager
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, for_write=False):
         self.__file_path = file_path
         self.__seek = 0
         self.__cur_data_block = None
@@ -31,8 +32,15 @@ class SmartFileObject:
         self.__transaction = None #used for read()
         self.__unsync = False
         self.__closed = False
+        self.__for_write = for_write
 
     def write(self, data):
+        if not self.__for_write:
+            raise PermissionsException('File %s is openned for read!'%self.__file_path)
+
+        if not data:
+            return
+
         try:
             if self.__closed:
                 raise ClosedFileException('closed file!')
@@ -81,6 +89,8 @@ class SmartFileObject:
 
 
     def read(self, read_len=None):
+        if self.__for_write:
+            raise PermissionsException('File %s is openned for write!'%self.__file_path)
         if self.__closed:
             raise ClosedFileException('closed file!')
 
@@ -93,6 +103,8 @@ class SmartFileObject:
                     if self.__seek is None:
                         break
                     self.__cur_data_block, self.__seek = self.__transaction.get_data_block(self.__seek)
+                    if not self.__cur_data_block:
+                        break
 
                 data = self.__cur_data_block.read(read_len)
                 if data:
@@ -113,11 +125,16 @@ class SmartFileObject:
         if self.__closed:
             return
         try:
-            if self.__unsync:
+            if self.__for_write:
                 try:
-                    if self.__cur_data_block:
+                    if self.__unsync and self.__cur_data_block:
                         self.__send_data_block()
-                    self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
+                    else:
+                        if not self.__transaction_id:
+                            self.TRANSACTIONS_MANAGER.save_empty_file(self.__file_path)
+
+                    if self.__transaction_id:
+                        self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
                 except Exception, err: 
                     self.__failed_transaction(err)
                     raise err

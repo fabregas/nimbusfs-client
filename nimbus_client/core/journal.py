@@ -90,6 +90,7 @@ class Journal:
     @JLock
     def _synchronize(self):
         try:
+            logger.debug('synchronizing journal...')
             self.__journal.flush()
             j_data = DataBlock(self.__journal_path, actsize=True)
             is_send = self.__fabnet_gateway.put(j_data, key=self.__journal_key)
@@ -200,7 +201,7 @@ class JournalSyncThread(threading.Thread):
     def run(self):
         logger.info('thread is started')
         while not self.__stop_flag.is_set():
-            if self.__journal.status() == Journal.JS_NOT_SYNC:
+            if self.__journal.status() in (Journal.JS_NOT_SYNC, Journal.JS_SYNC_FAILED):
                 try:
                     self.__journal._synchronize()
                 except Exception, err:

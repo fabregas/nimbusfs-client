@@ -10,6 +10,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 
 This module contains the implementation of Metadata class
 """
+import os
 import anydbm
 
 from nimbus_client.core.metadata import *
@@ -186,14 +187,25 @@ class MetadataFile:
     IT_FILE = 0x0e
 
     def __init__(self, md_file_path='md.cache', journal=None):
-        self.db =  anydbm.open(md_file_path, 'c')
-        self.__last_item_id = long(self.__get_db_val('last_item_id', 0))
-        self.__last_journal_rec_id = long(self.__get_db_val('last_journal_rec_id', 0))
         self.__root_id = 0
         self.__journal = journal
         self.__valid = False
+        self.__load_md_db(md_file_path)
 
-        self.__init_from_journal(self.__last_journal_rec_id)
+    def __load_md_db(self, md_file_path):
+        self.db =  anydbm.open(md_file_path, 'c')
+        self.__last_item_id = long(self.__get_db_val('last_item_id', 0))
+        self.__last_journal_rec_id = long(self.__get_db_val('last_journal_rec_id', 0))
+
+        try:
+            self.__init_from_journal(self.__last_journal_rec_id)
+        except NimbusException, err:
+            logger.error('Metadata was not restored from journal! Details: %s'%err)
+
+            logger.info('Trying restoring full journal records...')
+            os.remove(md_file_path)
+            self.db = anydbm.open(md_file_path, 'c')
+            self.__init_from_journal(0)
 
     def __get_db_val(self, key, default=None):
         if self.db.has_key(key):
@@ -449,8 +461,7 @@ class MetadataFile:
     def update(self, item_md):
         if item_md.item_id is None:
             raise Exception('Item ID does not found for item {%s}'%item_md)
-        if self.__exists(item_md):
-            raise AlreadyExistsException('Item "%s" alredy exists in dir with id %s'%(item_md.name, item_md.parent_dir_id))
+
         old_md = self.__get_item_md(item_md.item_id)
         self.__update_addr_item(old_md, item_md)
         i_key = Key(Key.KT_ITEM, item_md.item_id)
