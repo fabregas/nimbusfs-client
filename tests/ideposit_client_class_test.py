@@ -21,13 +21,13 @@ from id_client.idepositbox_client import IdepositboxClient, \
             CS_STARTED, CS_STOPPED, Config
 from id_client.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 
-from client_base_test import MockedFriClient
+from client_base_test import MockedFriClient, wait_oper_status, Transaction
 fabnet_gateway.FriClient = MockedFriClient
 from nimbus_client.core.logger import logger
 
 #logger.setLevel(logging.INFO)
 
-CLIENT_KS_PATH = './tests/cert/test_client_ks.zip'
+CLIENT_KS_PATH = './tests/cert/test_cl_1024.zip'
 PASSWD = 'qwerty123'
 
 TEST_FILE = '/tmp/test_file.out'
@@ -35,6 +35,11 @@ TEST_FILE = '/tmp/test_file.out'
 class TestIdepositbox(unittest.TestCase):
     CLIENT = None
     def test00_start(self):
+        if os.path.exists('/tmp/static_cache/'):
+            os.system('rm -rf /tmp/static_cache/')
+        if os.path.exists('/tmp/test_idepositbox.conf'):
+            os.remove('/tmp/test_idepositbox.conf')
+        Config.get_config_file_path = lambda a: '/tmp/test_idepositbox.conf'
         config = Config()
         config.security_provider_type = SPT_FILE_BASED
         config.key_storage_path = CLIENT_KS_PATH
@@ -43,7 +48,6 @@ class TestIdepositbox(unittest.TestCase):
         TestIdepositbox.CLIENT = IdepositboxClient()
 
         TestIdepositbox.CLIENT.start(PASSWD)
-        TestIdepositbox.CLIENT.nibbler.register_user()
 
         self.assertEqual(TestIdepositbox.CLIENT.status, CS_STARTED)
 
@@ -70,24 +74,16 @@ class TestIdepositbox(unittest.TestCase):
 
         TestIdepositbox.CHECKSUM = hashlib.sha1(data).hexdigest()
         client = WebDAVClient("127.0.0.1", 8080)
+
         with open(TEST_FILE) as fd:
             response = client.put('/foo/test.out', fd, "text/plain")
             self.assertEqual(response.statusline, 'HTTP/1.1 201 Created')
 
-        for i in xrange(10):
-            time.sleep(1)
-            if not TestIdepositbox.CLIENT.nibbler.inprocess_operations():
-                break
-        else:
-            raise Exception('File does not uploaded...')
-
         response = client.propfind("/foo", depth=1)
         self.assertTrue('displayname>test.out<' in response.content)
 
-        with self.assertRaises(HTTPServerError):
-            with open(TEST_FILE) as fd:
-                response = client.put('/foo/test.out', fd, "text/plain")
-                self.assertEqual(response.statusline, 'HTTP/1.1 201 Created')
+        wait_oper_status(TestIdepositbox.CLIENT.nibbler.inprocess_operations, '/foo/test.out', Transaction.TS_FINISHED)
+
 
     def test04_get(self):
         client = WebDAVClient("127.0.0.1", 8080)

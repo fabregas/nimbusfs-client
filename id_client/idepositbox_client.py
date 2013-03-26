@@ -12,6 +12,7 @@ This module contains the implementation of IdepositboxClient class
 """
 import time
 import logging
+import traceback
 
 from nimbus_client.core.security_manager import FileBasedSecurityManager, AbstractSecurityManager
 from nimbus_client.core.nibbler import Nibbler
@@ -55,7 +56,8 @@ class IdepositboxClient:
                 raise Exception('Unexpected security provider type: "%s"'%config.security_provider_type)
 
             self.nibbler = Nibbler(config.fabnet_hostname, security_provider, \
-                                config.parallel_put_count, config.parallel_get_count)
+                                config.parallel_put_count, config.parallel_get_count, \
+                                config.cache_dir, config.cache_size)
 
             try:
                 registered = self.nibbler.is_registered()
@@ -71,6 +73,7 @@ class IdepositboxClient:
                     logger.error('Register user error: %s'%err)
                     raise Exception('User does not registered in service')
 
+            self.nibbler.start()
             self.webdav_server = WebDavServer(config.webdav_bind_host, config.webdav_bind_port, self.nibbler)
             self.webdav_server.start()
 
@@ -89,6 +92,10 @@ class IdepositboxClient:
             self.status = CS_FAILED
             if self.nibbler:
                 self.nibbler.stop()
+            if self.webdav_server:
+                self.webdav_server.stop()
+            logger.write = logger.info
+            traceback.print_exc(file=logger)
             raise err
         self.status = CS_STARTED
 

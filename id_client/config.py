@@ -11,6 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of Config class
 """
 import os
+import tempfile
 import ConfigParser
 from ConfigParser import RawConfigParser
 
@@ -20,26 +21,34 @@ class Config:
     def __init__(self):
         self.refresh()
 
+    def __get_conf_val(self, section, param, var_name, p_type=str):
+        try:
+            val = self.config.get(section, param)
+            setattr(self, var_name, p_type(val))
+        except ConfigParser.Error:
+            pass
+
     def refresh(self):
         try:
             config_file = self.get_config_file_path()
+            self.create_defaults()
+
             if not os.path.exists(config_file):
-                self.create_defaults()
                 self.save()
 
-            config = RawConfigParser()
-            config.read(config_file)
+            self.config = RawConfigParser()
+            self.config.read(config_file)
 
-            self.log_level = config.get('LOG','log_level')
-            self.security_provider_type = config.get('SECURITY_PROVIDER', 'provider_type')
-            self.key_storage_path = config.get('SECURITY_PROVIDER', 'key_storage_path')
-            self.fabnet_hostname = config.get('FABNET', 'fabnet_url')
-            self.parallel_put_count = int(config.get('FABNET', 'parallel_put_count'))
-            self.parallel_get_count = int(config.get('FABNET', 'parallel_get_count'))
-            self.webdav_bind_host = config.get('WEBDAV', 'bind_hostname')
-            self.webdav_bind_port = config.get('WEBDAV', 'bind_port')
-        except ConfigParser.NoOptionError, msg:
-            raise Exception('ConfigParser. No option error: %s' % msg)
+            self.__get_conf_val('LOG','log_level', 'log_level')
+            self.__get_conf_val('SECURITY_PROVIDER', 'provider_type', 'security_provider_type')
+            self.__get_conf_val('SECURITY_PROVIDER', 'key_storage_path', 'key_storage_path')
+            self.__get_conf_val('FABNET', 'fabnet_url', 'fabnet_hostname')
+            self.__get_conf_val('FABNET', 'parallel_put_count', 'parallel_put_count', int)
+            self.__get_conf_val('FABNET', 'parallel_get_count', 'parallel_get_count', int)
+            self.__get_conf_val('CACHE', 'cache_dir', 'cache_dir')
+            self.__get_conf_val('CACHE', 'cache_size', 'cache_size', int)
+            self.__get_conf_val('WEBDAV', 'bind_hostname', 'webdav_bind_host')
+            self.__get_conf_val('WEBDAV', 'bind_port', 'webdav_bind_port')
         except ConfigParser.Error, msg:
             raise Exception('ConfigParser: %s' % msg)
 
@@ -55,11 +64,15 @@ class Config:
         self.key_storage_path = ''
         self.webdav_bind_host = '127.0.0.1'
         self.webdav_bind_port = '8080'
+        self.cache_dir = tempfile.gettempdir()
+        self.cache_size = 0
+
 
     def save(self):
         config = RawConfigParser()
         config.add_section('LOG')
         config.add_section('FABNET')
+        config.add_section('CACHE')
         config.add_section('SECURITY_PROVIDER')
         config.add_section('WEBDAV')
 
@@ -68,6 +81,8 @@ class Config:
         config.set('FABNET', 'fabnet_url', self.fabnet_hostname)
         config.set('FABNET', 'parallel_put_count', self.parallel_put_count)
         config.set('FABNET', 'parallel_get_count', self.parallel_get_count)
+        config.set('CACHE', 'cache_dir', self.cache_dir)
+        config.set('CACHE', 'cache_size', self.cache_size)
         config.set('SECURITY_PROVIDER', 'provider_type', self.security_provider_type)
         config.set('SECURITY_PROVIDER', 'key_storage_path', self.key_storage_path)
         config.set('WEBDAV', 'bind_hostname', self.webdav_bind_host)

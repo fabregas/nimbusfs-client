@@ -1,136 +1,264 @@
-#!/usr/bin/python
-"""
-Copyright (C) 2012 Konstantin Andrusenko
-    See the documentation for further information on copyrights,
-    or contact the author. All Rights Reserved.
-
-@package client.metadata
-@author Konstantin Andrusenko
-@date October 12, 2012
-
-This module contains the implementation of user metadata classes.
-"""
-import json
-import uuid
-import hashlib
-import copy
-from datetime import datetime
+import struct
 import threading
+import time
+import zlib
+from datetime import datetime
 
-from nimbus_client.core.constants import DEFAULT_REPLICA_COUNT
 from nimbus_client.core.exceptions import *
+from nimbus_client.core.utils import to_str
 
-class ChunkMD:
-    def __init__(self, **chunk_params):
-        self.checksum = None
-        self.key = None
-        self.seek = None
-        self.size = None
-        self.load(chunk_params)
+MAX_B = pow(2, struct.calcsize('<B')*8)-1
+MAX_L = pow(2, struct.calcsize('<L')*8)-1
+MAX_Q = pow(2, struct.calcsize('<Q')*8)-1
 
-    def load(self, chunk_obj):
-        self.checksum = chunk_obj.get('checksum', None)
-        self.key = chunk_obj.get('key', None)
-        self.seek = chunk_obj.get('seek', None)
-        self.size = chunk_obj.get('size', None)
+MO_APPEND = 1
+MO_REMOVE = 0
 
+DEFAULT_REPLICA_COUNT = 2
+
+class SafeDict:
+    def __init__(self, dict_obj={}):
+        self.__dict_obj = dict_obj
+        self.__lock = threading.RLock()
+
+    def __setitem__(self, key, value):
+        self.__lock.acquire()
+        try:
+            self.__dict_obj[key] = value
+        finally:
+            self.__lock.release()
+
+    def __getitem__(self, key):
+        self.__lock.acquire()
+        try:
+            return self.__dict_obj.get(key, None)
+        finally:
+            self.__lock.release()
+
+    def __repr__(self):
+        self.__lock.acquire()
+        try:
+            ret = []
+            for key, value in self.__dict_obj.items():
+                ret.append('%s=%s'%(key, value))
+            return '{%s}'%', '.join(ret)
+        finally:
+            self.__lock.release()
+
+
+
+class AbstractMetadataObject(object):
+    #metadata objects labels
+    MOL_FILE = 1
+    MOL_DIR = 2
+
+    def __init__(self, dumped_md=None, **kw_args):
+        self._args = kw_args
+        if dumped_md:
+            self.load(dumped_md)
+        self.on_init()
+
+    def on_init(self):
+        pass
+
+    def __repr__(self):
+        return '[%s] %s'%(self.__class__.__name__, self._args)
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __unicode__(self):
+        return self.__repr__()
+
+    def __getattr__(self, attr):
+        return self._args.get(attr, None)
+
+    def __setattr__(self, attr, value):
+        if attr.startswith('_'):
+            object.__setattr__(self, attr, value)
+            return
+        self._args[attr] = value
+
+    def copy(self):
+        c_args = copy.copy(self._args)
+        c_obj = self.__class__(**c_args)
+        c_obj.set_addr(self.__md_addr)
+        return c_obj
+
+    def dump(self, is_local=False, recursive=False):
+        raise Exception('Not implemented')
+
+    def load(self, dumped):
+        raise Exception('Not implemented')
+
+    @classmethod
+    def load_md(cls, dumped):
+        md_obj_label = ord(dumped[0])
+        if md_obj_label == cls.MOL_FILE:
+            md = FileMD()
+        elif md_obj_label == cls.MOL_DIR:
+            md = DirectoryMD()
+        else:
+            raise Exception('Unknown metadata label "%s"'%md_obj_label)
+        md.load(dumped)
+        return md
+
+
+class ChunkMD(AbstractMetadataObject):
+    DUMP_STRUCT = '<20s20sQL'
+    MIN_DUMP_LEN = struct.calcsize(DUMP_STRUCT)
+
+    def validate(self):
         if self.checksum is None:
-            raise BadMetadata('Chunk checksum does not found!')
-        if self.key is None:
-            raise BadMetadata('Chunk key does not found!')
+            raise MDValidationError('Checksum is empty')
         if self.seek is None:
-            raise BadMetadata('Chunk seek does not found!')
+            raise MDValidationError('Seek is empty')
         if self.size is None:
-            raise BadMetadata('Chunk size does not found!')
+            raise MDValidationError('ChunkMD: Size is empty')
+        if self.seek < 0 or self.seek > MAX_Q:
+            raise MDValidationError('Seek %s is out of supported range [0..%s]'%(self.seek, MAX_Q))
+        if self.size < 0 or self.size > MAX_L:
+            raise MDValidationError('Chunk size %s is out of supported range [0..%s]'%(self.size, MAX_L))
 
-    def dump(self):
-        return {'checksum': self.checksum,
-                'key': self.key,
-                'seek': self.seek,
-                'size': self.size}
+    def dump(self, is_local=False, recursive=False):
+        self.validate()
+        try:
+            if not self.key:
+                key = ''
+            else:
+                key = self.key.decode('hex')
+        except TypeError:
+            raise MDValidationError('Invalid key "%s"'%self.key)
+        try:
+            checksum = self.checksum.decode('hex')
+        except TypeError:
+            raise MDValidationError('Invalid checksum "%s"'%self.checksum)
+
+        dumped = struct.pack(self.DUMP_STRUCT, key, checksum, self.seek, self.size)
+        if is_local and self.local_key:
+            try:
+                dumped += self.local_key.decode('hex')
+            except TypeError:
+                raise MDValidationError('Invalid local key "%s"'%self.local_key)
+
+        return dumped
+
+    def load(self, dumped):
+        size = self.MIN_DUMP_LEN
+        if len(dumped) < size:
+            raise MDIivalid('Invalid chunks MD size %s'%len(dumped))
+        key, checksum, self.seek, self.size = struct.unpack(self.DUMP_STRUCT, dumped[:size])
+        self.checksum = checksum.encode('hex')
+        if key == '\x00'*20:
+            self.key = None
+        else:
+            self.key = key.encode('hex')
+        if len(dumped) == size+20:
+            self.local_key = dumped[size:].encode('hex')
 
 
-class FileMD:
-    def __init__(self, name=None, size=0, replica_count=DEFAULT_REPLICA_COUNT):
-        self.id = uuid.uuid4().hex
-        self.name = name
-        self.size = size
-        self.replica_count = replica_count
+
+class FileMD(AbstractMetadataObject):
+    HDR_STRUCT = '<BBLQBLQ'
+    HDR_LEN = struct.calcsize(HDR_STRUCT)
+
+    @classmethod
+    def is_dir(cls):
+        return False
+
+    @classmethod
+    def is_file(cls):
+        return True
+
+    def validate(self):
+        if self.size is None:
+            raise MDValidationError('FileMD: Size is empty')
+        if self.parent_dir_id is None:
+            raise MDValidationError('ParentDirID is empty')
+        if not self.name:
+            raise MDValidationError('FileName is empty')
+
+        if self.item_id < 0 or self.item_id > MAX_L:
+            raise MDValidationError('File id %s is out of supported range [0..%s]'%(self.item_id, MAX_L))
+        if self.replica_count < 0 or self.replica_count > MAX_B:
+            raise MDValidationError('Replica count %s is out of supported range [0..%s]'%(self.seek, MAX_B))
+        if self.size < 0 or self.size > MAX_Q:
+            raise MDValidationError('File size %s is out of supported range [0..%s]'%(self.size, MAX_Q))
+        if self.parent_dir_id < 0 or self.parent_dir_id > MAX_L:
+            raise MDValidationError('File parent dir id %s is out of supported range [0..%s]'%(self.parent_dir_id, MAX_L))
+
+    def on_init(self):
+        if not self.replica_count:
+            self.replica_count = DEFAULT_REPLICA_COUNT
+        if not self.create_date:
+            self.create_date = int(time.mktime(datetime.now().timetuple()))
+        if self.chunks is None:
+            self.chunks = []
+
+    def dump(self, is_local=False, recursive=False):
+        self.validate()
+        fname = to_str(self.name)
+        fname_len = len(fname)
+        if fname_len < 1 or fname_len > MAX_B:
+            raise MDValidationError('File name length should be in range [1..%s], but "%s" occured'%(MAX_B, fname))
+
+        dump = struct.pack(self.HDR_STRUCT, AbstractMetadataObject.MOL_FILE, fname_len, self.item_id, \
+                self.size, self.replica_count, self.parent_dir_id, self.create_date)
+        dump += fname
+        for chunk in self.chunks:
+            ch_dump = chunk.dump(is_local)
+            dump += '%s%s'%(chr(len(ch_dump)), ch_dump)
+        return dump
+
+    def load(self, dumped):
+        if len(dumped) < self.HDR_LEN:
+            raise MDIivalid('Invalid file MD dump size %s'%len(dumped))
+
+        file_label, f_name_len, self.item_id, self.size, self.replica_count, \
+            self.parent_dir_id, self.create_date = \
+            struct.unpack(self.HDR_STRUCT, dumped[:self.HDR_LEN])
+
+        f_name = dumped[self.HDR_LEN: self.HDR_LEN+f_name_len]
+        self.name = f_name
+        seek = self.HDR_LEN+f_name_len
+        while seek < len(dumped):
+            chunk_len = ord(dumped[seek])
+            seek += 1
+            chunk_dump = dumped[seek:seek+chunk_len]
+            chunk = ChunkMD(dumped_md=chunk_dump)
+            self.append_chunk(chunk)
+            seek += chunk_len
+
+    def append_chunk(self, chunk):
+        if self.chunks is None:
+            self.chunks = []
+        self.chunks.append(chunk)
+
+    def clear_chunks(self):
+        if self.chunks is None:
+            self.chunks = []
+        ret_chunks = self.chunks
         self.chunks = []
-        self.create_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        self.parent_dir_id = None
+        return ret_chunks
 
-        self.__lock = threading.Lock()
-
-    @classmethod
-    def is_dir(cls):
-        return False
-
-    @classmethod
-    def is_file(cls):
-        return True
-
-    def __safe_load(self, obj, attr):
-        val = obj.get(attr, None)
-        if val is None:
-            raise BadMetadata('File %s does not found!'%val)
-        return val
-
-    def load(self, file_obj):
-        self.parent_dir_id = self.__safe_load(file_obj, 'parent_id')
-        self.name = self.__safe_load(file_obj, 'name')
-        self.size = self.__safe_load(file_obj, 'size')
-        chunks = file_obj.get('chunks', [])
-        for chunk in chunks:
-            chunk_obj = ChunkMD(**chunk)
-            self.chunks.append(chunk_obj)
-        self.replica_count = file_obj.get('replica_count', DEFAULT_REPLICA_COUNT)
-        create_date = file_obj.get('create_date', None)
-        if create_date:
-            self.create_date = create_date
-
-        return self
-
-    def dump(self):
-        return {'name': self.name,
-                'size': self.size,
-                'chunks': [c.dump() for c in self.chunks],
-                'replica_count': self.replica_count,
-                'create_date': self.create_date,
-                'parent_id': self.parent_dir_id}
-
-    def append_chunk(self, key, checksum, seek, size):
-        self.__lock.acquire()
-        try:
-            chunk_obj = ChunkMD(**{'key':key, 'checksum': checksum, 'seek': seek, 'size':size})
-            self.chunks.append(chunk_obj)
-        finally:
-            self.__lock.release()
-
-    def is_all_chunks(self):
-        act_size = 0
-        self.__lock.acquire()
-        try:
-            for chunk in self.chunks:
-                act_size += chunk.size
-
-            if act_size == self.size:
-                return True
-            return False
-        finally:
-            self.__lock.release()
+    def chunks_stat(self):
+        foreign_chunks = local_chunks = 0
+        for chunk in self.chunks:
+            if chunk.key:
+                foreign_chunks += 1
+            if chunk.local_key:
+                local_chunks += 1
+        return local_chunks, foreign_chunks
 
 
-class DirectoryMD:
-    def __init__(self, name='', dir_id=None):
-        self.name = name
-        self.content = []
-        self.create_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        self.last_modify_date = self.create_date
-        self.parent_dir_id = None
-        if dir_id is None:
-            dir_id = uuid.uuid4().hex
-        self.dir_id = dir_id
+
+
+
+class DirectoryMD(AbstractMetadataObject):
+    HDR_STRUCT = '<BBLLQQ'
+    HDR_LEN = struct.calcsize(HDR_STRUCT)
+    ITEM_HDR_STRUCT = '<IB'
+    ITEM_HDR_LEN = struct.calcsize(ITEM_HDR_STRUCT)
 
     @classmethod
     def is_dir(cls):
@@ -140,226 +268,75 @@ class DirectoryMD:
     def is_file(cls):
         return False
 
-    def __safe_load(self, obj, attr):
-        val = obj.get(attr, None)
-        if val is None:
-            raise BadMetadata('Directory %s does not found'%attr)
-        return val
+    def update_datetime(self):
+        self.last_modify_date = int(time.mktime(datetime.now().timetuple()))
 
-    def load(self, dir_obj):
-        self.dir_id = self.__safe_load(dir_obj, 'id')
-        self.parent_dir_id = self.__safe_load(dir_obj, 'parent_id')
-        self.name = self.__safe_load(dir_obj, 'name')
-        create_date = dir_obj.get('create_date', None)
-        if create_date:
-            self.create_date = create_date
-        last_mod_date = dir_obj.get('last_modify_date', None)
-        if last_mod_date:
-            self.last_modify_date = last_mod_date
+    def __hash(self, str_data):
+        return zlib.adler32(str_data)
 
-        return self
+    def on_init(self):
+        if not self.create_date:
+            self.create_date = int(time.mktime(datetime.now().timetuple()))
+        if not self.last_modify_date:
+            self.update_datetime()
+        if not self.content:
+            self.content = {}
 
-    def dump(self):
-        #TODO: attr validation should be implemented
-        return {'id': self.dir_id,
-                'name': self.name,
-                'parent_id': self.parent_dir_id,
-                'is_dir': True,
-                'create_date': self.create_date,
-                'last_modify_date': self.last_modify_date}
+    def validate(self):
+        if not self.name:
+            raise MDValidationError('DirectoryName is empty')
+        if self.item_id is None:
+            raise MDValidationError('DirID is empty')
+        if self.parent_dir_id is None:
+            raise MDValidationError('ParentDirID is empty')
 
-    def items(self):
-        return self.content
+        if self.item_id < 0 or self.item_id > MAX_L:
+            raise MDValidationError('Directory id %s is out of supported range [0..%s]'%(self.item_id, MAX_L))
+        if self.parent_dir_id < 0 or self.parent_dir_id > MAX_L:
+            raise MDValidationError('Directory parent id %s is out of supported range [0..%s]'%(self.parent_dir_id, MAX_L))
 
-    def get(self, item_name):
-        for item in self.content:
-            if unicode(item.name) == unicode(item_name):
-                return item
+    def dump(self, is_local=False, recursive=False):
+        self.validate()
+        dname = to_str(self.name)
+        dname_len = len(dname)
+        if dname_len < 1 or dname_len > MAX_B:
+            raise MDValidationError('Directory name length should be in range [1..%s], but "%s" occured'%(MAX_B, dname))
+        dump = struct.pack(self.HDR_STRUCT, AbstractMetadataObject.MOL_DIR, dname_len, self.item_id, \
+                self.parent_dir_id, self.create_date, self.last_modify_date)
+        dump += dname
 
-        raise PathException('"%s" does not found in %s directory'%(item_name, self.name))
+        if recursive:
+            for dir_item in self.content.values():
+                for item in dir_item:
+                    im_dump = item.dump(is_local, recursive)
+                    dump += '%s%s'%(struct.pack(self.ITEM_HDR_STRUCT, len(im_dump), int(item.is_file())), im_dump)
 
-    def append(self, item_md):
-        if not isinstance(item_md, DirectoryMD) and not isinstance(item_md, FileMD):
-            raise Exception('Item cant be appended to directory, bcs it type is equal to "%s"'%item_md)
+        return dump
 
-        try:
-            ex_item = self.get(item_md.name)
-            if ex_item.is_dir() == item_md.is_dir():
-                raise AlreadyExistsException('Item %s is already exists in directory %s'%\
-                                                (item_md.name, self.name))
-        except PathException:
-            pass
+    def load(self, dumped):
+        if len(dumped) < self.HDR_LEN:
+            raise MDIivalid('Invalid directory MD dump size %s'%len(dumped))
 
-        item_md.parent_dir_id = self.dir_id
-        self.content.append(item_md)
-        self.last_modify_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+        dir_label, d_name_len, self.item_id, self.parent_dir_id, \
+            self.create_date, self.last_modify_date = \
+            struct.unpack(self.HDR_STRUCT, dumped[:self.HDR_LEN])
+        d_name = dumped[self.HDR_LEN: self.HDR_LEN+d_name_len]
+        self.name = d_name
 
-    def remove(self, item_name):
-        rm_i = None
-        for i, item in enumerate(self.content):
-            if unicode(item.name) == unicode(item_name):
-                rm_i = i
-                break
+        seek = self.HDR_LEN+d_name_len
+        ss = self.ITEM_HDR_LEN
+        self.content = {}
+        while seek < len(dumped):
+            item_len, is_file = struct.unpack(self.ITEM_HDR_STRUCT, dumped[seek:seek+ss])
+            seek += ss
+            item_dump = dumped[seek:seek+item_len]
+            if is_file:
+                i_class = FileMD
+            else:
+                i_class = DirectoryMD
 
-        if rm_i is not None:
-            del self.content[rm_i]
-            self.last_modify_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            item = i_class(dumped_md=item_dump)
+            self.append(item)
+            seek += item_len
 
-
-
-class MDVersion:
-    def __init__(self):
-        self.__ver_datetime = None
-        self.__app_items = []
-        self.__rm_items = []
-
-    def empty(self):
-        return (not self.__app_items) and (not self.__rm_items)
-
-    def append(self, item):
-        self.__app_items.append(item)
-
-    def remove(self, item):
-        self.__rm_items.append(copy.copy(item))
-
-    def dump(self):
-        ret_lst = []
-        for item in self.__app_items:
-            ret_lst.append((item.dump(), False))
-        for item in self.__rm_items:
-            ret_lst.append((item.dump(), True))
-
-        ver_datetime = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
-        return (ver_datetime, ret_lst)
-
-
-class MetadataFile:
-    def __init__(self):
-        self.versions = []
-        self.root_dir = DirectoryMD('/', dir_id='')
-        self.unsaved_ver = MDVersion()
-
-    def load(self, md_str):
-        md_obj = json.loads(md_str)
-        self.versions = md_obj.get('versions', [])
-        for ver_dt, md_ver in self.versions:
-            for item, is_removed in md_ver:
-                if item.get('is_dir', False):
-                    item_md = DirectoryMD()
-                else:
-                    item_md = FileMD()
-
-                item_md.load(item)
-                parent = self.find_by_id(item_md.parent_dir_id)
-                if is_removed:
-                    parent.remove(item_md.name)
-                else:
-                    parent.append(item_md)
-
-    def save(self):
-        if not self.unsaved_ver.empty():
-            self.versions.append(self.unsaved_ver.dump())
-            self.unsaved_ver = MDVersion()
-
-        d_obj = {'versions': self.versions}
-
-        return json.dumps(d_obj)
-
-    def find(self, path):
-        items = path.split('/')
-        cur_item = self.root_dir
-        for item_name in items:
-            if not item_name:
-                continue
-
-            if not cur_item.is_dir():
-                raise PathException('Path "%s" does not found!'%path)
-
-            cur_item = cur_item.get(item_name)
-
-        return cur_item
-
-    def find_by_id(self, dir_id, start_dir=None):
-        if not dir_id:
-            return self.root_dir
-
-        if not start_dir:
-            start_dir = self.root_dir
-
-        if start_dir.dir_id == dir_id:
-            return start_dir
-
-        for item_md in start_dir.items():
-            if item_md.is_dir():
-                found_id = self.find_by_id(dir_id, item_md)
-                if found_id:
-                    return found_id
-
-    def exists(self, path):
-        try:
-            self.find(path)
-        except PathException, err:
-            return False
-
-        return True
-
-
-    def append(self, dest_dir, item_md):
-        dest_dir_md = self.find(dest_dir)
-        dest_dir_md.append(item_md)
-
-        self.unsaved_ver.append(item_md)
-
-    def remove(self, rm_path):
-        rm_item_md = self.find(rm_path)
-        if rm_item_md.is_dir() and rm_item_md.items():
-            raise NotEmptyException('Directory %s is not empty!'%rm_path)
-
-        base_dir = self.find_by_id(rm_item_md.parent_dir_id)
-        base_dir.remove(rm_item_md.name)
-        self.unsaved_ver.remove(rm_item_md)
-
-
-    '''
-    def make_new_version(self, user_id):
-        cdt = datetime.now().isoformat()
-        new_version_key = hashlib.sha1(user_id+cdt).hexdigest()
-        self.versions.append((cdt, new_version_key))
-        return new_version_key
-
-    def get_versions(self):
-        return self.versions
-
-    def remove_version(self, version_key):
-        for_del = None
-        for i, (vdt, ver_key) in enumerate(self.versions):
-            if ver_key == version_key:
-                for_del = i
-
-        if for_del is not None:
-            del self.versions[for_del]
-    '''
-
-if __name__ == '__main__':
-    md = MetadataFile()
-    dirmd = DirectoryMD('test_dir')
-    md.append('/', dirmd)
-
-    filemd = FileMD('new_file')
-    filemd.append_chunk('tttttttt', 'ewwerwerewrwrwr', 0, 123131)
-    md.append('/test_dir', filemd)
-    md_dump = md.save()
-
-    assert md.exists('/test_dir') == True
-    assert md.exists('/test_dir/new_file') == True
-    assert md.exists('/test_dir/fake_file') == False
-    dirmd = md.find('/test_dir')
-
-    del md
-    md = MetadataFile()
-    md.load(md_dump)
-    md.remove('/test_dir/new_file')
-    md.remove('/test_dir')
-    print 'metadata size: %s'%len(md.save())
-    print md.save()
 

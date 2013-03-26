@@ -45,7 +45,7 @@ class FilesInprogressDialog(QDialog):
         ops = self.nibbler.inprocess_operations()
         operations = []
         for op in ops:
-            operations.append((op.op_type, op.file_name))
+            operations.append(('UPLOAD' if op.is_upload else 'DOWNLOAD', os.path.basename(op.file_path)))
 
         if self.__cache == operations:
             return

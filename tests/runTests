@@ -10,6 +10,7 @@ for item in os.listdir(path):
     if not item.endswith('.py'):
         continue
 
+    print '===============> %s ...'%item
     ret = os.system('python %s'%os.path.join(path, item))
     if ret:
         print('[ERROR] Tests failed!')

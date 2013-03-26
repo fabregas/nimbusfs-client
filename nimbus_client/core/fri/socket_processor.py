@@ -93,7 +93,7 @@ class SocketProcessor:
         req = FabnetPacketRequest(method='crtput', parameters={'certificate': self.__cert})
         self.__sock.sendall(req.dump())
 
-    def get_packet(self, allow_socket_close=False):
+    def recv_packet(self, allow_socket_close=True):
         packet, bin_data = self.read_next_packet()
         if packet.is_response and packet.ret_code == RC_REQ_CERTIFICATE:
             self.__send_cert()
@@ -150,8 +150,12 @@ class SocketProcessor:
         if self.__can_close_socket and self.__sock:
             self.__close_sock()
 
+    def is_closed(self):
+        return self.__sock == None
+
     def __close_sock(self):
         try:
+            self.__sock.shutdown(socket.SHUT_RDWR)
             self.__sock.close()
         except socket.error, err:
             print('[close socket error] %s'%err)
