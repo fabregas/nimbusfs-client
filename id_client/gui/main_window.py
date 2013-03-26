@@ -231,7 +231,7 @@ class CheckSyncStatusThread(QThread):
                 if not self.tray.idepositbox_client.nibbler:
                     continue
 
-                ops = self.tray.idepositbox_client.nibbler.inprocess_operations()
+                ops = self.tray.idepositbox_client.nibbler.has_incomlete_operations()
                 if ops:
                     self.tray.sync_data_inprogress.emit()
                 else:

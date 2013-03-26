@@ -248,3 +248,9 @@ class Nibbler:
             ret_list.append(InprogressOperation(is_upload, file_path, status, size, progress_perc))
         return ret_list
 
+    def has_incomlete_operations(self):
+        for _, _, status, _, _ in self.transactions_manager.iterate_transactions():
+            if status not in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
+                return True
+        return False
+
