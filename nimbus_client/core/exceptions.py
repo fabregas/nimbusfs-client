@@ -65,3 +65,6 @@ class NotFoundException(NimbusException):
 
 class PermissionsException(NimbusException):
     pass
+
+class NoLocalFileFound(NimbusException):
+    pass

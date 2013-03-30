@@ -67,7 +67,7 @@ class WebDavServer(threading.Thread):
             "provider_mapping": {"/": provider},
             "user_mapping": {},
             "verbose": 1,
-           # "debug_methods": ['OPTIONS', 'PROPFIND'],
+            #"debug_methods": ['OPTIONS', 'PROPFIND'],
             "enable_loggers": [],
             "propsmanager": True,      # True: use property_manager.PropertyManager                    
             "locksmanager": True,      # True: use lock_manager.LockManager                   

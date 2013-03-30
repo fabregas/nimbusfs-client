@@ -57,19 +57,18 @@ class TestMetadata(unittest.TestCase):
         size = 23425522
         seek = 23235634532423
 
-        chunk = ChunkMD(checksum=checksum, size=size, seek=seek, key=key, local_key=local_key)
+        chunk = ChunkMD(checksum=checksum, size=size, seek=seek, key=key)
 
-        dump = chunk.dump(is_local=True)
+        dump = chunk.dump()
         restored_chunk = ChunkMD()
         restored_chunk.load(dump)
 
         self.assertEqual(restored_chunk.checksum, checksum)
         self.assertEqual(restored_chunk.key, key)
-        self.assertEqual(restored_chunk.local_key, local_key)
         self.assertEqual(restored_chunk.size, size)
         self.assertEqual(restored_chunk.seek, seek)
 
-        dump = chunk.dump(is_local=False)
+        dump = chunk.dump()
         restored_chunk = ChunkMD()
         restored_chunk.load(dump)
 

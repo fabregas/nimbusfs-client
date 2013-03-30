@@ -44,6 +44,8 @@ class EmptyFileObject:
         pass
 
 
+    
+
 #===============================================================================
 # FileResource
 #===============================================================================
@@ -217,7 +219,7 @@ class FolderResource(DAVCollection):
         nameList = []
 
         for item in self.nibbler.listdir(self.path):
-            name = item.name.encode('utf8')
+            name = item.name
             nameList.append(name)
 
         for item in self.provider.cache_fs.get_dir_content(self.path):

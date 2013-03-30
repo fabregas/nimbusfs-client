@@ -196,6 +196,15 @@ class MetadataFile:
         self.db =  anydbm.open(md_file_path, 'c')
         self.__last_item_id = long(self.__get_db_val('last_item_id', 0))
         self.__last_journal_rec_id = long(self.__get_db_val('last_journal_rec_id', 0))
+        if self.__journal:
+            j_key = self.__get_db_val('journal_key', None)
+            if j_key != self.__journal.get_journal_key():
+                logger.info('Invalid journal key in metadata database! Recreating it...')
+                os.remove(md_file_path)
+                self.db = anydbm.open(md_file_path, 'c')
+                self.db['journal_key'] = self.__journal.get_journal_key()
+                self.__last_item_id = 0
+                self.__last_journal_rec_id = 0
 
         try:
             self.__init_from_journal(self.__last_journal_rec_id)
@@ -402,6 +411,8 @@ class MetadataFile:
 
     def __update_journal(self, op_type, item_md):
         if self.__journal and self.__valid:
+            if item_md.is_local:
+                return
             self.__last_journal_rec_id = self.__journal.append(op_type, item_md)
 
     @MDLock

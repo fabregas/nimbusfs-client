@@ -21,7 +21,7 @@ from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.metadata import FileMD, ChunkMD
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.exceptions import AlreadyExistsException, \
-                                NotDirectoryException, PathException
+                            NotDirectoryException, PathException, NoLocalFileFound
 
 GTLock = LockObject()
 TLock = LockObject()
@@ -264,6 +264,16 @@ class TransactionsManager:
 
             return file_md
 
+    def __remove_from_inprogress(self, file_path):
+        rem_tr_id = None
+        for tr_id, transaction in self.__transactions.items():
+            if transaction.is_uploading() and (transaction.get_file_path() == file_path):
+                rem_tr_id = tr_id
+                break
+
+        if rem_tr_id is not None:
+            self.update_transaction_state(rem_tr_id, Transaction.TS_FAILED)
+
     @GTLock
     def find_inprogress_file(self, file_path):
         return self.__find_inprogress_file(file_path)
@@ -291,6 +301,9 @@ class TransactionsManager:
                     else:
                         logger.error('Removing corrupted data block: %s'% data_block.get_name())
                         data_block.remove()
+
+                if file_md.is_local:
+                    raise NoLocalFileFound('No local chunk found for key=%s'%chunk.key)
 
                 if not stored_transaction:
                     self.__transactions[transaction_id] = transaction
@@ -329,6 +342,32 @@ class TransactionsManager:
     def save_empty_file(self, file_path):
         transaction = self.__create_upload_transaction(file_path)
         self.__save_metadata(transaction)
+
+    @GTLock
+    def save_local_file(self, file_path, file_size, data_block):
+        transaction = self.__create_upload_transaction(file_path)
+        if data_block:
+            transaction.append_data_block(0, file_size, data_block, data_block.get_name(), no_transfer=True)
+        self.__save_metadata(transaction, local_only=True)
+
+    @GTLock
+    def remove_file(self, file_path):
+        file_md = self.__find_inprogress_file(file_path)
+        if file_md:
+            self.__remove_from_inprogress(file_path)
+
+        try:
+            file_md = self.__metadata.find(file_path)
+            if not file_md.is_file():
+                raise NotFileException('%s is not a file!'%dest_dir)
+
+            self.__metadata.remove(file_md)
+
+            for chunk in file_md.chunks:
+                self.__db_cache.remove_data_block(chunk.key)
+            #TODO: remove file from NimbusFS should be implemented!
+        except PathException:
+            return
 
     @GTLock
     def update_transaction_state(self, transaction_id, status):
@@ -396,7 +435,7 @@ class TransactionsManager:
             #FIXME REMOVE_FROM_BACKEND(foreign_name)
             pass
 
-    def __save_metadata(self, transaction):
+    def __save_metadata(self, transaction, local_only=False):
         file_path = transaction.get_file_path()
         save_path, file_name = os.path.split(file_path)
 
@@ -411,8 +450,12 @@ class TransactionsManager:
             #FIXME remove old chunks from backend and cache!!!
             self.__construct_file_md(transaction, file_md)
             file_md.size = transaction.total_size()
+            file_md.is_local = local_only
             self.__metadata.update(file_md)
         else:
+            if not file_md.has_chunks():
+                self.__construct_file_md(transaction, file_md)
+            file_md.is_local = local_only
             self.__metadata.append(save_path, file_md)
 
     def __remove_oldest_stransaction(self):

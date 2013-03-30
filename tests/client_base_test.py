@@ -201,6 +201,12 @@ class BaseNibblerTest(unittest.TestCase):
         f_obj.close()
         self.assertEqual(e_data, '')
 
+        #tmp files saved locally only
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/._temp_file.tmp', for_write=True)
+        f_obj.write('test data')
+        f_obj.write(' for local save')
+        f_obj.close()
+
         f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out', for_write=True)
         f_obj.write(data[:100])
         f_obj.write(data[100:])
@@ -245,10 +251,17 @@ class BaseNibblerTest(unittest.TestCase):
         s_data_len = len(data)
         checksum = hashlib.sha1(data).hexdigest()
 
+
+        print 'reading data from NimbusFS file...'
+
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/._temp_file.tmp')
+        data = f_obj.read()
+        f_obj.close()
+        self.assertEqual(data, 'test data for local save')
+
         #clear cached data blocks...
         os.system('rm -rf /tmp/dynamic_cache/*')
 
-        print 'reading data from NimbusFS file...'
         f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
         data = ''
         while True:
@@ -282,6 +295,11 @@ class BaseNibblerTest(unittest.TestCase):
         data = f_obj.read()
         f_obj.close()
         self.assertEqual(data, 'test message')
+
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/._temp_file.tmp')
+        with self.assertRaises(NoLocalFileFound):
+            data = f_obj.read()
+        f_obj.close()
         print 'finished!'
 
     def test05_listdir(self):
@@ -296,11 +314,13 @@ class BaseNibblerTest(unittest.TestCase):
         self.assertEqual(items[2].is_dir, True)
 
         items = nibbler.listdir('/my_first_dir/my_first_subdir')
-        self.assertEqual(len(items), 2, items)
+        self.assertEqual(len(items), 3, items)
         self.assertEqual(items[0].name, 'test_file.out')
         self.assertEqual(items[0].is_file, True)
-        self.assertEqual(items[1].name, 'small_file')
+        self.assertEqual(items[1].name, '._temp_file.tmp')
         self.assertEqual(items[1].is_file, True)
+        self.assertEqual(items[2].name, 'small_file')
+        self.assertEqual(items[2].is_file, True)
 
         with self.assertRaises(PathException):
             nibbler.listdir('/some/imagine/path')
@@ -391,9 +411,11 @@ class BaseNibblerTest(unittest.TestCase):
     def test08_remove_file(self):
         nibbler = BaseNibblerTest.NIBBLER_INST
 
+        items = nibbler.listdir('/my_first_dir/my_first_subdir')
+        self.assertEqual(len(items), 3, items)
+        
         nibbler.remove_file('/my_first_dir/my_first_subdir/test_file.out')
-        with self.assertRaises(PathException):
-            nibbler.remove_file('/my_first_dir/my_first_subdir/test_file.out')
+        nibbler.remove_file('/my_first_dir/my_first_subdir/._temp_file.tmp')
         items = nibbler.listdir('/my_first_dir/my_first_subdir')
         self.assertEqual(len(items), 1, items)
         

@@ -10,10 +10,15 @@ Copyright (C) 2013 Konstantin Andrusenko
 
 This module contains the implementation of SmartFileObject class
 """
+import os
+import re 
+
 from nimbus_client.core.transactions_manager import TransactionsManager, Transaction
 from nimbus_client.core.constants import MAX_DATA_BLOCK_SIZE
 from nimbus_client.core.exceptions import ClosedFileException, PermissionsException
 from nimbus_client.core.logger import logger
+
+TMP_FILES_PATTERNS = [(re.compile('\._.+'), 4096)]
 
 class SmartFileObject:
     TRANSACTIONS_MANAGER = None
@@ -33,6 +38,14 @@ class SmartFileObject:
         self.__unsync = False
         self.__closed = False
         self.__for_write = for_write
+        logger.debug('opening file %s for %s...'%(file_path, 'write' if for_write else 'read'))
+
+    def __tmp_file(self):
+        f_name = os.path.basename(self.__file_path)
+        for re_f_name, max_tmp_f_size in TMP_FILES_PATTERNS:
+            if re.match(re_f_name, f_name) and self.__cur_db_seek <= max_tmp_f_size:
+                return True
+        return False
 
     def write(self, data):
         if not self.__for_write:
@@ -48,7 +61,11 @@ class SmartFileObject:
                 self.__cur_data_block = self.TRANSACTIONS_MANAGER.new_data_block()
 
             data_len = len(data)
-            rest = self.__cur_db_seek + data_len - MAX_DATA_BLOCK_SIZE
+            if self.__tmp_file():
+                rest = 0
+            else:
+                rest = self.__cur_db_seek + data_len - MAX_DATA_BLOCK_SIZE
+
             if rest > 0:
                 rest_data = data[data_len-rest:]
                 data = data[:data_len-rest]
@@ -62,6 +79,8 @@ class SmartFileObject:
             if rest_data:
                 self.__send_data_block()
                 self.write(rest_data)
+
+            #logger.debug('write %s bytes to %s ...'%(len(data), self.__file_path))
         except Exception, err:
             self.__failed_transaction(err)
             raise err
@@ -118,6 +137,7 @@ class SmartFileObject:
             self.__failed_transaction(err)
             raise err
 
+        #logger.debug('read %s bytes from %s ...'%(len(ret_data), self.__file_path))
         return ret_data
 
 
@@ -127,11 +147,14 @@ class SmartFileObject:
         try:
             if self.__for_write:
                 try:
-                    if self.__unsync and self.__cur_data_block:
+                    if self.__tmp_file():
+                        self.__cur_data_block.finalize()
+                        self.__cur_data_block.close()
+                        self.TRANSACTIONS_MANAGER.save_local_file(self.__file_path, self.__cur_db_seek, self.__cur_data_block)
+                    elif self.__unsync and self.__cur_data_block:
                         self.__send_data_block()
-                    else:
-                        if not self.__transaction_id:
-                            self.TRANSACTIONS_MANAGER.save_empty_file(self.__file_path)
+                    elif not self.__transaction_id:
+                        self.TRANSACTIONS_MANAGER.save_empty_file(self.__file_path)
 
                     if self.__transaction_id:
                         self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
@@ -143,6 +166,7 @@ class SmartFileObject:
                     self.__cur_data_block.close()
         finally:
             self.__closed = True
+            logger.debug('file %s is closed!'%self.__file_path)
             
     def __send_data_block(self):
         self.__cur_data_block.finalize()

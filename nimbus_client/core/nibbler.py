@@ -153,9 +153,9 @@ class Nibbler:
 
     def listdir(self, path='/'):
         path = to_str(path)
-        items = self.metadata.listdir(path)
-        ret_lst = [self.__make_item_fs(i) for i in items]
- 
+        ret_lst = []
+        inc_tr_l = []
+
         #try to find uploading files in @path (fully saved into data blocks cache)
         for is_upload, file_path, status, size, _ in self.transactions_manager.iterate_transactions():
             if not is_upload:
@@ -165,6 +165,13 @@ class Nibbler:
             base_path, file_name = os.path.split(file_path)
             if base_path == path:
                 ret_lst.append(self.__make_item_fs(FileMD(name=file_name, size=size)))
+                inc_tr_l.append(file_name)
+
+        items = self.metadata.listdir(path)
+        for item in items:
+            if item.name not in inc_tr_l:
+                ret_lst.append(self.__make_item_fs(item))
+
         return ret_lst
 
 
@@ -227,19 +234,16 @@ class Nibbler:
             mdf.find(dst_path) #check existance
 
         mdf.update(source)
+        logger.debug('%s is moved to %s!'%(s_path, d_path))
 
     def remove_file(self, file_path):
         file_path = to_str(file_path)
         logger.debug('removing file %s ...'%file_path)
-        file_md = self.metadata.find(file_path)
-        if not file_md.is_file():
-            raise NotFileException('%s is not a file!'%dest_dir)
-        self.metadata.remove(file_md)
-        #TODO: remove file from NimbusFS should be implemented!
+        self.transactions_manager.remove_file(file_path)
+        logger.debug('file %s is removed!'%file_path)
 
     def open_file(self, file_path, for_write=False):
         file_path = to_str(file_path)
-        logger.debug('opening file %s for %s...'%(file_path, 'write' if for_write else 'read'))
         return SmartFileObject(file_path, for_write)
 
     def inprocess_operations(self):

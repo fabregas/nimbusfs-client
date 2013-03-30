@@ -85,7 +85,7 @@ class AbstractMetadataObject(object):
         c_obj.set_addr(self.__md_addr)
         return c_obj
 
-    def dump(self, is_local=False, recursive=False):
+    def dump(self, recursive=False):
         raise Exception('Not implemented')
 
     def load(self, dumped):
@@ -120,7 +120,7 @@ class ChunkMD(AbstractMetadataObject):
         if self.size < 0 or self.size > MAX_L:
             raise MDValidationError('Chunk size %s is out of supported range [0..%s]'%(self.size, MAX_L))
 
-    def dump(self, is_local=False, recursive=False):
+    def dump(self, recursive=False):
         self.validate()
         try:
             if not self.key:
@@ -135,12 +135,6 @@ class ChunkMD(AbstractMetadataObject):
             raise MDValidationError('Invalid checksum "%s"'%self.checksum)
 
         dumped = struct.pack(self.DUMP_STRUCT, key, checksum, self.seek, self.size)
-        if is_local and self.local_key:
-            try:
-                dumped += self.local_key.decode('hex')
-            except TypeError:
-                raise MDValidationError('Invalid local key "%s"'%self.local_key)
-
         return dumped
 
     def load(self, dumped):
@@ -153,13 +147,10 @@ class ChunkMD(AbstractMetadataObject):
             self.key = None
         else:
             self.key = key.encode('hex')
-        if len(dumped) == size+20:
-            self.local_key = dumped[size:].encode('hex')
-
 
 
 class FileMD(AbstractMetadataObject):
-    HDR_STRUCT = '<BBLQBLQ'
+    HDR_STRUCT = '<BBLQBLQB'
     HDR_LEN = struct.calcsize(HDR_STRUCT)
 
     @classmethod
@@ -177,6 +168,8 @@ class FileMD(AbstractMetadataObject):
             raise MDValidationError('ParentDirID is empty')
         if not self.name:
             raise MDValidationError('FileName is empty')
+        if not self.is_local:
+            self.is_local = False
 
         if self.item_id < 0 or self.item_id > MAX_L:
             raise MDValidationError('File id %s is out of supported range [0..%s]'%(self.item_id, MAX_L))
@@ -195,7 +188,7 @@ class FileMD(AbstractMetadataObject):
         if self.chunks is None:
             self.chunks = []
 
-    def dump(self, is_local=False, recursive=False):
+    def dump(self, recursive=False):
         self.validate()
         fname = to_str(self.name)
         fname_len = len(fname)
@@ -203,10 +196,10 @@ class FileMD(AbstractMetadataObject):
             raise MDValidationError('File name length should be in range [1..%s], but "%s" occured'%(MAX_B, fname))
 
         dump = struct.pack(self.HDR_STRUCT, AbstractMetadataObject.MOL_FILE, fname_len, self.item_id, \
-                self.size, self.replica_count, self.parent_dir_id, self.create_date)
+                self.size, self.replica_count, self.parent_dir_id, self.create_date, int(self.is_local))
         dump += fname
         for chunk in self.chunks:
-            ch_dump = chunk.dump(is_local)
+            ch_dump = chunk.dump()
             dump += '%s%s'%(chr(len(ch_dump)), ch_dump)
         return dump
 
@@ -215,9 +208,10 @@ class FileMD(AbstractMetadataObject):
             raise MDIivalid('Invalid file MD dump size %s'%len(dumped))
 
         file_label, f_name_len, self.item_id, self.size, self.replica_count, \
-            self.parent_dir_id, self.create_date = \
+            self.parent_dir_id, self.create_date, is_local = \
             struct.unpack(self.HDR_STRUCT, dumped[:self.HDR_LEN])
 
+        self.is_local = bool(is_local)
         f_name = dumped[self.HDR_LEN: self.HDR_LEN+f_name_len]
         self.name = f_name
         seek = self.HDR_LEN+f_name_len
@@ -250,6 +244,8 @@ class FileMD(AbstractMetadataObject):
                 local_chunks += 1
         return local_chunks, foreign_chunks
 
+    def has_chunks(self):
+        return bool(self.chunks)
 
 
 
@@ -295,7 +291,7 @@ class DirectoryMD(AbstractMetadataObject):
         if self.parent_dir_id < 0 or self.parent_dir_id > MAX_L:
             raise MDValidationError('Directory parent id %s is out of supported range [0..%s]'%(self.parent_dir_id, MAX_L))
 
-    def dump(self, is_local=False, recursive=False):
+    def dump(self, recursive=False):
         self.validate()
         dname = to_str(self.name)
         dname_len = len(dname)
@@ -308,7 +304,7 @@ class DirectoryMD(AbstractMetadataObject):
         if recursive:
             for dir_item in self.content.values():
                 for item in dir_item:
-                    im_dump = item.dump(is_local, recursive)
+                    im_dump = item.dump(recursive)
                     dump += '%s%s'%(struct.pack(self.ITEM_HDR_STRUCT, len(im_dump), int(item.is_file())), im_dump)
 
         return dump

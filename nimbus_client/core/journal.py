@@ -55,6 +55,9 @@ class Journal:
         self.__j_sync_thrd = JournalSyncThread(self)
         self.__j_sync_thrd.start()
 
+    def get_journal_key(self):
+        return self.__journal_key
+
     def __recv_journal(self):
         self.__journal.remove()
         self.__journal = DataBlock(self.__journal_path, create_if_none=True)
