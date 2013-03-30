@@ -80,6 +80,7 @@ class Nibbler:
 
         user_id = self.security_provider.get_client_cert()
         self.metadata_key = hashlib.sha1(user_id).hexdigest()
+        self.metadata_f_name = 'md-%s.bin'%self.metadata_key
 
         self.journal = None
         self.metadata = None
@@ -97,7 +98,7 @@ class Nibbler:
         if not self.journal.foreign_exists():
             raise NoJournalFoundException('No journal for key = %s'%self.metadata_key)
 
-        self.metadata = MetadataFile(self.db_cache.get_static_cache_path('md.bin'), self.journal)
+        self.metadata = MetadataFile(self.db_cache.get_static_cache_path(self.metadata_f_name), self.journal)
         self.transactions_manager = TransactionsManager(self.metadata, self.db_cache)
 
         SmartFileObject.setup_transaction_manager(self.transactions_manager)
@@ -117,7 +118,7 @@ class Nibbler:
         self.journal.init()
         if self.metadata:
             self.metadata.close()
-            self.metadata = MetadataFile(self.db_cache.get_static_cache_path('md.bin'), self.journal)
+            self.metadata = MetadataFile(self.db_cache.get_static_cache_path(self.metadata_f_name), self.journal)
 
     def on_error(self, error_msg):
         pass
