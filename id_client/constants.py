@@ -13,4 +13,3 @@ CS_FAILED = 'failed'
 CS_STARTED = 'started'
 CS_STOPPED = 'stopped'
 
-WAIT_WEBDAV_SERVER_TIMEOUT = 10

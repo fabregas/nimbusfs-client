@@ -18,17 +18,16 @@ from nimbus_client.core.security_manager import FileBasedSecurityManager, Abstra
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.logger import logger
 
-from id_client.webdav_server import WebDavServer
+from id_client.webdav.application import WebDavAPI
 from id_client.token_agent import TokenAgent
 from id_client.config import Config
 from id_client.constants import *
 
 
-
 class IdepositboxClient:
     def __init__(self):
         self.nibbler = None
-        self.webdav_server = None
+        self.api_list = []
         self.config = Config()
         self.token_agent = TokenAgent(self.on_usb_token_event)
         self.status = CS_STOPPED
@@ -55,6 +54,7 @@ class IdepositboxClient:
             else:
                 raise Exception('Unexpected security provider type: "%s"'%config.security_provider_type)
 
+            
             self.nibbler = Nibbler(config.fabnet_hostname, security_provider, \
                                 config.parallel_put_count, config.parallel_get_count, \
                                 config.cache_dir, config.cache_size)
@@ -74,26 +74,29 @@ class IdepositboxClient:
                     raise Exception('User does not registered in service')
 
             self.nibbler.start()
-            self.webdav_server = WebDavServer(config.webdav_bind_host, config.webdav_bind_port, self.nibbler)
-            self.webdav_server.start()
 
-            logger.debug('waiting while WebDav server is started...')
-            for i in xrange(WAIT_WEBDAV_SERVER_TIMEOUT):
-                time.sleep(1)
-                if self.webdav_server.is_ready():
-                    break
-            else:
-                raise Exception('Webdav server does not started!')
+            #init API instances
+            webdav_server = WebDavAPI(self.nibbler, config.webdav_bind_host, config.webdav_bind_port)
+            self.api_list.append(webdav_server)
 
-            logger.debug('WebDav server is started!')
+            for api_instance in self.api_list:
+                logger.debug('starting %s...'%api_instance.get_name())
+                api_instance.start()
+                
+                logger.debug('waiting while %s is started...'%api_instance.get_name())
+                for i in xrange(api_instance.get_start_waittime()):
+                    time.sleep(1)
+                    if api_instance.is_ready():
+                        break
+                else:
+                    raise Exception('%s does not started!'%api_instance.get_name())
+                logger.info('%s is started!'%api_instance.get_name())
+
             logger.info('IdepositboxClient is started')
         except Exception, err:
             logger.error('init fabnet provider error: %s'%err)
             self.status = CS_FAILED
-            if self.nibbler:
-                self.nibbler.stop()
-            if self.webdav_server:
-                self.webdav_server.stop()
+            self.stop()
             logger.write = logger.info
             traceback.print_exc(file=logger)
             raise err
@@ -102,10 +105,17 @@ class IdepositboxClient:
     def stop(self):
         try:
             self.token_agent.stop()
-            if self.webdav_server:
-                self.webdav_server.stop()
+            for api_instance in self.api_list:
+                try:
+                    logger.debug('stopping %s ...'%api_instance.get_name())
+                    api_instance.stop()
+                    logger.info('%s is stopped!'%api_instance.get_name())
+                except Exception, err:
+                    logger.error('stopping %s error: %s'%(api_instance.get_name(), err))
+
             if self.nibbler:
                 self.nibbler.stop()
+
             logger.info('IdepositboxClient is stopped')
         except Exception, err:
             logger.error('stopping fabnet provider error: %s'%err)

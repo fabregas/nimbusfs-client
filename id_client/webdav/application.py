@@ -4,7 +4,7 @@ Copyright (C) 2012 Konstantin Andrusenko
     See the documentation for further information on copyrights,
     or contact the author. All Rights Reserved.
 
-@package webdav_server.server
+@package id_clientwebdav.application
 @author Konstantin Andrusenko
 @date Nobember 25, 2012
 
@@ -25,18 +25,25 @@ from wsgidav.util import BASE_LOGGER_NAME
 from cherrypy import wsgiserver, __version__ as cp_version
 
 from fabnet_dav_provider import FabnetProvider
-from nimbus_client.core.logger import logger
+from id_client.base_external_api import BaseExternalAPI
 
+WAIT_WEBDAV_SERVER_TIMEOUT = 10
 
-
-class WebDavServer(threading.Thread):
-    def __init__(self, host, port, nibbler):
-        threading.Thread.__init__(self)
+class WebDavAPI(BaseExternalAPI):
+    def __init__(self, nibbler, host, port):
+        BaseExternalAPI.__init__(self, nibbler)
         self.host = host
-        self.port = int(port)
-        self.nibbler = nibbler
-
+        self.port = port
         self.server = None
+
+    def get_name(self):
+        return 'WebDav API'
+
+    def get_start_waittime(self):
+        return WAIT_WEBDAV_SERVER_TIMEOUT
+
+    def is_ready(self):
+        pass
 
     def __init_logger(self):
         wsgi_logger = logging.getLogger(BASE_LOGGER_NAME)
@@ -54,11 +61,6 @@ class WebDavServer(threading.Thread):
 
         wsgi_logger.setLevel(logging.INFO)
 
-    def is_ready(self):
-        if not self.server:
-            return False
-        return self.server.ready
-
     def run(self):
         provider = FabnetProvider(self.nibbler)
 
@@ -74,32 +76,25 @@ class WebDavServer(threading.Thread):
             "domaincontroller": None,  # None: domain_controller.WsgiDAVDomainController(user_mapping)
             })
 
+
         app = WsgiDAVApp(config)
 
         version = "WsgiDAV/%s %s" % (__version__, wsgiserver.CherryPyWSGIServer.version)
         wsgiserver.CherryPyWSGIServer.version = version
         if config["verbose"] >= 1:
-            print("Runing %s, listening on %s://%s:%s" % (version, 'http', self.host, self.port))
+            print("Running %s, listening on %s://%s:%s" % (version, 'http', self.host, self.port))
 
-        server = wsgiserver.CherryPyWSGIServer((self.host, self.port), app,)
-        server.provider = provider
+        self.server = wsgiserver.CherryPyWSGIServer((self.host, self.port), app,)
+        self.server.provider = provider
 
-        self.server = server
         self.__init_logger()
-        logger.info('WebDav server is initialized!')
-        try:
-            self.server.start()
-        except Exception, err:
-            self.server = None
-            logger.error('WebDav server: %s'%err)
+
+        self.server.start()
 
 
     def stop(self):
-        try:
-            logger.info('Stopping webdav server...')
-            if self.server:
-                self.server.stop()
-        except Exception, err:
-            logger.error('Stopping webdav server error: %s'%err)
+        if self.server:
+            self.server.stop()
+
 
 
