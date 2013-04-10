@@ -1,0 +1,56 @@
+
+<h4 id="ks_status"></h4>
+<h4 id="serv_status"></h4>
+<h4 id="sync_status"></h4>
+
+<a id="startstop"></a>
+
+<SCRIPT type="text/javascript">
+    function start_service() {
+        if ($('#startstop').hasClass('disabled')) {return;}
+        alert('service are not started!');
+    }
+
+    function stop_service() {
+        if ($('#startstop').hasClass('disabled')) {return;}
+        alert('service are not stopped!');
+    }
+    
+    $(function () { 
+        var SS_ALL_SYNC = 0,
+            SS_SYNC_PENDING = 1;
+
+        $.getJSON('/get_service_status', function(data) {
+            var status, sync_status, ks_status;
+            if (data['service_status'] == 'started') {
+                status = '<span class="label label-success">Started</span>';
+                $('#startstop').attr('class', 'btn btn-large btn-danger').html('Stop service').click(stop_service);
+            } else {
+                status = '<span class="label label-important">Stopped</span>'; 
+                $('#startstop').attr('class', 'btn btn-large btn-success').html('Start service').click(start_service);
+            }
+
+            if (data['sync_status'] == SS_ALL_SYNC) {
+                sync_status = '<span class="label label-success">All files are synchronized</span>';
+            } else if (data['sync_status'] == SS_SYNC_PENDING) {
+                sync_status = '<span class="label label-warning">Some files are not synchronized yet</span>';
+            } else {
+                sync_status = '<span class="label label-warning">Unknown</span>';
+            }
+
+            if (data['has_keystorage']) {
+                ks_status = '<span class="label label-success">Exists</span>'
+            } else {
+                ks_status = '<span class="label label-important">Not found</span>'
+                $('#startstop').addClass('disabled');
+            }
+
+            $('#serv_status').html('Service status: ' + status);
+            $('#sync_status').html('Synchronization status: ' + sync_status);
+            $('#ks_status').html('Key storage status: '+ ks_status);
+        }).fail(function() {
+            $('#serv_status').html('Service status: <span class="label label-warning">Unknown</span>');
+            $('#sync_status').html('Synchronization status: <span class="label label-warning">Unknown</span>');
+        });
+    });
+</SCRIPT>

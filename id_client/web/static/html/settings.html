@@ -1,0 +1,77 @@
+
+<div class="hero-unit">
+
+    <form class="form-horizontal">
+      <!--<div class="control-group">
+        <h3 class="controls">NimbusFS settings...</h3>
+    </div>
+    <hr> -->
+      <div class="control-group">
+        <label class="control-label" for="ksType">Key storage type</label>
+        <div class="controls">
+            <select class="input-xlarge" id="ksType">
+                <option>USB Token</option>
+                <option>File based</option>
+            </select>
+        </div>
+      </div>
+      <div class="control-group">
+        <label class="control-label" for="psPath">Key storage path</label>
+        <div class="controls">
+            <div class="input-append">
+               <input class="input-xlarge" id="ksPath" type="text">
+               <button class="btn" type="button">...</button>
+            </div>
+        </div>
+      </div>
+      <div class="control-group">
+        <label class="control-label" for="serviceURL">Service URL</label>
+        <div class="controls">
+          <input class="input-xlarge" type="text" id="serviceURL">
+        </div>
+      </div>
+      <div class="control-group">
+          <label class="control-label" for="parDownCnt">Parallel downloads count</label>
+            <div class="controls">
+              <input type="number" max="10" min="1" id="parDownCnt">
+            </div>
+      </div>
+      <div class="control-group">
+          <label class="control-label" for="parUpCnt">Parallel uploads count</label>
+            <div class="controls">
+              <input type="number" max="10" min="1" id="parUpCnt">
+            </div>
+      </div>
+      <hr>
+
+      <div class="control-group">
+        <label class="control-label" for="mountType">Mount type</label>
+        <div class="controls">
+            <select class="input-xlarge" id="mountType">
+                <option>Local mount</option>
+                <option>Export WebDav</option>
+            </select>
+        </div>
+      </div>
+      <div class="control-group">
+        <label class="control-label" for="webdavHost">WebDav hostname</label>
+        <div class="controls">
+          <input class="input-xlarge" type="text" id="webdavHost">
+        </div>
+      </div>
+      <div class="control-group">
+          <label class="control-label" for="webdavPort">WebDav port</label>
+            <div class="controls">
+              <input type="number" max="64000" min="1" id="webdavPort">
+            </div>
+      </div>
+      <hr>
+
+      <div class="control-group">
+        <div class="controls">
+          <button type="submit" class="btn span4">Apply</button>
+        </div>
+      </div>
+    </form>
+
+</div>
