@@ -1,3 +1,14 @@
+#!/usr/bin/python
+"""
+Copyright (C) 2013 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
+
+@package id_client.web.web_logic
+@author Konstantin Andrusenko
+@date April 23, 2013
+"""
+
 import os
 
 from wsgi_app import UrlHandler
