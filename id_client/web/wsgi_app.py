@@ -13,6 +13,7 @@ import re
 import json
 import urllib
 import mimetypes
+import cgi
 
 class NotFound(Exception):
     pass
@@ -59,6 +60,13 @@ class UrlHandler:
         json_data = json.dumps(data)
         return 'application/json', json_data
 
+    def get_post_form(self, environ):
+        input = environ['wsgi.input']
+        fs = cgi.FieldStorage(fp=input, environ=environ, keep_blank_values=1)
+        params = {}
+        for key in fs.keys():
+            params[ key ] = fs[ key ].value
+        return params
 
 
 class WSGIApplication:

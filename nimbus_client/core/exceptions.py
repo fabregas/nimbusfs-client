@@ -68,3 +68,6 @@ class PermissionsException(NimbusException):
 
 class NoLocalFileFound(NimbusException):
     pass
+
+class InvalidPasswordException(NimbusException):
+    pass

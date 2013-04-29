@@ -1,26 +1,20 @@
 
 <div class="hero-unit">
-
     <form class="form-horizontal">
-      <!--<div class="control-group">
-        <h3 class="controls">NimbusFS settings...</h3>
-    </div>
-    <hr> -->
       <div class="control-group">
         <label class="control-label" for="ksType">Key storage type</label>
         <div class="controls">
             <select class="input-xlarge" id="ksType">
-                <option>USB Token</option>
-                <option>File based</option>
+                <option value="token">USB Token</option>
+                <option value="file">File based</option>
             </select>
         </div>
       </div>
       <div class="control-group">
-        <label class="control-label" for="psPath">Key storage path</label>
+        <label class="control-label" for="ksPath">Key storage path</label>
         <div class="controls">
             <div class="input-append">
                <input class="input-xlarge" id="ksPath" type="text">
-               <button class="btn" type="button">...</button>
             </div>
         </div>
       </div>
@@ -48,8 +42,8 @@
         <label class="control-label" for="mountType">Mount type</label>
         <div class="controls">
             <select class="input-xlarge" id="mountType">
-                <option>Local mount</option>
-                <option>Export WebDav</option>
+                <option value="local">Local mount</option>
+                <option value="export">Export WebDav</option>
             </select>
         </div>
       </div>
@@ -69,9 +63,67 @@
 
       <div class="control-group">
         <div class="controls">
-          <button type="submit" class="btn span4">Apply</button>
+          <button type="submit" id="apply_btn" class="btn span4">Apply</button>
         </div>
       </div>
     </form>
-
 </div>
+
+<SCRIPT type="text/javascript">
+    function on_ks_type_change() {
+        if ($('#ksType').val() == 'token') {
+            $('#ksPath').attr('disabled', 'disabled');
+        } else {
+            $('#ksPath').removeAttr('disabled');
+        }
+    }
+    function on_mount_type_change() {
+        if ($('#mountType').val() == 'local') {
+            $('#webdavHost').attr('disabled', 'disabled');
+        } else {
+            $('#webdavHost').removeAttr('disabled');
+        }
+    }
+
+    $(function () {
+        $('#ksType').change(on_ks_type_change);
+        $('#mountType').change(on_mount_type_change);
+        $.getJSON('/get_settings', function(data) {
+           $('#ksPath').val(data['key_storage_path']); 
+           $('#serviceURL').val(data['fabnet_hostname']); 
+           $('#webdavHost').val(data['webdav_bind_host']); 
+           $('#webdavPort').val(data['webdav_bind_port']); 
+           $('#parDownCnt').val(data['parallel_get_count']); 
+           $('#parUpCnt').val(data['parallel_put_count']); 
+
+           $('#ksType option[value="'+data['security_provider_type']+'"]').attr('selected', 'selected');
+           $('#mountType option[value="'+data['mount_type']+'"]').attr('selected', 'selected');
+           on_ks_type_change();
+           on_mount_type_change();
+        });
+    });
+    $('form').submit(function() {
+        $.post('/apply_settings', 
+            {'key_storage_path': $('#ksPath').val(),
+            'fabnet_hostname': $('#serviceURL').val(),
+            'webdav_bind_host': $('#webdavHost').val(),
+            'webdav_bind_port': $('#webdavPort').val(),
+            'parallel_get_count': $('#parDownCnt').val(),
+            'parallel_put_count': $('#parUpCnt').val(),
+            'security_provider_type': $('#ksType').val(), 
+            'mount_type': $('#mountType').val() 
+            },            
+            function(html) {
+                $('#err_msg').remove();
+                $('#apply_btn').before('<div id="err_msg"></div>');
+                var close_btn = '<button type="button" class="close" data-dismiss="alert">×</button>';
+                if (html['ret_code'] == 0) {
+                    $('#err_msg').html('');
+                    $('#err_msg').attr('class', 'alert alert-success').html(close_btn+'<strong>Done!</strong> Settings are applied!');
+                } else {
+                    $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> '+html['ret_message']+'');
+                }
+            });
+        return false;
+    });
+</SCRIPT>

@@ -26,14 +26,17 @@ from cherrypy import wsgiserver, __version__ as cp_version
 
 from fabnet_dav_provider import FabnetProvider
 from id_client.base_external_api import BaseExternalAPI
+from nimbus_client.core.logger import logger
 
 WAIT_WEBDAV_SERVER_TIMEOUT = 10
+
+wsgiserver.CherryPyWSGIServer.version = "WsgiDAV/%s %s" % (__version__, wsgiserver.CherryPyWSGIServer.version)
 
 class WebDavAPI(BaseExternalAPI):
     def __init__(self, nibbler, host, port):
         BaseExternalAPI.__init__(self, nibbler)
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.server = None
 
     def get_name(self):
@@ -43,7 +46,9 @@ class WebDavAPI(BaseExternalAPI):
         return WAIT_WEBDAV_SERVER_TIMEOUT
 
     def is_ready(self):
-        pass
+        if self.server:
+            return self.server.ready
+        return False
 
     def __init_logger(self):
         wsgi_logger = logging.getLogger(BASE_LOGGER_NAME)
@@ -77,17 +82,15 @@ class WebDavAPI(BaseExternalAPI):
             })
 
 
+        self.__init_logger()
+
         app = WsgiDAVApp(config)
 
-        version = "WsgiDAV/%s %s" % (__version__, wsgiserver.CherryPyWSGIServer.version)
-        wsgiserver.CherryPyWSGIServer.version = version
         if config["verbose"] >= 1:
-            print("Running %s, listening on %s://%s:%s" % (version, 'http', self.host, self.port))
+            print("Running %s, listening on %s://%s:%s" % (wsgiserver.CherryPyWSGIServer.version, 'http', self.host, self.port))
 
         self.server = wsgiserver.CherryPyWSGIServer((self.host, self.port), app,)
         self.server.provider = provider
-
-        self.__init_logger()
 
         self.server.start()
 

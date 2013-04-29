@@ -1,56 +1,171 @@
 
-<h4 id="ks_status"></h4>
-<h4 id="serv_status"></h4>
-<h4 id="sync_status"></h4>
+<div class="row-fluid" id="alert_field">
+</div>
 
-<a id="startstop"></a>
+<div class="row-fluid">
+    <div class="span3 text-right" ><h4>Key storage status:</h4></div>
+    <div class="span9"><h4 id="ks_status"></h4></div>
+</div>
+
+<div class="row-fluid">
+    <div class="span3 text-right" ><h4>Service status:</h4></div>
+    <div class="span9"><h4 id="serv_status"></h4></div>
+</div>
+<div class="row-fluid">
+    <div class="span3 text-right" ><h4>Synchronization status:</h4></div>
+    <div class="span9"><h4 id="sync_status"></h4></div>
+</div>
+
+<div class="row-fluid">
+    <div class="span3 text-right" ><a id="startstop"></a></div>
+    <div class="span9"></div>
+</div>
+
+<div id="pwdModal" class="modal hide fade">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h3>Please, enter password for key storage</h3>
+    </div>
+    <div class="modal-body">
+        <input id="pwdEdit" type="password"/>
+    </div>
+  <div class="modal-footer">
+      <a onclick="start_service();" class="btn btn-success">Start</a>
+    </div>
+</div>
+
+<div id="spinModal" class="modal hide fade">
+    <div class="modal-header">
+        <h3>Processing request...</h3>
+    </div>
+    <div class="modal-body text-center">
+        <img class="" src="/static/img/wait.gif"/>
+    </div>
+</div>
+
 
 <SCRIPT type="text/javascript">
+    function show_alert(msg) {
+        html ='<div class="alert alert-error">'+
+          '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
+          '<h4>Error!</h4>'+
+          '<span id="err_msg"/>'+
+        '</div>';
+        $('#alert_field').html(html);
+        $('#err_msg').html(msg);
+    }
+
     function start_service() {
         if ($('#startstop').hasClass('disabled')) {return;}
-        alert('service are not started!');
+
+        var pwd=$('#pwdEdit').val();
+
+        $('#alert_field').html('');
+        if (pwd) {
+            $('#pwdEdit').val('');    
+            $('#pwdModal').modal('hide');
+            $('#spinModal').modal();
+
+            $.post("/start_service", { password: pwd },
+                    function(data) {
+                        if (data['ret_code'] == 0) {
+                            reload_content();
+                        } else {
+                            show_alert(data['ret_message']);
+                        }
+                        $('#spinModal').modal('hide');
+                    }
+            ).fail(
+                function() { 
+                    show_alert('Internal server error...');
+                    $('#spinModal').modal('hide');
+                }        
+            ); 
+
+        } else {
+            $('#pwdModal').modal();        
+            $('#pwdEdit').focus();
+        }
     }
 
     function stop_service() {
         if ($('#startstop').hasClass('disabled')) {return;}
-        alert('service are not stopped!');
+
+        $('#spinModal').modal();
+        $.post("/stop_service",
+                function(data) {
+                    if (data['ret_code'] == 0) {
+                        reload_content();
+                    } else {
+                        show_alert(data['ret_message']);
+                    }
+
+                    $('#spinModal').modal('hide');
+                    $('#pwdModal').modal('hide');
+                }
+        ).fail(
+            function() { 
+                show_alert('Internal server error...');
+                $('#spinModal').modal('hide');
+            }        
+        ); 
     }
-    
-    $(function () { 
+
+    function start_stop_service() {
+        if ($('#startstop').hasClass("btn-danger")) {
+            stop_service();
+        } else {
+            start_service();
+        }
+    }
+
+    function reload_content(){
         var SS_ALL_SYNC = 0,
             SS_SYNC_PENDING = 1;
 
         $.getJSON('/get_service_status', function(data) {
             var status, sync_status, ks_status;
             if (data['service_status'] == 'started') {
-                status = '<span class="label label-success">Started</span>';
-                $('#startstop').attr('class', 'btn btn-large btn-danger').html('Stop service').click(stop_service);
+                $('#serv_status').attr('class', 'label label-success').html('Started');
+                $('#startstop').attr('class', 'btn btn-large btn-danger').html('Stop service');
             } else {
                 status = '<span class="label label-important">Stopped</span>'; 
-                $('#startstop').attr('class', 'btn btn-large btn-success').html('Start service').click(start_service);
+                $('#serv_status').attr('class', 'label label-important').html('Stopped');
+                $('#startstop').attr('class', 'btn btn-large btn-success').html('Start service');
             }
 
             if (data['sync_status'] == SS_ALL_SYNC) {
-                sync_status = '<span class="label label-success">All files are synchronized</span>';
+                $('#sync_status').attr('class', 'label label-success').html('All files are synchronized');
             } else if (data['sync_status'] == SS_SYNC_PENDING) {
-                sync_status = '<span class="label label-warning">Some files are not synchronized yet</span>';
+                $('#sync_status').attr('class', 'label label-warning').html('Some files are not synchronized yet');
             } else {
-                sync_status = '<span class="label label-warning">Unknown</span>';
+                $('#sync_status').attr('class', 'label label-warning').html('Unknown');
             }
 
             if (data['has_keystorage']) {
-                ks_status = '<span class="label label-success">Exists</span>'
+                $('#ks_status').attr('class', 'label label-success').html('Exists');
             } else {
-                ks_status = '<span class="label label-important">Not found</span>'
+                $('#ks_status').attr('class', 'label label-important').html('Not found');
                 $('#startstop').addClass('disabled');
             }
-
-            $('#serv_status').html('Service status: ' + status);
-            $('#sync_status').html('Synchronization status: ' + sync_status);
-            $('#ks_status').html('Key storage status: '+ ks_status);
         }).fail(function() {
-            $('#serv_status').html('Service status: <span class="label label-warning">Unknown</span>');
-            $('#sync_status').html('Synchronization status: <span class="label label-warning">Unknown</span>');
+            $('#serv_status').attr('class', 'label label-warning').html('Unknown');
+            $('#sync_status').attr('class', 'label label-warning').html('Unknown');
+            $('#ks_status').attr('class', 'label label-warning').html('Unknown');
         });
+    }
+
+    $(function () { 
+        $('#startstop').click(start_stop_service);
+        $('#pwdEdit').keypress(function (e) {
+            if (e.which == 13) {
+              start_service();
+            }
+        });
+        $('#pwdModal').on('hide', function () {
+            $('#pwdEdit').val('');    
+        });
+
+        reload_content();
     });
 </SCRIPT>

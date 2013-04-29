@@ -20,6 +20,7 @@ from base64 import b64encode, b64decode
 from nimbus_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 from nimbus_client.core.encdec_provider import EncDecProvider
 from nimbus_client.core import pycrypto_enc_engine
+from nimbus_client.core.exceptions import InvalidPasswordException
 
 CLIENT_CERT_FILENAME = 'client_certificate.pem'
 CLIENT_PRIKEY_FILENAME = 'client_prikey'
@@ -60,7 +61,11 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         storage.setpassword(passwd)
 
         def read_file(f_name):
-            f_obj = storage.open(f_name)
+            try:
+                f_obj = storage.open(f_name)
+            except RuntimeError, err:
+                raise InvalidPasswordException('Bad password for key storage!')
+                
             data = f_obj.read()
             f_obj.close()
             return data

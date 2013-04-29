@@ -3,6 +3,10 @@
 SPT_TOKEN_BASED = 'token'
 SPT_FILE_BASED = 'file'
 
+#mount types
+MOUNT_LOCAL = 'local'
+MOUNT_EXPORT = 'export'
+
 #usb token events
 UTE_TOKEN_INSERTED = 1
 UTE_TOKEN_REMOVED = 0

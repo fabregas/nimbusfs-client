@@ -63,6 +63,7 @@ class MgmtServer(threading.Thread):
 
     def stop(self):
         try:
+            self.idespositbox_client.stop()
             logger.info('Stopping management server...')
             if self.server:
                 self.server.stop()

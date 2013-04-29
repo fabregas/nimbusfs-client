@@ -10,6 +10,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the implementation of IdepositboxClient class
 """
+import os
 import time
 import logging
 import traceback
@@ -43,6 +44,9 @@ class IdepositboxClient:
 
 
     def start(self, ks_passwd):
+        if self.status == CS_STARTED:
+            raise Exception('IdepositboxClient is already started')
+
         self.config.refresh()
         config = self.config
         try:
@@ -76,6 +80,7 @@ class IdepositboxClient:
             self.nibbler.start()
 
             #init API instances
+            self.api_list = []
             webdav_server = WebDavAPI(self.nibbler, config.webdav_bind_host, config.webdav_bind_port)
             self.api_list.append(webdav_server)
 
@@ -102,7 +107,27 @@ class IdepositboxClient:
             raise err
         self.status = CS_STARTED
 
+    def get_config(self):
+        self.config.refresh()
+        return self.config.get_config_dict()
+
+    def update_config(self, new_config):
+        self.config.update(new_config)
+        self.config.save()
+
+    def has_key_storage(self):
+        self.config.refresh()
+        config = self.config
+
+        if config.security_provider_type == SPT_TOKEN_BASED:
+            raise Exception('not implemented') #FIXME
+        elif SPT_FILE_BASED:
+            return os.path.exists(config.key_storage_path)
+
     def stop(self):
+        if self.status == CS_STOPPED:
+            return
+
         try:
             self.token_agent.stop()
             for api_instance in self.api_list:
