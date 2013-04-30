@@ -1,0 +1,252 @@
+
+<div class="hero-unit hidden" id="first_form">
+
+    <div class="alert alert-success">
+        <h4>Information!</h4>
+            Select key storage...
+    </div>
+    <div class="row-fluid" id="alert_field">
+    </div>
+    <form class="form-horizontal">
+      <div class="control-group">
+        <label class="control-label" for="ksType">Key storage type</label>
+        <div class="controls">
+            <select class="input-xlarge" id="ksType">
+                <option value="token">USB Token</option>
+                <option value="file">File based</option>
+            </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label" for="ksPath">Key storage path</label>
+        <div class="controls">
+            <div class="input-append">
+               <input class="input-xlarge" id="ksPath" type="text">
+            </div>
+        </div>
+      </div>
+    
+    <div class="control-group">
+        <div class="controls">
+            <button type="submit" id="open_btn" class="btn btn-primary btn-large">Manage</button>
+        </div>
+     </div>
+
+    </form>
+</div>
+
+<div class="hero-unit hidden" id="info_form">
+    <div class="alert alert-success text-center">
+        <h4>Certificate information</h4>
+    </div>
+
+    <pre id="cert_txt"> 
+    </pre>
+    <div class="text-center">
+        <button id="back_btn" class="btn " onclick="init_page()">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Back&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</button> 
+    </div>
+</div>
+
+<div class="hero-unit" id="gen_form">
+    <div class="alert alert-success">
+        <h4>New key storage!</h4>
+            You can generate new key storage on this page. Please, enter activation key and password for key storage
+    </div>
+    <form class="form-horizontal">
+      <div class="control-group">
+        <label class="control-label" for="act_key">Activation key</label>
+        <div class="controls">
+            <div class="input-append">
+               <input class="input-xlarge" id="act_key" type="text">
+            </div>
+        </div>
+      </div>
+    
+      <div class="control-group">
+        <label class="control-label" for="password">Key storage password</label>
+        <div class="controls">
+            <div class="input-append">
+               <input class="input-xlarge" id="password" type="password">
+            </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label" for="re_password">Retype password</label>
+        <div class="controls">
+            <div class="input-append">
+               <input class="input-xlarge" id="re_password" type="password">
+            </div>
+        </div>
+      </div>
+    <div class="control-group">
+        <div id="pwd_alert_field"/>
+        <div class="controls">
+            <button type="submit" id="generate_btn" class="btn btn-primary btn-large">Generate</button>
+            <button id="cancel_btn" class="btn btn-large" onclick="init_page()">Cancel</button>
+        </div>
+     </div>
+
+    </form>
+</div>
+
+<div id="pwdModal" class="modal hide fade">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h3>Please, enter password for key storage</h3>
+    </div>
+    <div class="modal-body">
+        <input id="pwdEdit" type="password"/>
+    </div>
+  <div class="modal-footer">
+      <a onclick="show_ks_info();" class="btn btn-success">Open key storage</a>
+    </div>
+</div>
+
+<div id="spinModal" class="modal hide fade">
+    <div class="modal-header">
+        <h3>Processing request...</h3>
+    </div>
+    <div class="modal-body text-center">
+        <img class="" src="/static/img/wait.gif"/>
+    </div>
+</div>
+
+<SCRIPT type="text/javascript">
+    function init_page() {
+        $('#alert_field').html('');
+
+        $('#gen_form').addClass('hidden');
+        $('#info_form').addClass('hidden');
+        $('#first_form').removeClass('hidden');
+    }
+
+    function show_new_ks() {
+        $('#act_key').val('');
+        $('#password').val('');
+        $('#re_password').val('');
+        $('#generate_btn').addClass('disabled');
+
+        $('#gen_form').removeClass('hidden');
+        $('#first_form').addClass('hidden');
+    }
+
+    $('#gen_form input').change(function() {
+        if (($('#act_key').val() == '') || ($('#password').val() == '') || ($('#re_password').val() == '')) {
+            if ($('#generate_btn').hasClass('disabled')) {return;}
+            $('#generate_btn').addClass('disabled');
+        } else {
+            $('#generate_btn').removeClass('disabled');
+        }
+    });
+
+    function show_alert(msg) {
+        html ='<div class="alert alert-error">'+
+          '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
+          '<h4>Error!</h4>'+
+          '<span id="err_msg"/>'+
+        '</div>';
+        $('#alert_field').html(html);
+        $('#err_msg').html(msg);
+    }
+
+    function on_ks_type_change() {
+        if ($('#ksType').val() == 'token') {
+            $('#ksPath').attr('disabled', 'disabled');
+        } else {
+            $('#ksPath').removeAttr('disabled');
+        }
+    }
+    $('#ksType').change(on_ks_type_change);
+
+    function show_ks_info() {
+        $.post("/get_ks_info",
+            {'key_storage_path': $('#ksPath').val(),
+            'security_provider_type': $('#ksType').val(),
+            'password': $('#pwdEdit').val()
+            },            
+            function(data) {
+                if (data['ret_code'] == 0) {
+                    $('#cert_txt').html(data['cert']);
+                    $('#info_form').removeClass('hidden');
+                    $('#first_form').addClass('hidden');            
+                } else {
+                    show_alert(data['ret_message']);
+                }
+                $('#pwdModal').modal('hide');
+            }
+        );
+        $('#pwdModal').modal('hide');
+    }
+
+    $(function () {
+        $('#pwdEdit').keypress(function (e) {
+            if (e.which == 13) {
+              show_ks_info();
+            }
+        });
+        init_page();
+        $.getJSON('/get_settings', function(data) {
+           $('#ksPath').val(data['key_storage_path']); 
+           $('#ksType option[value="'+data['security_provider_type']+'"]').attr('selected', 'selected');
+            on_ks_type_change();
+        });
+    });
+
+    $('#first_form form').submit(function() {
+        $.post('/is_ks_exists', 
+            {'key_storage_path': $('#ksPath').val(),
+            'security_provider_type': $('#ksType').val()
+            },            
+            function(html) {
+                if (html['ret_code'] != 0) {
+                    show_alert('Internal server error! Details: '+html['ret_message']);
+                } else {
+                    if (html['ks_status'] == 1) {
+                        $('#pwdEdit').val('');
+                        $('#pwdModal').modal();        
+                        $('#pwdEdit').focus();
+                        return;
+                    }
+                    if (html['ks_status'] == 0) {
+                        show_new_ks();
+                    } else {
+                        show_alert('Invalid key storage!');
+                    }
+
+                }
+            });
+        return false;
+    });
+
+    $('#gen_form form').submit(function() {
+        if ($('#generate_btn').hasClass('disabled')) {return false;}
+        $('#pwd_alert_field').html(''); 
+        if ($('#password').val() != $('#re_password').val()) {
+            html ='<div class="alert alert-error">'+
+              '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
+              '<h4>Error!</h4>'+
+              '<span id="err_msg">Passwords are not equal!</span>'+
+            '</div>';
+            $('#pwd_alert_field').html(html);        
+            return false;
+        }
+
+        $.post('/generate_key_storage', 
+            {'key_storage_path': $('#ksPath').val(),
+            'security_provider_type': $('#ksType').val(),
+            'password': $('#password').val(),
+            'act_key': $('#act_key').val(),
+            },            
+            function(html) {
+                if (html['ret_code'] == 0) {
+                    //OKkkkkk
+                } else {
+                    //ERRROR
+                }
+            });
+        return false;
+    });
+    
+</SCRIPT>

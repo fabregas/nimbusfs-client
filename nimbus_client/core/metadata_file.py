@@ -538,9 +538,12 @@ class MetadataFile:
 
     @MDLock
     def close(self):
+        if not self.db:
+            return
         self.db['last_journal_rec_id'] = str(self.__last_journal_rec_id)
         self.db['last_item_id'] = str(self.__last_item_id)
         self.db.close()
+        self.db = None
 
     @MDLock
     def _print(self):

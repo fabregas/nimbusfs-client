@@ -28,6 +28,18 @@ CLIENT_PRIKEY_FILENAME = 'client_prikey'
 Cipher = pycrypto_enc_engine.PythonCryptoEngine
 
 class AbstractSecurityManager:
+    KSS_NOT_FOUND = 0
+    KSS_INVALID = -1
+    KSS_EXISTS = 1
+
+    @classmethod
+    def get_ks_status(cls, ks_path):
+        pass
+
+    @classmethod
+    def get_ks_info(cls, ks_path, ks_pwd):
+        pass
+
     def __init__(self, ks_path, passwd):
         self._client_cert = None
         self._client_prikey = None
@@ -53,6 +65,15 @@ class AbstractSecurityManager:
 
 
 class FileBasedSecurityManager(AbstractSecurityManager):
+    @classmethod
+    def get_ks_status(cls, ks_path):
+        if not os.path.exists(ks_path):
+            return cls.KSS_NOT_FOUND
+        if not zipfile.is_zipfile(ks_path):
+            return cls.KSS_INVALID
+        return cls.KSS_EXISTS
+
+
     def _load_key_storage(self, ks_path, passwd):
         if not os.path.exists(ks_path):
             raise Exception('Key storage file %s does not found!'%ks_path)

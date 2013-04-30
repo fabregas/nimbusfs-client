@@ -37,7 +37,7 @@ class GetServiceStatusHandler(UrlHandler):
         sync_stat = -1
         if idepositbox_client is not None:
             status = idepositbox_client.status
-            has_ks = idepositbox_client.has_key_storage()
+            has_ks = idepositbox_client.key_storage_status()
         else:
             status = 'stopped'
             has_ks = False
@@ -105,15 +105,16 @@ class ApplySettingsHandler(UrlHandler):
             if data.get('security_provider_type') not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
                 raise Exception('Invalid security provider type!')
 
-            if data.get('security_provider_type') not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
-                raise Exception('Invalid security provider type!')
-
             if data.get('mount_type') not in (MOUNT_LOCAL, MOUNT_EXPORT):
                 raise Exception('Invalid mount type!')
 
             if data.get('security_provider_type') == SPT_FILE_BASED:
-                if not os.path.exists(key_storage_path):
+                kss = idepositbox_client.key_storage_status(SPT_FILE_BASED, key_storage_path)
+                if kss == 0:
                     raise Exception('Key storage does not found at %s'%key_storage_path)
+                elif kss == -1:
+                    raise Exception('Invalid key storage at %s'%key_storage_path)
+                data['key_storage_path'] = os.path.abspath(key_storage_path)
 
             idepositbox_client.update_config(data) 
             
@@ -145,6 +146,43 @@ class StopServiceHandler(UrlHandler):
             resp = {'ret_code':1, 'ret_message': str(err)}
         return self.json_source(resp)
         
+class IsKsExistsHandler(UrlHandler):
+    def on_process(self, env, *args):
+        try:
+            idepositbox_client = env['idepositbox_app']
+            data = self.get_post_form(env)
+
+            ks_type = data.get('security_provider_type', SPT_TOKEN_BASED)
+            if ks_type not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
+                raise Exception('Invalid security provider type!')
+            ks_path = data.get('key_storage_path', '')
+
+            kss = idepositbox_client.key_storage_status(ks_type, ks_path)
+            resp = {'ret_code':0, 'ks_status': int(kss)}
+        except Exception, err:
+            resp = {'ret_code':1, 'ret_message': str(err)}
+        return self.json_source(resp)
+    
+class GetKsInfoHandler(UrlHandler):
+    def on_process(self, env, *args):
+        try:
+            idepositbox_client = env['idepositbox_app']
+            data = self.get_post_form(env)
+
+            ks_type = data.get('security_provider_type', SPT_TOKEN_BASED)
+            if ks_type not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
+                raise Exception('Invalid security provider type!')
+            ks_path = data.get('key_storage_path', '')
+            ks_pwd = data.get('password', None)
+            if ks_pwd is None:
+                raise Exception('Password does not found!')
+
+            cert = idepositbox_client.get_key_storage_info(ks_type, ks_path, ks_pwd)
+            resp = {'ret_code': 0, 'cert': cert}
+        except Exception, err:
+            resp = {'ret_code': 1, 'ret_message': str(err)}
+        return self.json_source(resp)
+
 
 HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/get_service_status', GetServiceStatusHandler()),
@@ -152,6 +190,8 @@ HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/stop_service', StopServiceHandler()),
                 ('/get_settings', GetSettingsHandler()),
                 ('/apply_settings', ApplySettingsHandler()),
+                ('/is_ks_exists', IsKsExistsHandler()),
+                ('/get_ks_info', GetKsInfoHandler()),
                 ('/get_page/(.+)', GetPageHandler()),
                 ('/static/(.+)', StaticPage()),
                 ('/(\w*)', MainPage())]

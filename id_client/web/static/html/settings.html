@@ -76,6 +76,7 @@
         } else {
             $('#ksPath').removeAttr('disabled');
         }
+        allow_applying();
     }
     function on_mount_type_change() {
         if ($('#mountType').val() == 'local') {
@@ -83,9 +84,15 @@
         } else {
             $('#webdavHost').removeAttr('disabled');
         }
+        allow_applying();
+    }
+
+    function allow_applying() {
+        $('#apply_btn').removeAttr('disabled');
     }
 
     $(function () {
+        $('input').change(allow_applying);
         $('#ksType').change(on_ks_type_change);
         $('#mountType').change(on_mount_type_change);
         $.getJSON('/get_settings', function(data) {
@@ -100,6 +107,7 @@
            $('#mountType option[value="'+data['mount_type']+'"]').attr('selected', 'selected');
            on_ks_type_change();
            on_mount_type_change();
+           $('#apply_btn').attr('disabled', 'disabled');
         });
     });
     $('form').submit(function() {
@@ -120,6 +128,7 @@
                 if (html['ret_code'] == 0) {
                     $('#err_msg').html('');
                     $('#err_msg').attr('class', 'alert alert-success').html(close_btn+'<strong>Done!</strong> Settings are applied!');
+                    $('#apply_btn').attr('disabled', 'disabled');
                 } else {
                     $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> '+html['ret_message']+'');
                 }

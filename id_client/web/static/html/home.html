@@ -1,24 +1,27 @@
 
+<div class="hero-unit">
+
 <div class="row-fluid" id="alert_field">
 </div>
 
 <div class="row-fluid">
-    <div class="span3 text-right" ><h4>Key storage status:</h4></div>
-    <div class="span9"><h4 id="ks_status"></h4></div>
+    <div class="span4 text-right" ><h4>Key storage status:</h4></div>
+    <div class="span8"><h4 id="ks_status"></h4></div>
 </div>
 
 <div class="row-fluid">
-    <div class="span3 text-right" ><h4>Service status:</h4></div>
-    <div class="span9"><h4 id="serv_status"></h4></div>
+    <div class="span4 text-right" ><h4>Service status:</h4></div>
+    <div class="span8"><h4 id="serv_status"></h4></div>
 </div>
 <div class="row-fluid">
-    <div class="span3 text-right" ><h4>Synchronization status:</h4></div>
-    <div class="span9"><h4 id="sync_status"></h4></div>
+    <div class="span4 text-right" ><h4>Synchronization status:</h4></div>
+    <div class="span8"><h4 id="sync_status"></h4></div>
 </div>
 
 <div class="row-fluid">
-    <div class="span3 text-right" ><a id="startstop"></a></div>
-    <div class="span9"></div>
+    <div class="span4 text-right" ></div>
+    <div class="span8"><a id="startstop"></a></div>
+</div>
 </div>
 
 <div id="pwdModal" class="modal hide fade">
@@ -142,10 +145,14 @@
                 $('#sync_status').attr('class', 'label label-warning').html('Unknown');
             }
 
-            if (data['has_keystorage']) {
+            if (data['has_keystorage'] == 1) {
                 $('#ks_status').attr('class', 'label label-success').html('Exists');
             } else {
-                $('#ks_status').attr('class', 'label label-important').html('Not found');
+                if (data['has_keystorage'] == 0) {
+                    $('#ks_status').attr('class', 'label label-important').html('Not found');
+                } else {
+                    $('#ks_status').attr('class', 'label label-important').html('Invalid');
+                }
                 $('#startstop').addClass('disabled');
             }
         }).fail(function() {

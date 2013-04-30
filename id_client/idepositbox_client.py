@@ -14,6 +14,8 @@ import os
 import time
 import logging
 import traceback
+import tempfile
+import subprocess
 
 from nimbus_client.core.security_manager import FileBasedSecurityManager, AbstractSecurityManager
 from nimbus_client.core.nibbler import Nibbler
@@ -24,6 +26,7 @@ from id_client.token_agent import TokenAgent
 from id_client.config import Config
 from id_client.constants import *
 
+SM_TYPES_MAP = {SPT_TOKEN_BASED: None, SPT_FILE_BASED: FileBasedSecurityManager}
 
 class IdepositboxClient:
     def __init__(self):
@@ -115,14 +118,35 @@ class IdepositboxClient:
         self.config.update(new_config)
         self.config.save()
 
-    def has_key_storage(self):
-        self.config.refresh()
-        config = self.config
+    def key_storage_status(self, ks_type=None, ks_path=''):
+        if ks_type is None:
+            self.config.refresh()
+            config = self.config
+            ks_type = config.security_provider_type
+            ks_path = config.key_storage_path
 
-        if config.security_provider_type == SPT_TOKEN_BASED:
-            raise Exception('not implemented') #FIXME
-        elif SPT_FILE_BASED:
-            return os.path.exists(config.key_storage_path)
+        sm = SM_TYPES_MAP.get(ks_type, None)
+        if not sm:
+            raise Exception('Unsupported key storage type: "%s"'%ks_type)
+        return sm.get_ks_status(ks_path)
+
+
+    def get_key_storage_info(self, ks_type, ks_path, ks_pwd):
+        sm_class = SM_TYPES_MAP.get(ks_type, None)
+        if not sm_class:
+            raise Exception('Unsupported key storage type: "%s"'%ks_type)
+
+        cert = sm_class(ks_path, ks_pwd).get_client_cert()
+        tmp_file = tempfile.NamedTemporaryFile()
+        tmp_file.write(cert)
+        tmp_file.flush()
+        cmd = 'openssl x509 -in %s -noout -text'%tmp_file.name
+        p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cout, cerr = p.communicate()
+        tmp_file.close()
+        if p.returncode != 0:
+            raise Exception(cerr)
+        return cout
 
     def stop(self):
         if self.status == CS_STOPPED:
