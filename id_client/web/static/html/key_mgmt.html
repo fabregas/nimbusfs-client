@@ -53,6 +53,7 @@
         <h4>New key storage!</h4>
             You can generate new key storage on this page. Please, enter activation key and password for key storage
     </div>
+    <div id="gen_alert_field"/>
     <form class="form-horizontal">
       <div class="control-group">
         <label class="control-label" for="act_key">Activation key</label>
@@ -104,6 +105,17 @@
     </div>
 </div>
 
+<div id="succGenCertModal" class="modal hide fade">
+    <div class="modal-body">
+        <p><h3>Key storage is generated successfully!</h3></p>
+        <p>Do you want update settings with generated key storage?</p>
+    </div>
+  <div class="modal-footer">
+      <a onclick="update_settings();" class="btn btn-success">Yes</a>
+      <a onclick="close_ok_modal();" class="btn">No</a>
+    </div>
+</div>
+
 <div id="spinModal" class="modal hide fade">
     <div class="modal-header">
         <h3>Processing request...</h3>
@@ -122,6 +134,10 @@
         $('#first_form').removeClass('hidden');
     }
 
+    function close_ok_modal() {
+        $('#succGenCertModal').modal('hide');
+    }
+
     function show_new_ks() {
         $('#act_key').val('');
         $('#password').val('');
@@ -130,6 +146,7 @@
 
         $('#gen_form').removeClass('hidden');
         $('#first_form').addClass('hidden');
+        $('#gen_alert_field').html('');        
     }
 
     $('#gen_form input').change(function() {
@@ -180,6 +197,21 @@
         $('#pwdModal').modal('hide');
     }
 
+    function update_settings() {
+        $.getJSON('/get_settings', function(data) {
+            data['key_storage_path'] = $('#ksPath').val();
+            data['security_provider_type'] = $('#ksType').val(); 
+
+            $.post('/apply_settings', data,
+                function(html) {
+                    if (html['ret_code'] != 0) {
+                        show_alert('Settings are not applied! Details: '+data['ret_message']);
+                    }
+                });
+        });
+        $('#succGenCertModal').modal('hide');
+    }
+
     $(function () {
         $('#pwdEdit').keypress(function (e) {
             if (e.which == 13) {
@@ -220,9 +252,11 @@
         return false;
     });
 
+
     $('#gen_form form').submit(function() {
         if ($('#generate_btn').hasClass('disabled')) {return false;}
         $('#pwd_alert_field').html(''); 
+        $('#gen_alert_field').html('');
         if ($('#password').val() != $('#re_password').val()) {
             html ='<div class="alert alert-error">'+
               '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
@@ -233,6 +267,7 @@
             return false;
         }
 
+        $('#spinModal').modal();
         $.post('/generate_key_storage', 
             {'key_storage_path': $('#ksPath').val(),
             'security_provider_type': $('#ksType').val(),
@@ -240,10 +275,17 @@
             'act_key': $('#act_key').val(),
             },            
             function(html) {
+                $('#spinModal').modal('hide');
                 if (html['ret_code'] == 0) {
-                    //OKkkkkk
+                    init_page(); 
+                    $('#succGenCertModal').modal();
                 } else {
-                    //ERRROR
+                    html ='<div class="alert alert-error">'+
+                      '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
+                      '<h4>Error!</h4>'+
+                      '<span id="err_msg">Details: '+html['ret_message']+'</span>'+
+                    '</div>';
+                    $('#gen_alert_field').html(html);        
                 }
             });
         return false;

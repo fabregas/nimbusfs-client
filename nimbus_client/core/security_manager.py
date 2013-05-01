@@ -11,9 +11,11 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of security manager
 """
 import os
+import re
 import tempfile
 import zipfile
 import struct
+import shutil
 from datetime import datetime
 from base64 import b64encode, b64decode
 
@@ -37,7 +39,7 @@ class AbstractSecurityManager:
         pass
 
     @classmethod
-    def get_ks_info(cls, ks_path, ks_pwd):
+    def initiate_key_storage(cls, ks_path, ks_pwd):
         pass
 
     def __init__(self, ks_path, passwd):
@@ -62,6 +64,11 @@ class AbstractSecurityManager:
     def get_encoder(self, raw_len):
         return EncDecProvider(Cipher, raw_len)
 
+    def generate_cert_request(self):
+        pass
+
+    def append_certificate(self, ks_path, ks_pwd, cert):
+        pass
 
 
 class FileBasedSecurityManager(AbstractSecurityManager):
@@ -69,31 +76,81 @@ class FileBasedSecurityManager(AbstractSecurityManager):
     def get_ks_status(cls, ks_path):
         if not os.path.exists(ks_path):
             return cls.KSS_NOT_FOUND
-        if not zipfile.is_zipfile(ks_path):
-            return cls.KSS_INVALID
+        ##if not zipfile.is_zipfile(ks_path):
+        ##    return cls.KSS_INVALID
         return cls.KSS_EXISTS
 
+    @classmethod
+    def initiate_key_storage(cls, ks_path, ks_pwd):
+        ks_path = os.path.abspath(ks_path)
+        if os.path.exists(ks_path):
+            raise Exception('File "%s" is already exists'%ks_path)
+
+        try:
+            open(ks_path, 'w').close()
+        except IOError:
+            raise Exception('Can not write to "%s"'%ks_path)
+
+        pkey_file = tempfile.NamedTemporaryFile()
+        ret = os.system('openssl genrsa -out %s 1024'%pkey_file.name)
+        if ret:
+            raise Exception('Can not generate private key using openssl command')
+
+        ret = os.system('openssl pkcs12 -export -inkey %s -nocerts -out %s -password pass:%s'%\
+                (pkey_file.name, ks_path, ks_pwd))
+        pkey_file.close()
+        if ret:
+            raise Exception('Can not create key storage at %s'%ks_path)
 
     def _load_key_storage(self, ks_path, passwd):
         if not os.path.exists(ks_path):
             raise Exception('Key storage file %s does not found!'%ks_path)
 
-        storage = zipfile.ZipFile(ks_path)
-        storage.setpassword(passwd)
+        tmp_file = tempfile.NamedTemporaryFile()
+        ret = os.system('openssl pkcs12 -in %s -out %s -password pass:%s -nodes'%\
+                (ks_path, tmp_file.name, passwd))
+        if ret:
+            raise InvalidPasswordException('Can not open key storage! Maybe password is invalid!')
 
-        def read_file(f_name):
-            try:
-                f_obj = storage.open(f_name)
-            except RuntimeError, err:
-                raise InvalidPasswordException('Bad password for key storage!')
-                
-            data = f_obj.read()
-            f_obj.close()
-            return data
+        data = open(tmp_file.name).read()
+        tmp_file.close()
+        pkey_s = re.search('(-----BEGIN PRIVATE KEY-----(\w|\W)+-----END PRIVATE KEY-----)', data)
+        if not pkey_s:
+            raise Exception('Private key does not found in key storage!')
+        self._client_prikey = pkey_s.groups()[0]
 
-        self._client_cert = read_file(CLIENT_CERT_FILENAME)
-        self._client_prikey = read_file(CLIENT_PRIKEY_FILENAME)
+        cert_s = re.search('(-----BEGIN CERTIFICATE-----(\w|\W)+-----END CERTIFICATE-----)', data)
+        if cert_s:
+            self._client_cert = cert_s.groups()[0]
 
-        storage.close()
+    def generate_cert_request(self, cert_cn):
+        pkey_file = tempfile.NamedTemporaryFile()
+        cert_req_file = tempfile.NamedTemporaryFile()
+        pkey_file.write(self._client_prikey)
+        pkey_file.flush()
+        ret = os.system('openssl req -key %s -out %s -new -subj /CN=%s/O=iDepositBox\ software/OU=clients.idepositbox.com'%\
+                (pkey_file.name, cert_req_file.name, cert_cn))
+
+        if ret:
+            raise Exception('No certificate request generated!')
+        cert_req = open(cert_req_file.name).read()
+        pkey_file.close()
+        cert_req_file.close()
+        return cert_req
 
 
+    def append_certificate(self, ks_path, ks_pwd, cert):
+        pkey_file = tempfile.NamedTemporaryFile()
+        cert_file = tempfile.NamedTemporaryFile()
+        pkey_file.write(self._client_prikey)
+        pkey_file.flush()
+        cert_file.write(cert)
+        cert_file.flush()
+
+        ret = os.system('openssl pkcs12 -export -inkey %s -in %s -out %s -password pass:%s'%\
+                (pkey_file.name, cert_file.name, ks_path, ks_pwd))
+
+        pkey_file.close()
+        cert_file.close()
+        if ret:
+            raise Exception('Can not update key storage at %s'%ks_path)

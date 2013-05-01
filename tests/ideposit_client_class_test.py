@@ -27,7 +27,7 @@ from nimbus_client.core.logger import logger
 
 #logger.setLevel(logging.INFO)
 
-CLIENT_KS_PATH = './tests/cert/test_cl_1024.zip'
+CLIENT_KS_PATH = './tests/cert/test_cl_1024.ks'
 PASSWD = 'qwerty123'
 
 TEST_FILE = '/tmp/test_file.out'

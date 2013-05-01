@@ -32,8 +32,7 @@ from nimbus_client.core.exceptions import *
 
 DEBUG=False
 
-CLIENT_KS_PATH = './tests/cert/test_cl_1024.zip'
-VALID_STORAGE = './tests/cert/test_keystorage.zip'
+CLIENT_KS_PATH = './tests/cert/test_cl_1024.ks'
 PASSWD = 'qwerty123'
 
 TMP_FILE = '/tmp/test_file.out'

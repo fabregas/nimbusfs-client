@@ -15,6 +15,10 @@ import time
 import logging
 import traceback
 import tempfile
+import httplib
+import urllib
+import socket
+import json
 import subprocess
 
 from nimbus_client.core.security_manager import FileBasedSecurityManager, AbstractSecurityManager
@@ -147,6 +151,50 @@ class IdepositboxClient:
         if p.returncode != 0:
             raise Exception(cerr)
         return cout
+
+
+    def generate_key_storage(self, ks_type, ks_path, act_key, password):
+        sm_class = SM_TYPES_MAP.get(ks_type, None)
+        if not sm_class:
+            raise Exception('Unsupported key storage type: "%s"'%ks_type)
+
+        resp = self.__ca_call('/get_payment_info', {'payment_key': act_key})
+        if resp.status == 505: #not found err_code
+            raise Exception('Activation key %s does not found!'%act_key)
+        if resp.status != 200:
+            raise Exception('CA service error! [%s %s] %s'%(resp.status, resp.reason, resp.read()))
+        data = resp.read()
+        try:
+            p_info = json.loads(data)
+        except Exception, err:
+            raise Exception('Invalid CA response: "%s"'%data)
+        if p_info['status'] != 'WAIT_FOR_USER':
+            raise Exception('Activation key %s is already processed!'%act_key)
+
+        sm_class.initiate_key_storage(ks_path, password)
+        sm = sm_class(ks_path, password)
+        cert_req = sm.generate_cert_request(p_info['cert_cn'])
+
+        resp = self.__ca_call('/generate_certificate', \
+                {'cert_req_pem': cert_req, 'payment_key': act_key})
+
+        if resp.status != 200:
+            raise Exception('CA service error! Generate certificate: [%s %s] %s'%\
+                    (resp.status, resp.reason, resp.read()))
+        cert = resp.read()
+        sm.append_certificate(ks_path, password, cert)
+
+    def __ca_call(self, path, params={}, method='POST'):
+        ca_addr = '%s:8888'%self.config.webdav_bind_host
+        try:
+            conn = httplib.HTTPConnection(ca_addr)
+            params = urllib.urlencode(params)
+            conn.request(method, path, params)
+            response = conn.getresponse()
+        except socket.error, err:
+            raise Exception('CA service does not respond! Details: %s'%err)
+
+        return response
 
     def stop(self):
         if self.status == CS_STOPPED:

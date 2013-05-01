@@ -184,6 +184,21 @@ class GetKsInfoHandler(UrlHandler):
         return self.json_source(resp)
 
 
+class GenerateKeyStorageHandler(UrlHandler):
+    def on_process(self, env, *args):
+        try:
+            idepositbox_client = env['idepositbox_app']
+            data = self.get_post_form(env)
+            idepositbox_client.generate_key_storage(\
+                    data['security_provider_type'],
+                    data['key_storage_path'],
+                    data['act_key'], data['password'])
+            resp = {'ret_code': 0}
+        except Exception, err:
+            resp = {'ret_code': 1, 'ret_message': str(err)}
+        return self.json_source(resp)
+
+
 HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/get_service_status', GetServiceStatusHandler()),
                 ('/start_service', StartServiceHandler()),
@@ -192,9 +207,11 @@ HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/apply_settings', ApplySettingsHandler()),
                 ('/is_ks_exists', IsKsExistsHandler()),
                 ('/get_ks_info', GetKsInfoHandler()),
+                ('/generate_key_storage', GenerateKeyStorageHandler()),
                 ('/get_page/(.+)', GetPageHandler()),
                 ('/static/(.+)', StaticPage()),
                 ('/(\w*)', MainPage())]
+
 
 STATIC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static'))
 

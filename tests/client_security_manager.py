@@ -19,8 +19,8 @@ constants.READ_SLEEP_TIME = 0.2
 from nimbus_client.core.data_block import DataBlock
 
 
-CLIENT_KS_1024_PATH = './tests/cert/test_cl_1024.zip'
-CLIENT_KS_4096_PATH = './tests/cert/test_client_ks.zip'
+CLIENT_KS_1024_PATH = './tests/cert/test_cl_1024.ks'
+CLIENT_KS_4096_PATH = './tests/cert/test_client_ks.ks'
 
 PASSWD = 'qwerty123'
 

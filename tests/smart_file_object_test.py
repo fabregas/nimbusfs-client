@@ -22,7 +22,7 @@ from nimbus_client.core.metadata_file import MetadataFile
 from nimbus_client.core.data_block import DataBlock, DBLocksManager
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 
-CLIENT_KS_PATH = './tests/cert/test_cl_1024.zip'
+CLIENT_KS_PATH = './tests/cert/test_cl_1024.ks'
 PASSWD = 'qwerty123'
 
 class MockedGetThread(threading.Thread):

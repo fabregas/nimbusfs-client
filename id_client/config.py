@@ -78,8 +78,8 @@ class Config(dict):
             raise  AttributeError(attr)
 
     def __setattr__(self, attr, value):
-        if attr.startswith('_') or attr in self:
-            dict.__setattr__(self, attr, value)
+        if attr in self:
+            self[attr] = value
         else:
             self.__setitem__(attr, value)
 
