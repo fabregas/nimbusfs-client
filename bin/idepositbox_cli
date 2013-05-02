@@ -22,15 +22,14 @@ client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 daemon_script = os.path.join(client_dir, 'id_client/client_daemon.py')
 sys.path.append(client_dir)
 
-from id_client.client_daemon import DAEMON_PORT, STATUS_PATH, \
-                        SYNC_STAT_PATH, START_PATH, STOP_PATH
+from id_client.client_daemon import DAEMON_PORT
 
 PID_FILE_NAME = 'idepositbox_client_daemon.pid'
 
 def check_daemon():
     try:
         conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
-        conn.request('GET', STATUS_PATH)
+        conn.request('GET', '/')
         response = conn.getresponse()
         conn.close()
     except socket.error, err:
@@ -42,7 +41,7 @@ def get_pid_file():
 
 def start_daemon():
     if check_daemon():
-        sys.stderr.write('Idepositbox client daemon is already started\n')
+        sys.stderr.write('iDepositBox management console is already started\n')
         sys.exit(1)
 
     t0 = datetime.now()
@@ -51,38 +50,12 @@ def start_daemon():
     sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull)
     open(get_pid_file(), 'w').write(str(sp.pid))
 
-    ks_passwd = getpass.getpass('Key storage password: ')
-
-    dt = datetime.now() - t0
-    sleep_time = 2 - dt.seconds
-    if sleep_time > 0:
-        time.sleep(sleep_time)
-
-    if not check_daemon():
-        sys.stderr.write('Idepositbox client daemon does not started!\n')
-        sys.exit(1)
-
-    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
-    conn.request('POST', START_PATH, ks_passwd)
-    response = conn.getresponse()
-    if response.status == 200:
-        sys.stdout.write('Idepositbox client is started!\n')
-    else:
-        sys.stderr.write('ERROR! %s\n'%response.reason)
-    conn.close()
+    print('iDepositBox management console is started at 0.0.0.0:%s'%DAEMON_PORT)
 
 
 def stop_deamon():
     if not check_daemon():
-        sys.stderr.write('Idepositbox client daemon does not started\n')
-        sys.exit(1)
-
-    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
-    conn.request('POST', STOP_PATH)
-    response = conn.getresponse()
-    conn.close()
-    if response.status != 200:
-        sys.stdout.write('Idepositbox client does not stopped!\n')
+        sys.stderr.write('iDepositBox management console does not started\n')
         sys.exit(1)
 
     pid_file = get_pid_file()
@@ -93,45 +66,19 @@ def stop_deamon():
     pid = open(pid_file, 'r').read()
     os.system('kill -s INT %s'%pid)
     os.unlink(pid_file)
-    sys.stdout.write('Idepositbox client daemon is stopped now\n')
+    print('iDepositBox management console is stopped!')
 
 
 def status_daemon():
     if not check_daemon():
-        sys.stderr.write('Idepositbox client daemon does not started\n')
-        sys.exit(1)
-
-    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
-    conn.request('GET', STATUS_PATH)
-    response = conn.getresponse()
-    conn.close()
-    if response.status != 200:
-        sys.stderr.write('ERROR! %s %s\n'%(response.status, response.reason))
+        print('iDepositBox management console does not started')
     else:
-        sys.stdout.write('client status: %s\n'%response.read())
+        print('iDepositBox management console is started')
 
-def sync_stat_daemon():
-    if not check_daemon():
-        sys.stderr.write('Idepositbox client daemon does not started\n')
-        sys.exit(1)
-
-    conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
-    conn.request('GET', SYNC_STAT_PATH)
-    response = conn.getresponse()
-    if response.status != 200:
-        sys.stderr.write('ERROR! %s %s\n'%(response.status, response.reason))
-    else:
-        stat = response.read().strip()
-        if not stat:
-            stat = 'all data is synchronized with Cloud'
-        else:
-            stat = '\n%s'%stat
-        sys.stdout.write('sync status: %s\n'%stat)
-    conn.close()
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        print 'usage: %s start|stop|status|sync-stat'%sys.argv[0]
+        print 'usage: %s start|stop|status'%sys.argv[0]
         sys.exit(1)
 
     command = sys.argv[1]
@@ -141,9 +88,8 @@ if __name__ == '__main__':
         stop_deamon()
     elif command == 'status':
         status_daemon()
-    elif command == 'sync-stat':
-        sync_stat_daemon()
     else:
-        sys.stdout.write('ERROR! Unknown command "%s"\n'%command)
+        sys.stderr.write('ERROR! Unknown command "%s"\n'%command)
+        sys.exit(1)
 
 
