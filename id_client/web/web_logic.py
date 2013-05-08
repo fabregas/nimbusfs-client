@@ -70,6 +70,7 @@ class GetSettingsHandler(UrlHandler):
         idepositbox_client = env['idepositbox_app']
         config = idepositbox_client.get_config()
 
+        has_configured = False
         ms_list = idepositbox_client.get_available_media_storages()
         available_ks_list = []
         for ms in ms_list:
@@ -82,9 +83,15 @@ class GetSettingsHandler(UrlHandler):
             kss = idepositbox_client.key_storage_status(ms.ks_type, ms.path)
             item = (label, '%s:%s'%(ms.ks_type, ms.path), kss)
             if config.security_provider_type == ms.ks_type and config.key_storage_path == ms.path:
+                has_configured = True
                 available_ks_list.insert(0, item)
             else:
                 available_ks_list.append(item)
+
+        has_ks = idepositbox_client.key_storage_status(config.security_provider_type, config.key_storage_path)
+        if not has_configured and has_ks:
+            available_ks_list.insert(0, (config.key_storage_path, \
+                    '%s:%s'%(config.security_provider_type, config.key_storage_path), 1))
 
         resp = {
                 'fabnet_hostname': config.fabnet_hostname,
@@ -93,7 +100,7 @@ class GetSettingsHandler(UrlHandler):
                 'webdav_bind_host': config.webdav_bind_host,
                 'webdav_bind_port': config.webdav_bind_port,
                 'mount_type': config.mount_type,
-                '__has_ks': idepositbox_client.key_storage_status(config.security_provider_type, config.key_storage_path),
+                '__has_ks': has_ks,
                 '__available_ks_list': available_ks_list
                 }
         return self.json_source(resp)
