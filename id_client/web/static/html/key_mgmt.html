@@ -1,16 +1,14 @@
 
 <div class="hero-unit hidden" id="first_form">
 
-    <div class="alert alert-success">
-        <h4>Information!</h4>
-            <p>On this page you can manage your key storage(s).</p>
-            <p>If you can generate new key storage, select a key storage path that does not exist and click Manage button.</p>
-            <p>Select existing key storage and click Manage for dispaying certificate information.</p>
-    </div>
     <div class="row-fluid" id="alert_field">
     </div>
-    <form class="form-horizontal">
+    <div class="alert alert-info">
+        <h4>Browse key storage information</h4>
+        <p>Select existing key storage and click Open for dispaying certificate information.</p>
 
+    <form class="form-horizontal" id="ks_info_select_form">
+      <div id="ks_info_select_alert"/>
       <div class="control-group">
         <label class="control-label" for="ksPath">Key storage</label>
         <div class="controls">
@@ -18,13 +16,33 @@
             </select>
         </div>
       </div>
-
       <div class="control-group">
         <div class="controls">
-            <button type="submit" id="open_btn" class="btn btn-primary btn-large">Manage</button>
+            <button type="submit" id="open_btn" class="btn btn-primary btn-large">Open</button>
         </div>
       </div>
     </form>
+
+    </div>
+    <div class="alert alert-info">
+        <h4>Generation new key storage</h4>
+        <p>Select destanation path for new key storage and click Generate button.</p>
+    <form class="form-horizontal" id="ks_gen_select_form">
+      <div id="ks_gen_select_alert"/>
+      <div class="control-group">
+        <label class="control-label" for="ksNewPath">Key storage</label>
+        <div class="controls">
+            <select class="input-xlarge" id="ksNewPath">
+            </select>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="controls">
+            <button type="submit" id="gen_btn" class="btn btn-primary btn-large">Generate</button>
+        </div>
+      </div>
+    </form>
+    </div>
 </div>
 
 <div class="hero-unit hidden" id="info_form">
@@ -125,6 +143,34 @@
         $('#first_form').removeClass('hidden');
     }
 
+    function init_page_reload() {
+        $.getJSON('/get_settings', function(data) {
+            $('#ks_info_select_alert').html('');
+            $('#ks_gen_select_alert').html('');
+            $('#open_btn').removeClass('disabled');
+            $('#gen_btn').removeClass('disabled');
+            $('#ksPath').html('');
+            $('#ksNewPath').html('');
+            var sel_id;
+            for (var i=0; i<data['__available_ks_list'].length; i++) {
+               if (data['__available_ks_list'][i][2]) {
+                    sel_id = '#ksPath';
+               } else {
+                    sel_id = '#ksNewPath';
+               }
+               $(sel_id).append('<option value="'+data['__available_ks_list'][i][1]+'">'+data['__available_ks_list'][i][0]+'</option>');
+            }
+            if ($('#ksPath').children().length == 0) {
+                $('#open_btn').addClass('disabled');
+                show_alert('#ks_info_select_alert', 'No one key storage found!');
+            }
+            if ($('#ksNewPath').children().length == 0) {
+                $('#gen_btn').addClass('disabled');
+                show_alert('#ks_gen_select_alert', 'No one suitable media storage found!');
+            }
+        });
+    }
+
     function close_ok_modal() {
         $('#succGenCertModal').modal('hide');
     }
@@ -149,13 +195,12 @@
         }
     });
 
-    function show_alert(msg) {
+    function show_alert(alert_field, msg) {
         html ='<div class="alert alert-error">'+
           '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
-          '<h4>Error!</h4>'+
           '<span id="err_msg"/>'+
         '</div>';
-        $('#alert_field').html(html);
+        $(alert_field).html(html);
         $('#err_msg').html(msg);
     }
 
@@ -170,7 +215,7 @@
                     $('#info_form').removeClass('hidden');
                     $('#first_form').addClass('hidden');            
                 } else {
-                    show_alert(data['ret_message']);
+                    show_alert('#alert_field', data['ret_message']);
                 }
                 $('#pwdModal').modal('hide');
             }
@@ -180,11 +225,11 @@
 
     function update_settings() {
         $.getJSON('/get_settings', function(data) {
-            data['__key_storage'] = $('#ksPath').val();
+            data['__key_storage'] = $('#ksNewPath').val();
             $.post('/apply_settings', data,
                 function(html) {
                     if (html['ret_code'] != 0) {
-                        show_alert('Settings are not applied! Details: '+data['ret_message']);
+                        show_alert('#alert_field', 'Settings are not applied! Details: '+data['ret_message']);
                     }
                 });
         });
@@ -198,36 +243,20 @@
             }
         });
         init_page();
-        $.getJSON('/get_settings', function(data) {
-            $('#ksPath').html('');
-            for (var i=0; i<data['__available_ks_list'].length; i++) {
-                $('#ksPath').append('<option value="'+data['__available_ks_list'][i][1]+'">'+data['__available_ks_list'][i][0]+'</option>');
-            }
-        });
+        init_page_reload();
     });
 
-    $('#first_form form').submit(function() {
-        $.post('/is_ks_exists', 
-            {'__key_storage': $('#ksPath').val()
-            },            
-            function(html) {
-                if (html['ret_code'] != 0) {
-                    show_alert('Internal server error! Details: '+html['ret_message']);
-                } else {
-                    if (html['ks_status'] == 1) {
-                        $('#pwdEdit').val('');
-                        $('#pwdModal').modal();        
-                        $('#pwdEdit').focus();
-                        return;
-                    }
-                    if (html['ks_status'] == 0) {
-                        show_new_ks();
-                    } else {
-                        show_alert('Invalid key storage!');
-                    }
+    $('#ks_gen_select_form').submit(function() {
+        if ($('#gen_btn').hasClass('disabled')) {return false;}
+        show_new_ks();
+        return false;
+    });
 
-                }
-            });
+    $('#ks_info_select_form').submit(function() {
+        if ($('#open_btn').hasClass('disabled')) {return false;}
+        $('#pwdEdit').val('');
+        $('#pwdModal').modal();        
+        $('#pwdEdit').focus();
         return false;
     });
 
@@ -248,7 +277,7 @@
 
         $('#spinModal').modal();
         $.post('/generate_key_storage', 
-            {'__key_storage': $('#ksPath').val(),
+            {'__key_storage': $('#ksNewPath').val(),
             'password': $('#password').val(),
             'act_key': $('#act_key').val(),
             },            
@@ -256,6 +285,7 @@
                 $('#spinModal').modal('hide');
                 if (html['ret_code'] == 0) {
                     init_page(); 
+                    init_page_reload();
                     $('#succGenCertModal').modal();
                 } else {
                     html ='<div class="alert alert-error">'+
