@@ -53,7 +53,7 @@ def start_daemon():
     print('iDepositBox management console is started at 0.0.0.0:%s'%DAEMON_PORT)
 
 
-def stop_deamon():
+def stop_daemon():
     if not check_daemon():
         sys.stderr.write('iDepositBox management console does not started\n')
         sys.exit(1)
@@ -72,22 +72,29 @@ def stop_deamon():
 def status_daemon():
     if not check_daemon():
         print('iDepositBox management console does not started')
+        return 13
     else:
         print('iDepositBox management console is started')
+        return 0
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        print 'usage: %s start|stop|status'%sys.argv[0]
+        print 'usage: %s start|stop|restart|status'%sys.argv[0]
         sys.exit(1)
 
     command = sys.argv[1]
     if command == 'start':
         start_daemon()
     elif command == 'stop':
-        stop_deamon()
+        stop_daemon()
+    elif command == 'restart':
+        if check_daemon():
+            stop_daemon()
+            time.sleep(1)
+        start_daemon()
     elif command == 'status':
-        status_daemon()
+        sys.exit(status_daemon())
     else:
         sys.stderr.write('ERROR! Unknown command "%s"\n'%command)
         sys.exit(1)

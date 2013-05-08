@@ -31,7 +31,7 @@ from id_client.idepositbox_client import IdepositboxClient
 class IDClientDaemon:
     def __init__(self):
         signal.signal(signal.SIGINT, self.stop)
-        self.server = MgmtServer('0.0.0.0', 8880, IdepositboxClient())
+        self.server = MgmtServer('0.0.0.0', DAEMON_PORT, IdepositboxClient())
 
     def start(self):
         try:
