@@ -1,23 +1,15 @@
 
 <div class="hero-unit">
     <form class="form-horizontal">
+
       <div class="control-group">
-        <label class="control-label" for="ksType">Key storage type</label>
+        <label class="control-label" for="ksPath">Key storage</label>
         <div class="controls">
-            <select class="input-xlarge" id="ksType">
-                <option value="token">USB Token</option>
-                <option value="file">File based</option>
+            <select class="input-xlarge" id="ksPath">
             </select>
         </div>
       </div>
-      <div class="control-group">
-        <label class="control-label" for="ksPath">Key storage path</label>
-        <div class="controls">
-            <div class="input-append">
-               <input class="input-xlarge" id="ksPath" type="text">
-            </div>
-        </div>
-      </div>
+
       <div class="control-group">
         <label class="control-label" for="serviceURL">Service URL</label>
         <div class="controls">
@@ -70,14 +62,6 @@
 </div>
 
 <SCRIPT type="text/javascript">
-    function on_ks_type_change() {
-        if ($('#ksType').val() == 'token') {
-            $('#ksPath').attr('disabled', 'disabled');
-        } else {
-            $('#ksPath').removeAttr('disabled');
-        }
-        allow_applying();
-    }
     function on_mount_type_change() {
         if ($('#mountType').val() == 'local') {
             $('#webdavHost').attr('disabled', 'disabled');
@@ -90,35 +74,46 @@
     function allow_applying() {
         $('#apply_btn').removeAttr('disabled');
     }
-
     $(function () {
         $('input').change(allow_applying);
-        $('#ksType').change(on_ks_type_change);
+        $('#ksPath').change(allow_applying);
         $('#mountType').change(on_mount_type_change);
         $.getJSON('/get_settings', function(data) {
-           $('#ksPath').val(data['key_storage_path']); 
+           $('#ksPath').html('');
+           if (data['__has_ks'] != 1) {
+             $('#ksPath').append('<option value="INVALID">Not found</option>');
+           }
+           for (var i=0; i<data['__available_ks_list'].length; i++) {
+               if (data['__available_ks_list'][i][2]) {
+                $('#ksPath').append('<option value="'+data['__available_ks_list'][i][1]+'">'+data['__available_ks_list'][i][0]+'</option>');
+               }
+           }
            $('#serviceURL').val(data['fabnet_hostname']); 
            $('#webdavHost').val(data['webdav_bind_host']); 
            $('#webdavPort').val(data['webdav_bind_port']); 
            $('#parDownCnt').val(data['parallel_get_count']); 
            $('#parUpCnt').val(data['parallel_put_count']); 
-
-           $('#ksType option[value="'+data['security_provider_type']+'"]').attr('selected', 'selected');
            $('#mountType option[value="'+data['mount_type']+'"]').attr('selected', 'selected');
-           on_ks_type_change();
            on_mount_type_change();
            $('#apply_btn').attr('disabled', 'disabled');
         });
     });
     $('form').submit(function() {
+        var ksPath = $('#ksPath').val();
+        if (ksPath == 'INVALID') {
+            $('#err_msg').remove();
+            $('#apply_btn').before('<div id="err_msg"></div>');
+            var close_btn = '<button type="button" class="close" data-dismiss="alert">×</button>';
+            $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> Please, select key storage!');
+            return false;
+        }
         $.post('/apply_settings', 
-            {'key_storage_path': $('#ksPath').val(),
+            {'__key_storage': ksPath,
             'fabnet_hostname': $('#serviceURL').val(),
             'webdav_bind_host': $('#webdavHost').val(),
             'webdav_bind_port': $('#webdavPort').val(),
             'parallel_get_count': $('#parDownCnt').val(),
             'parallel_put_count': $('#parUpCnt').val(),
-            'security_provider_type': $('#ksType').val(), 
             'mount_type': $('#mountType').val() 
             },            
             function(html) {

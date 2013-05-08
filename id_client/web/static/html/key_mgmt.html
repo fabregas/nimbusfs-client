@@ -3,36 +3,27 @@
 
     <div class="alert alert-success">
         <h4>Information!</h4>
-            Select key storage...
+            <p>On this page you can manage your key storage(s).</p>
+            <p>If you can generate new key storage, select a key storage path that does not exist and click Manage button.</p>
+            <p>Select existing key storage and click Manage for dispaying certificate information.</p>
     </div>
     <div class="row-fluid" id="alert_field">
     </div>
     <form class="form-horizontal">
+
       <div class="control-group">
-        <label class="control-label" for="ksType">Key storage type</label>
+        <label class="control-label" for="ksPath">Key storage</label>
         <div class="controls">
-            <select class="input-xlarge" id="ksType">
-                <option value="token">USB Token</option>
-                <option value="file">File based</option>
+            <select class="input-xlarge" id="ksPath">
             </select>
         </div>
       </div>
 
       <div class="control-group">
-        <label class="control-label" for="ksPath">Key storage path</label>
-        <div class="controls">
-            <div class="input-append">
-               <input class="input-xlarge" id="ksPath" type="text">
-            </div>
-        </div>
-      </div>
-    
-    <div class="control-group">
         <div class="controls">
             <button type="submit" id="open_btn" class="btn btn-primary btn-large">Manage</button>
         </div>
-     </div>
-
+      </div>
     </form>
 </div>
 
@@ -168,19 +159,9 @@
         $('#err_msg').html(msg);
     }
 
-    function on_ks_type_change() {
-        if ($('#ksType').val() == 'token') {
-            $('#ksPath').attr('disabled', 'disabled');
-        } else {
-            $('#ksPath').removeAttr('disabled');
-        }
-    }
-    $('#ksType').change(on_ks_type_change);
-
     function show_ks_info() {
         $.post("/get_ks_info",
-            {'key_storage_path': $('#ksPath').val(),
-            'security_provider_type': $('#ksType').val(),
+            {'__key_storage': $('#ksPath').val(),
             'password': $('#pwdEdit').val()
             },            
             function(data) {
@@ -199,9 +180,7 @@
 
     function update_settings() {
         $.getJSON('/get_settings', function(data) {
-            data['key_storage_path'] = $('#ksPath').val();
-            data['security_provider_type'] = $('#ksType').val(); 
-
+            data['__key_storage'] = $('#ksPath').val();
             $.post('/apply_settings', data,
                 function(html) {
                     if (html['ret_code'] != 0) {
@@ -220,16 +199,16 @@
         });
         init_page();
         $.getJSON('/get_settings', function(data) {
-           $('#ksPath').val(data['key_storage_path']); 
-           $('#ksType option[value="'+data['security_provider_type']+'"]').attr('selected', 'selected');
-            on_ks_type_change();
+            $('#ksPath').html('');
+            for (var i=0; i<data['__available_ks_list'].length; i++) {
+                $('#ksPath').append('<option value="'+data['__available_ks_list'][i][1]+'">'+data['__available_ks_list'][i][0]+'</option>');
+            }
         });
     });
 
     $('#first_form form').submit(function() {
         $.post('/is_ks_exists', 
-            {'key_storage_path': $('#ksPath').val(),
-            'security_provider_type': $('#ksType').val()
+            {'__key_storage': $('#ksPath').val()
             },            
             function(html) {
                 if (html['ret_code'] != 0) {
@@ -269,8 +248,7 @@
 
         $('#spinModal').modal();
         $.post('/generate_key_storage', 
-            {'key_storage_path': $('#ksPath').val(),
-            'security_provider_type': $('#ksType').val(),
+            {'__key_storage': $('#ksPath').val(),
             'password': $('#password').val(),
             'act_key': $('#act_key').val(),
             },            

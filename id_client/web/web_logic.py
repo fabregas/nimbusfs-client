@@ -14,6 +14,7 @@ import os
 from wsgi_app import UrlHandler
 from wsgi_app import WSGIApplication
 from id_client.constants import *
+from id_client.media_storage import AbstractMediaStoragesManager
 
 class StaticPage(UrlHandler):
     def on_process(self, env, *args):
@@ -52,19 +53,48 @@ class GetServiceStatusHandler(UrlHandler):
                                     'sync_status': sync_stat,
                                     'has_keystorage': has_ks})
 
+def parse_ks(data):
+    key_storage = data.get('__key_storage', None)
+    if not key_storage:
+        raise Exception('Please, specify key storage path!')
+    idx = key_storage.find(':')
+    security_provider_type = key_storage[:idx]
+    key_storage_path = key_storage[idx+1:]
+    if security_provider_type not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
+        raise Exception('Invalid security provider type "%s"'%security_provider_type)
+    return security_provider_type, key_storage_path
+
 
 class GetSettingsHandler(UrlHandler):
     def on_process(self, env, *args):
         idepositbox_client = env['idepositbox_app']
         config = idepositbox_client.get_config()
-        resp = {'key_storage_path': config.key_storage_path,
+
+        ms_list = idepositbox_client.get_available_media_storages()
+        available_ks_list = []
+        for ms in ms_list:
+            label = []
+            if ms.label:
+                label.append(ms.label)
+            if ms.path:
+                label.append(ms.path)
+            label = ' - '.join(label)
+            kss = idepositbox_client.key_storage_status(ms.ks_type, ms.path)
+            item = (label, '%s:%s'%(ms.ks_type, ms.path), kss)
+            if config.security_provider_type == ms.ks_type and config.key_storage_path == ms.path:
+                available_ks_list.insert(0, item)
+            else:
+                available_ks_list.append(item)
+
+        resp = {
                 'fabnet_hostname': config.fabnet_hostname,
                 'parallel_get_count': config.parallel_get_count,
                 'parallel_put_count': config.parallel_put_count,
                 'webdav_bind_host': config.webdav_bind_host,
                 'webdav_bind_port': config.webdav_bind_port,
-                'security_provider_type': config.security_provider_type,
-                'mount_type': config.mount_type
+                'mount_type': config.mount_type,
+                '__has_ks': idepositbox_client.key_storage_status(config.security_provider_type, config.key_storage_path),
+                '__available_ks_list': available_ks_list
                 }
         return self.json_source(resp)
 
@@ -76,12 +106,9 @@ class ApplySettingsHandler(UrlHandler):
 
         data = self.get_post_form(env)
         try:
-            key_storage_path = data.get('key_storage_path', None)
             fabnet_hostname = data.get('fabnet_hostname', None)
             webdav_bind_host = data.get('webdav_bind_host', None)
 
-            if not key_storage_path:
-                raise Exception('Please, specify key storage path!')
             if not fabnet_hostname:
                 raise Exception('Please, specify Nimbus file system service URL!')
             if not webdav_bind_host:
@@ -102,19 +129,17 @@ class ApplySettingsHandler(UrlHandler):
             except ValueError:
                 raise Exception('Invalid parallel uploads count number!')
 
-            if data.get('security_provider_type') not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
-                raise Exception('Invalid security provider type!')
-
             if data.get('mount_type') not in (MOUNT_LOCAL, MOUNT_EXPORT):
                 raise Exception('Invalid mount type!')
 
-            if data.get('security_provider_type') == SPT_FILE_BASED:
-                kss = idepositbox_client.key_storage_status(SPT_FILE_BASED, key_storage_path)
-                if kss == 0:
-                    raise Exception('Key storage does not found at %s'%key_storage_path)
-                elif kss == -1:
-                    raise Exception('Invalid key storage at %s'%key_storage_path)
-                data['key_storage_path'] = os.path.abspath(key_storage_path)
+            security_provider_type, key_storage_path = parse_ks(data)
+            kss = idepositbox_client.key_storage_status(security_provider_type, key_storage_path)
+            if kss == 0:
+                raise Exception('Key storage does not found at %s'%key_storage_path)
+            elif kss == -1:
+                raise Exception('Invalid key storage at %s'%key_storage_path)
+            data['key_storage_path'] = key_storage_path
+            data['security_provider_type'] = security_provider_type
 
             idepositbox_client.update_config(data) 
             
@@ -152,16 +177,13 @@ class IsKsExistsHandler(UrlHandler):
             idepositbox_client = env['idepositbox_app']
             data = self.get_post_form(env)
 
-            ks_type = data.get('security_provider_type', SPT_TOKEN_BASED)
-            if ks_type not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
-                raise Exception('Invalid security provider type!')
-            ks_path = data.get('key_storage_path', '')
-
+            ks_type, ks_path = parse_ks(data)
             kss = idepositbox_client.key_storage_status(ks_type, ks_path)
             resp = {'ret_code':0, 'ks_status': int(kss)}
         except Exception, err:
             resp = {'ret_code':1, 'ret_message': str(err)}
         return self.json_source(resp)
+
     
 class GetKsInfoHandler(UrlHandler):
     def on_process(self, env, *args):
@@ -169,10 +191,7 @@ class GetKsInfoHandler(UrlHandler):
             idepositbox_client = env['idepositbox_app']
             data = self.get_post_form(env)
 
-            ks_type = data.get('security_provider_type', SPT_TOKEN_BASED)
-            if ks_type not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
-                raise Exception('Invalid security provider type!')
-            ks_path = data.get('key_storage_path', '')
+            ks_type, ks_path = parse_ks(data)
             ks_pwd = data.get('password', None)
             if ks_pwd is None:
                 raise Exception('Password does not found!')
@@ -189,9 +208,9 @@ class GenerateKeyStorageHandler(UrlHandler):
         try:
             idepositbox_client = env['idepositbox_app']
             data = self.get_post_form(env)
+            ks_type, ks_path = parse_ks(data)
             idepositbox_client.generate_key_storage(\
-                    data['security_provider_type'],
-                    data['key_storage_path'],
+                    ks_type, ks_path,
                     data['act_key'], data['password'])
             resp = {'ret_code': 0}
         except Exception, err:

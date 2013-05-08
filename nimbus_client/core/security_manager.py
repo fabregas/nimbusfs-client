@@ -86,6 +86,13 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         if os.path.exists(ks_path):
             raise Exception('File "%s" is already exists'%ks_path)
 
+        dirname = os.path.dirname(ks_path)
+        if not os.path.exists(dirname):
+            try:
+                os.mkdir(dirname)
+            except IOError:
+                raise Exception('Can not make directory "%s"'%dirname)
+
         try:
             open(ks_path, 'w').close()
         except IOError:

@@ -29,6 +29,7 @@ from id_client.webdav.application import WebDavAPI
 from id_client.token_agent import TokenAgent
 from id_client.config import Config
 from id_client.constants import *
+from id_client.media_storage import get_media_storage_manager
 
 SM_TYPES_MAP = {SPT_TOKEN_BASED: None, SPT_FILE_BASED: FileBasedSecurityManager}
 
@@ -39,6 +40,7 @@ class IdepositboxClient:
         self.config = Config()
         self.token_agent = TokenAgent(self.on_usb_token_event)
         self.status = CS_STOPPED
+        self.ms_mgr = get_media_storage_manager()
 
     def __set_log_level(self):
         log_level = self.config.log_level.lower()
@@ -48,7 +50,6 @@ class IdepositboxClient:
             logger.setLevel(logging.DEBUG)
         elif log_level == 'error':
             logger.setLevel(logging.ERROR)
-
 
     def start(self, ks_passwd):
         if self.status == CS_STARTED:
@@ -121,6 +122,9 @@ class IdepositboxClient:
     def update_config(self, new_config):
         self.config.update(new_config)
         self.config.save()
+
+    def get_available_media_storages(self):
+        return self.ms_mgr.get_available_storages()
 
     def key_storage_status(self, ks_type=None, ks_path=''):
         if ks_type is None:
