@@ -24,12 +24,20 @@ function load_content(path) {
     $('#menu li').each(function(index) {$(this).removeClass("active");});
     $('#'+path).first().addClass("active");
 
+    var base_e;
+    if (window.location.href.indexOf('?content_only') != -1) {
+        base_e = '#wind';
+        $('#wind').html('');
+    } else {
+        base_e = '.main_content';
+    }
+
     $.get('/get_page/'+path+'.html', function(data) {
-        $('.main_content').html(data); 
+        $(base_e).html(data); 
     }).fail(function() { 
         var fail_html = '<div class="hero-unit"><h1 class="text-error">Internal server error!</h1><p class="text-error">Page /get_page/'+
             path+'.html does not loaded...</p></div>'
-        $('.main_content').html(fail_html); });
+        $(base_e).html(fail_html); });
 }
 
 $(function () {

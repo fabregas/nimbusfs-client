@@ -4,13 +4,13 @@
     <div class="row-fluid" id="alert_field">
     </div>
     <div class="alert alert-success">
-        <h4>Browse key storage information</h4>
-        <p>Select existing key storage and click Open for dispaying certificate information.</p>
+        <h4>Explore key chain content</h4>
+        <p>Select existing key chain and click Open for dispaying certificate information</p>
 
     <form class="form-horizontal" id="ks_info_select_form">
       <div id="ks_info_select_alert"/>
       <div class="control-group">
-        <label class="control-label" for="ksPath">Key storage</label>
+        <label class="control-label" for="ksPath">Key chain</label>
         <div class="controls">
             <select class="input-xlarge" id="ksPath">
             </select>
@@ -25,12 +25,12 @@
 
     </div>
     <div class="alert alert-info">
-        <h4>Generation new key storage</h4>
-        <p>Select destanation path for new key storage and click Generate button.</p>
+        <h4>Generate new key chain</h4>
+        <p>Select removable device for key chain</p>
     <form class="form-horizontal" id="ks_gen_select_form">
       <div id="ks_gen_select_alert"/>
       <div class="control-group">
-        <label class="control-label" for="ksNewPath">Key storage</label>
+        <label class="control-label" for="ksNewPath">Key chain</label>
         <div class="controls">
             <select class="input-xlarge" id="ksNewPath">
             </select>
@@ -59,8 +59,9 @@
 
 <div class="hero-unit" id="gen_form">
     <div class="alert alert-success">
-        <h4>New key storage!</h4>
-            You can generate new key storage on this page. Please, enter activation key and password for key storage
+        <h4>New key chain generation!</h4>
+        <p>You need to have activation key in order to access iDepositBox cloud service.</p>
+        <p>To get one, goto http://idepositbox.com</p>
     </div>
     <div id="gen_alert_field"/>
     <form class="form-horizontal">
@@ -74,7 +75,7 @@
       </div>
     
       <div class="control-group">
-        <label class="control-label" for="password">Key storage password</label>
+        <label class="control-label" for="password">Key chain pin-code</label>
         <div class="controls">
             <div class="input-append">
                <input class="input-xlarge" id="password" type="password">
@@ -83,7 +84,7 @@
       </div>
 
       <div class="control-group">
-        <label class="control-label" for="re_password">Retype password</label>
+        <label class="control-label" for="re_password">Key chain pin-code again</label>
         <div class="controls">
             <div class="input-append">
                <input class="input-xlarge" id="re_password" type="password">
@@ -93,7 +94,7 @@
     <div class="control-group">
         <div id="pwd_alert_field"/>
         <div class="controls">
-            <button type="submit" id="generate_btn" class="btn btn-primary btn-large">Generate</button>
+            <button type="submit" id="generate_btn" class="btn btn-primary btn-large">Continue</button>
             <button id="cancel_btn" class="btn btn-large" onclick="init_page()">Cancel</button>
         </div>
      </div>
@@ -104,20 +105,20 @@
 <div id="pwdModal" class="modal hide fade">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-        <h3>Please, enter password for key storage</h3>
+        <h3>Please, enter pin-code for key chain</h3>
     </div>
     <div class="modal-body">
         <input id="pwdEdit" type="password"/>
     </div>
   <div class="modal-footer">
-      <a onclick="show_ks_info();" class="btn btn-success">Open key storage</a>
+      <a onclick="show_ks_info();" class="btn btn-success">Open key chain</a>
     </div>
 </div>
 
 <div id="succGenCertModal" class="modal hide fade">
     <div class="modal-body">
-        <p><h3>Key storage is generated successfully!</h3></p>
-        <p>Do you want update settings with generated key storage?</p>
+        <p><h3>Key chain is generated successfully!</h3></p>
+        <p>Do you want update settings with generated key chain?</p>
     </div>
   <div class="modal-footer">
       <a onclick="update_settings();" class="btn btn-success">Yes</a>
@@ -162,11 +163,11 @@
             }
             if ($('#ksPath').children().length == 0) {
                 $('#open_btn').addClass('disabled');
-                show_alert('#ks_info_select_alert', 'No one key storage found!');
+                show_alert('#ks_info_select_alert', 'No key chain found!');
             }
             if ($('#ksNewPath').children().length == 0) {
                 $('#gen_btn').addClass('disabled');
-                show_alert('#ks_gen_select_alert', 'No one suitable media storage found!');
+                show_alert('#ks_gen_select_alert', 'No suitable device found!');
             }
         });
     }

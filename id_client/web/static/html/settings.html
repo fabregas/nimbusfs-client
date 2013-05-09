@@ -3,27 +3,21 @@
     <form class="form-horizontal">
 
       <div class="control-group">
-        <label class="control-label" for="ksPath">Key storage</label>
+        <label class="control-label" for="ksPath">Key chain</label>
         <div class="controls">
             <select class="input-xlarge" id="ksPath">
             </select>
         </div>
       </div>
-
+      <hr>
       <div class="control-group">
-        <label class="control-label" for="serviceURL">Service URL</label>
-        <div class="controls">
-          <input class="input-xlarge" type="text" id="serviceURL">
-        </div>
-      </div>
-      <div class="control-group">
-          <label class="control-label" for="parDownCnt">Parallel downloads count</label>
+          <label class="control-label" for="parDownCnt">Simultaneous downloads</label>
             <div class="controls">
               <input type="number" max="10" min="1" id="parDownCnt">
             </div>
       </div>
       <div class="control-group">
-          <label class="control-label" for="parUpCnt">Parallel uploads count</label>
+          <label class="control-label" for="parUpCnt">Simultaneous uploads</label>
             <div class="controls">
               <input type="number" max="10" min="1" id="parUpCnt">
             </div>
@@ -31,11 +25,11 @@
       <hr>
 
       <div class="control-group">
-        <label class="control-label" for="mountType">Mount type</label>
+        <label class="control-label" for="mountType">Export as</label>
         <div class="controls">
             <select class="input-xlarge" id="mountType">
                 <option value="local">Local mount</option>
-                <option value="export">Export WebDav</option>
+                <option value="export">WebDav</option>
             </select>
         </div>
       </div>
@@ -88,7 +82,6 @@
                 $('#ksPath').append('<option value="'+data['__available_ks_list'][i][1]+'">'+data['__available_ks_list'][i][0]+'</option>');
                }
            }
-           $('#serviceURL').val(data['fabnet_hostname']); 
            $('#webdavHost').val(data['webdav_bind_host']); 
            $('#webdavPort').val(data['webdav_bind_port']); 
            $('#parDownCnt').val(data['parallel_get_count']); 
@@ -104,12 +97,11 @@
             $('#err_msg').remove();
             $('#apply_btn').before('<div id="err_msg"></div>');
             var close_btn = '<button type="button" class="close" data-dismiss="alert">×</button>';
-            $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> Please, select key storage!');
+            $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> Please, select key chain!');
             return false;
         }
         $.post('/apply_settings', 
             {'__key_storage': ksPath,
-            'fabnet_hostname': $('#serviceURL').val(),
             'webdav_bind_host': $('#webdavHost').val(),
             'webdav_bind_port': $('#webdavPort').val(),
             'parallel_get_count': $('#parDownCnt').val(),

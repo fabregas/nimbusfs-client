@@ -135,14 +135,14 @@ class IdepositboxClient:
 
         sm = SM_TYPES_MAP.get(ks_type, None)
         if not sm:
-            raise Exception('Unsupported key storage type: "%s"'%ks_type)
+            raise Exception('Unsupported key chain type: "%s"'%ks_type)
         return sm.get_ks_status(ks_path)
 
 
     def get_key_storage_info(self, ks_type, ks_path, ks_pwd):
         sm_class = SM_TYPES_MAP.get(ks_type, None)
         if not sm_class:
-            raise Exception('Unsupported key storage type: "%s"'%ks_type)
+            raise Exception('Unsupported key chain type: "%s"'%ks_type)
 
         cert = sm_class(ks_path, ks_pwd).get_client_cert()
         tmp_file = tempfile.NamedTemporaryFile()
@@ -160,7 +160,7 @@ class IdepositboxClient:
     def generate_key_storage(self, ks_type, ks_path, act_key, password):
         sm_class = SM_TYPES_MAP.get(ks_type, None)
         if not sm_class:
-            raise Exception('Unsupported key storage type: "%s"'%ks_type)
+            raise Exception('Unsupported key chain type: "%s"'%ks_type)
 
         resp = self.__ca_call('/get_payment_info', {'payment_key': act_key})
         if resp.status == 505: #not found err_code
@@ -232,7 +232,7 @@ class IdepositboxClient:
         Algorithm pattern:
 
         if event == UTE_TOKEN_INSERTED:
-            #ask key storage password...
+            #ask key chain password...
             self.init_fabnet_provider(ks_passwd)
         elif event == UTE_TOKEN_REMOVED:
             self.stop_fabnet_provider()

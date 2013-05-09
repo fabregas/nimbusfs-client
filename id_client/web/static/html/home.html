@@ -1,11 +1,11 @@
 
-<div class="hero-unit">
+<div class="hero-unit" id="stat_panel">
 
 <div class="row-fluid" id="alert_field">
 </div>
 
 <div class="row-fluid">
-    <div class="span4 text-right" ><h4>Key storage status:</h4></div>
+    <div class="span4 text-right" ><h4>Key chain status:</h4></div>
     <div class="span8"><h4 id="ks_status"></h4></div>
 </div>
 
@@ -27,7 +27,7 @@
 <div id="pwdModal" class="modal hide fade">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-        <h3>Please, enter password for key storage</h3>
+        <h3>Please, enter pin-code for key chain</h3>
     </div>
     <div class="modal-body">
         <input id="pwdEdit" type="password"/>
@@ -146,10 +146,10 @@
             }
 
             if (data['has_keystorage'] == 1) {
-                $('#ks_status').attr('class', 'label label-success').html('Exists');
+                $('#ks_status').attr('class', 'label label-success').html('Inserted');
             } else {
                 if (data['has_keystorage'] == 0) {
-                    $('#ks_status').attr('class', 'label label-important').html('Not found');
+                    $('#ks_status').attr('class', 'label label-important').html('Absent');
                 } else {
                     $('#ks_status').attr('class', 'label label-important').html('Invalid');
                 }

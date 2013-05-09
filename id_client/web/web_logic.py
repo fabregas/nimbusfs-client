@@ -56,7 +56,7 @@ class GetServiceStatusHandler(UrlHandler):
 def parse_ks(data):
     key_storage = data.get('__key_storage', None)
     if not key_storage:
-        raise Exception('Please, specify key storage path!')
+        raise Exception('Please, specify key chain path!')
     idx = key_storage.find(':')
     security_provider_type = key_storage[:idx]
     key_storage_path = key_storage[idx+1:]
@@ -116,8 +116,6 @@ class ApplySettingsHandler(UrlHandler):
             fabnet_hostname = data.get('fabnet_hostname', None)
             webdav_bind_host = data.get('webdav_bind_host', None)
 
-            if not fabnet_hostname:
-                raise Exception('Please, specify Nimbus file system service URL!')
             if not webdav_bind_host:
                 raise Exception('Please, specify WebDav server bind hostname')
             
@@ -142,9 +140,9 @@ class ApplySettingsHandler(UrlHandler):
             security_provider_type, key_storage_path = parse_ks(data)
             kss = idepositbox_client.key_storage_status(security_provider_type, key_storage_path)
             if kss == 0:
-                raise Exception('Key storage does not found at %s'%key_storage_path)
+                raise Exception('Key chain does not found at %s'%key_storage_path)
             elif kss == -1:
-                raise Exception('Invalid key storage at %s'%key_storage_path)
+                raise Exception('Invalid key chain at %s'%key_storage_path)
             data['key_storage_path'] = key_storage_path
             data['security_provider_type'] = security_provider_type
 

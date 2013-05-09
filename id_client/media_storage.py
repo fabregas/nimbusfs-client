@@ -33,7 +33,7 @@ class AbstractMediaStoragesManager:
     @classmethod
     def get_available_storages(cls):
         '''return list of available storages for saving 
-            key storage (objects of MediaStorage)
+            key chain (objects of MediaStorage)
         '''
         home_path = os.path.expanduser('~')
         st_list = [MediaStorage('HOME', home_path)]

@@ -107,23 +107,23 @@ class FileBasedSecurityManager(AbstractSecurityManager):
                 (pkey_file.name, ks_path, ks_pwd))
         pkey_file.close()
         if ret:
-            raise Exception('Can not create key storage at %s'%ks_path)
+            raise Exception('Can not create key chain at %s'%ks_path)
 
     def _load_key_storage(self, ks_path, passwd):
         if not os.path.exists(ks_path):
-            raise Exception('Key storage file %s does not found!'%ks_path)
+            raise Exception('Key chain file %s does not found!'%ks_path)
 
         tmp_file = tempfile.NamedTemporaryFile()
         ret = os.system('openssl pkcs12 -in %s -out %s -password pass:%s -nodes'%\
                 (ks_path, tmp_file.name, passwd))
         if ret:
-            raise InvalidPasswordException('Can not open key storage! Maybe password is invalid!')
+            raise InvalidPasswordException('Can not open key chain! Maybe password is invalid!')
 
         data = open(tmp_file.name).read()
         tmp_file.close()
         pkey_s = re.search('(-----BEGIN PRIVATE KEY-----(\w|\W)+-----END PRIVATE KEY-----)', data)
         if not pkey_s:
-            raise Exception('Private key does not found in key storage!')
+            raise Exception('Private key does not found in key chain!')
         self._client_prikey = pkey_s.groups()[0]
 
         cert_s = re.search('(-----BEGIN CERTIFICATE-----(\w|\W)+-----END CERTIFICATE-----)', data)
@@ -160,4 +160,4 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         pkey_file.close()
         cert_file.close()
         if ret:
-            raise Exception('Can not update key storage at %s'%ks_path)
+            raise Exception('Can not update key chain at %s'%ks_path)
