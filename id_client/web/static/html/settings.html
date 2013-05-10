@@ -69,6 +69,7 @@
         $('#apply_btn').removeAttr('disabled');
     }
     $(function () {
+        $('#wind').stopTime();
         $('input').change(allow_applying);
         $('#ksPath').change(allow_applying);
         $('#mountType').change(on_mount_type_change);

@@ -122,47 +122,64 @@
         }
     }
 
+    function update_label(label_id, label_type, text) {
+        if ($(label_id).hasClass(label_type) && ($(label_id).html() == text)) {
+            return;
+        }
+        var bcl;
+        if (label_type.indexOf('label') == -1) {
+            bcl = 'btn btn-large';
+        } else {
+            bcl = 'label';
+        }
+        $(label_id).attr('class', bcl).addClass(label_type).html(text);
+    }
+
     function reload_content(){
         var SS_ALL_SYNC = 0,
             SS_SYNC_PENDING = 1;
 
         $.getJSON('/get_service_status', function(data) {
-            var status, sync_status, ks_status;
             if (data['service_status'] == 'started') {
-                $('#serv_status').attr('class', 'label label-success').html('Started');
-                $('#startstop').attr('class', 'btn btn-large btn-danger').html('Stop service');
+                update_label('#serv_status', 'label-success', 'Started');
+                update_label('#startstop', 'btn-danger', 'Stop service');
             } else {
-                status = '<span class="label label-important">Stopped</span>'; 
-                $('#serv_status').attr('class', 'label label-important').html('Stopped');
-                $('#startstop').attr('class', 'btn btn-large btn-success').html('Start service');
+                update_label('#serv_status', 'label-important', 'Stopped');
+                update_label('#startstop', 'btn-success', 'Start service');
             }
 
             if (data['sync_status'] == SS_ALL_SYNC) {
-                $('#sync_status').attr('class', 'label label-success').html('All files are synchronized');
+                update_label('#sync_status', 'label-success', 'All files are synchronized');
             } else if (data['sync_status'] == SS_SYNC_PENDING) {
-                $('#sync_status').attr('class', 'label label-warning').html('Some files are not synchronized yet');
+                update_label('#sync_status', 'label-warning', 'Some files are not synchronized yet');
             } else {
-                $('#sync_status').attr('class', 'label label-warning').html('Unknown');
+                update_label('#sync_status', 'label-warning', 'Unknown');
             }
 
             if (data['has_keystorage'] == 1) {
-                $('#ks_status').attr('class', 'label label-success').html('Inserted');
+                update_label('#ks_status', 'label-success', 'Inserted');
+                if ($('#startstop').hasClass('disabled')) { 
+                    $('#startstop').removeClass('disabled');
+                }
             } else {
                 if (data['has_keystorage'] == 0) {
-                    $('#ks_status').attr('class', 'label label-important').html('Absent');
+                    update_label('#ks_status', 'label-important', 'Absent');
                 } else {
-                    $('#ks_status').attr('class', 'label label-important').html('Invalid');
+                    update_label('#ks_status', 'label-important', 'Invalid');
                 }
-                $('#startstop').addClass('disabled');
+                if (! $('#startstop').hasClass('disabled')) { 
+                    $('#startstop').addClass('disabled');
+                }
             }
         }).fail(function() {
-            $('#serv_status').attr('class', 'label label-warning').html('Unknown');
-            $('#sync_status').attr('class', 'label label-warning').html('Unknown');
-            $('#ks_status').attr('class', 'label label-warning').html('Unknown');
+            update_label('#sync_status', 'label-warning', 'Unknown');
+            update_label('#ks_status', 'label-warning', 'Unknown');
+            update_label('#serv_status', 'label-warning', 'Unknown');
         });
     }
 
     $(function () { 
+        $('#wind').everyTime(5000, reload_content);
         $('#startstop').click(start_stop_service);
         $('#pwdEdit').keypress(function (e) {
             if (e.which == 13) {
