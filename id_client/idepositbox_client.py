@@ -20,30 +20,35 @@ import urllib
 import socket
 import json
 import subprocess
+import threading
 
 from nimbus_client.core.security_manager import FileBasedSecurityManager, AbstractSecurityManager
+from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.logger import logger
 
+
 from id_client.webdav.application import WebDavAPI
-from id_client.token_agent import TokenAgent
 from id_client.config import Config
 from id_client.constants import *
 from id_client.media_storage import get_media_storage_manager
+from id_client.webdav_mounter import WebdavMounter
 
 SM_TYPES_MAP = {SPT_TOKEN_BASED: None, SPT_FILE_BASED: FileBasedSecurityManager}
 
+IDLock = LockObject()
+
 class IdepositboxClient:
     def __init__(self):
-        self.nibbler = None
-        self.api_list = []
-        self.config = Config()
-        self.token_agent = TokenAgent(self.on_usb_token_event)
-        self.status = CS_STOPPED
-        self.ms_mgr = get_media_storage_manager()
+        self.__nibbler = None
+        self.__api_list = []
+        self.__config = Config()
+        self.__status = CS_STOPPED
+        self.__ms_mgr = get_media_storage_manager()
+        self.__check_kss_thrd = None
 
     def __set_log_level(self):
-        log_level = self.config.log_level.lower()
+        log_level = self.__config.log_level.lower()
         if log_level == 'info':
             logger.setLevel(logging.INFO)
         elif log_level == 'debug':
@@ -51,12 +56,21 @@ class IdepositboxClient:
         elif log_level == 'error':
             logger.setLevel(logging.ERROR)
 
+    @IDLock
+    def get_nibbler(self):
+        return self.__nibbler
+
+    @IDLock
+    def get_status(self):
+        return self.__status
+
+    @IDLock
     def start(self, ks_passwd):
-        if self.status == CS_STARTED:
+        if self.__status == CS_STARTED:
             raise Exception('IdepositboxClient is already started')
 
-        self.config.refresh()
-        config = self.config
+        self.__config.refresh()
+        config = self.__config
         try:
             self.__set_log_level()
             if config.security_provider_type == SPT_TOKEN_BASED:
@@ -67,12 +81,12 @@ class IdepositboxClient:
                 raise Exception('Unexpected security provider type: "%s"'%config.security_provider_type)
 
             
-            self.nibbler = Nibbler(config.fabnet_hostname, security_provider, \
+            self.__nibbler = Nibbler(config.fabnet_hostname, security_provider, \
                                 config.parallel_put_count, config.parallel_get_count, \
                                 config.cache_dir, config.cache_size)
 
             try:
-                registered = self.nibbler.is_registered()
+                registered = self.__nibbler.is_registered()
             except Exception, err:
                 logger.error(err)
                 raise Exception('Service %s does not respond! Please, '\
@@ -80,19 +94,23 @@ class IdepositboxClient:
 
             if not registered:
                 try:
-                    self.nibbler.register_user() #FIXME: this is dangerous call! user should accept this case...
+                    self.__nibbler.register_user() #FIXME: this is dangerous call! user should accept this case...
                 except Exception, err:
                     logger.error('Register user error: %s'%err)
                     raise Exception('User does not registered in service')
 
-            self.nibbler.start()
+            self.__nibbler.start()
 
             #init API instances
-            self.api_list = []
-            webdav_server = WebDavAPI(self.nibbler, config.webdav_bind_host, config.webdav_bind_port)
-            self.api_list.append(webdav_server)
+            self.__api_list = []
+            if config.mount_type == MOUNT_LOCAL:
+                ext_host = '127.0.0.1'
+            else:
+                ext_host = config.webdav_bind_host
+            webdav_server = WebDavAPI(self.__nibbler, ext_host, config.webdav_bind_port)
+            self.__api_list.append(webdav_server)
 
-            for api_instance in self.api_list:
+            for api_instance in self.__api_list:
                 logger.debug('starting %s...'%api_instance.get_name())
                 api_instance.start()
                 
@@ -105,31 +123,46 @@ class IdepositboxClient:
                     raise Exception('%s does not started!'%api_instance.get_name())
                 logger.info('%s is started!'%api_instance.get_name())
 
+            if config.mount_type == MOUNT_LOCAL:
+                webdav_mount = WebdavMounter()
+                ret_code = webdav_mount.mount(ext_host, config.webdav_bind_port)
+                mount_point = webdav_mount.get_mount_point()
+                if ret_code:
+                    logger.error('WebDav resource does not mounted at %s!'%mount_point)
+                else:
+                    logger.info('WebDav resource is mounted at %s'%mount_point)
+
+            self.__check_kss_thrd = CheckKSStatusThread(self)
+            self.__check_kss_thrd.start()
             logger.info('IdepositboxClient is started')
         except Exception, err:
             logger.error('init fabnet provider error: %s'%err)
-            self.status = CS_FAILED
+            self.__status = CS_FAILED
             self.stop()
             logger.write = logger.info
             traceback.print_exc(file=logger)
             raise err
-        self.status = CS_STARTED
+        self.__status = CS_STARTED
 
+    @IDLock
     def get_config(self):
-        self.config.refresh()
-        return self.config.get_config_dict()
+        self.__config.refresh()
+        return self.__config.get_config_dict()
 
+    @IDLock
     def update_config(self, new_config):
-        self.config.update(new_config)
-        self.config.save()
+        self.__config.update(new_config)
+        self.__config.save()
 
+    @IDLock
     def get_available_media_storages(self):
-        return self.ms_mgr.get_available_storages()
+        return self.__ms_mgr.get_available_storages()
 
+    @IDLock
     def key_storage_status(self, ks_type=None, ks_path=''):
         if ks_type is None:
-            self.config.refresh()
-            config = self.config
+            self.__config.refresh()
+            config = self.__config
             ks_type = config.security_provider_type
             ks_path = config.key_storage_path
 
@@ -139,6 +172,7 @@ class IdepositboxClient:
         return sm.get_ks_status(ks_path)
 
 
+    @IDLock
     def get_key_storage_info(self, ks_type, ks_path, ks_pwd):
         sm_class = SM_TYPES_MAP.get(ks_type, None)
         if not sm_class:
@@ -157,6 +191,7 @@ class IdepositboxClient:
         return cout
 
 
+    @IDLock
     def generate_key_storage(self, ks_type, ks_path, act_key, password):
         sm_class = SM_TYPES_MAP.get(ks_type, None)
         if not sm_class:
@@ -189,7 +224,7 @@ class IdepositboxClient:
         sm.append_certificate(ks_path, password, cert)
 
     def __ca_call(self, path, params={}, method='POST'):
-        ca_addr = '%s:8888'%self.config.webdav_bind_host
+        ca_addr = '%s:8888'%self.__config.fabnet_hostname
         try:
             conn = httplib.HTTPConnection(ca_addr)
             params = urllib.urlencode(params)
@@ -200,13 +235,21 @@ class IdepositboxClient:
 
         return response
 
+    @IDLock
     def stop(self):
-        if self.status == CS_STOPPED:
+        if self.__status == CS_STOPPED:
             return
 
         try:
-            self.token_agent.stop()
-            for api_instance in self.api_list:
+            if self.__check_kss_thrd:
+                self.__check_kss_thrd.stop()
+                self.__check_kss_thrd = None
+
+            if self.__config.mount_type == MOUNT_LOCAL:
+                webdav_mount = WebdavMounter()
+                ret_code = webdav_mount.unmount()
+
+            for api_instance in self.__api_list:
                 try:
                     logger.debug('stopping %s ...'%api_instance.get_name())
                     api_instance.stop()
@@ -214,27 +257,38 @@ class IdepositboxClient:
                 except Exception, err:
                     logger.error('stopping %s error: %s'%(api_instance.get_name(), err))
 
-            if self.nibbler:
-                self.nibbler.stop()
+            if self.__nibbler:
+                self.__nibbler.stop()
 
             logger.info('IdepositboxClient is stopped')
         except Exception, err:
             logger.error('stopping fabnet provider error: %s'%err)
-            self.status = CS_FAILED
+            self.__status = CS_FAILED
             raise err
 
-        self.status = CS_STOPPED
+        self.__status = CS_STOPPED
 
-    def on_usb_token_event(self, event, data):
-        '''This method should be implemented for performing actions
-        when USB token is inserted or removed from PC
 
-        Algorithm pattern:
+class CheckKSStatusThread(threading.Thread):
+    def __init__(self, id_client):
+        threading.Thread.__init__(self)
+        self.id_client = id_client
+        self.stopped = threading.Event()
+        self.setName('CheckKSStatusThread')
 
-        if event == UTE_TOKEN_INSERTED:
-            #ask key chain password...
-            self.init_fabnet_provider(ks_passwd)
-        elif event == UTE_TOKEN_REMOVED:
-            self.stop_fabnet_provider()
-        '''
-        pass
+    def run(self):
+        logger.debug('thread is started')
+        while not self.stopped.is_set():
+            try:
+                ks_status = self.id_client.key_storage_status()
+                if ks_status != AbstractSecurityManager.KSS_EXISTS \
+                        and self.id_client.get_status() == CS_STARTED:
+                    self.id_client.stop()
+            except Exception, err:
+                logger.error('CheckKSStatusThread: %s'%err)
+            finally:
+                time.sleep(2)
+        logger.debug('thread is stopped')
+
+    def stop(self):
+        self.stopped.set()

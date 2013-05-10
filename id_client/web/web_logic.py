@@ -37,14 +37,14 @@ class GetServiceStatusHandler(UrlHandler):
         idepositbox_client = env['idepositbox_app']
         sync_stat = -1
         if idepositbox_client is not None:
-            status = idepositbox_client.status
+            status = idepositbox_client.get_status()
             has_ks = idepositbox_client.key_storage_status()
         else:
             status = 'stopped'
             has_ks = False
 
         if status == 'started':
-            if idepositbox_client.nibbler.has_incomlete_operations():
+            if idepositbox_client.get_nibbler().has_incomlete_operations():
                 sync_stat = 1
             else:
                 sync_stat = 0
