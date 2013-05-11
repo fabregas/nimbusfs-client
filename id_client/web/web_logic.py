@@ -35,7 +35,7 @@ class GetMenuHandler(UrlHandler):
 class GetServiceStatusHandler(UrlHandler):
     def on_process(self, env, *args):
         idepositbox_client = env['idepositbox_app']
-        sync_stat = -1
+        sync_stat = SS_UNKNOWN
         if idepositbox_client is not None:
             status = idepositbox_client.get_status()
             has_ks = idepositbox_client.key_storage_status()
@@ -45,9 +45,9 @@ class GetServiceStatusHandler(UrlHandler):
 
         if status == 'started':
             if idepositbox_client.get_nibbler().has_incomlete_operations():
-                sync_stat = 1
+                sync_stat = SS_SYNC_PROGRESS
             else:
-                sync_stat = 0
+                sync_stat = SS_ALL_SYNC
 
         return self.json_source({'service_status': status,
                                     'sync_status': sync_stat,

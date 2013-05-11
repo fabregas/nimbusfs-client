@@ -13,114 +13,103 @@ import os
 import sys
 import threading
 import time
+import json
+import httplib
+import socket
+import copy
+from subprocess import Popen, PIPE
 
 from PySide.QtCore import *
 from PySide.QtGui import *
 import PySide
 
-from id_client.idepositbox_client import IdepositboxClient, logger
-from id_client.config import Config
-from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED
-from files_inprogress_dialog import FilesInprogressDialog
-from settings_dialog import SettingsDialog
-from about_dialog import AboutDialog
-from id_client.webdav_mounter import WebdavMounter
-
+import id_client
+from id_client.idepositbox_client import logger
+from id_client.constants import *
+from id_client.gui.webview_dialog import WebViewDialog
 
 CUR_DIR = os.path.abspath(os.path.dirname(__file__))
+LIB_DIR = os.path.abspath(os.path.join(os.path.dirname(id_client.__file__), '../'))
+MGMT_CLI_PATH = os.path.abspath(os.path.join(CUR_DIR, '../../bin/idepositbox_cli'))
 RESOURCES_DIR = os.path.join(CUR_DIR, 'resources')
 
 if not os.path.exists(RESOURCES_DIR):
     RESOURCES_DIR = CUR_DIR
 
+if not os.path.exists(MGMT_CLI_PATH):
+    MGMT_CLI_PATH = os.path.abspath(os.path.join(CUR_DIR, 'idepositbox_cli'))
+
 LOGOUT_ICON = os.path.join(RESOURCES_DIR, "logout-icon.png")
 LOGIN_ICON = os.path.join(RESOURCES_DIR, "login-icon.png")
 SYNCDATA_ICON = os.path.join(RESOURCES_DIR, "sync-icon.png")
-MENU_LOGIN_ICON = os.path.join(RESOURCES_DIR, "menu-login-icon.png")
-MENU_LOGOUT_ICON = os.path.join(RESOURCES_DIR, "menu-logout-icon.png")
-MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
-MENU_SETTING_ICON = os.path.join(RESOURCES_DIR, "menu-settings-icon.png")
-MENU_ABOUT_ICON = os.path.join(RESOURCES_DIR, "menu-about-icon.png")
-ABOUT_ICON = os.path.join(RESOURCES_DIR, "about-icon.png")
-ABOUT_BG = os.path.join(RESOURCES_DIR, "about-bg.png")
 
-LM_LOGIN = unicode('Login')
-LM_LOGOUT = unicode('Logout')
-LM_SYNC_INFO = unicode('Data transfers...')
-LM_SETTINGS = unicode('Settings...')
-LM_ABOUT = unicode('About')
+MENU_MANAGE_ICON = os.path.join(RESOURCES_DIR, "menu-manage-icon.png")
+MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
+
+LM_MANAGE = unicode('Manage...')
 LM_EXIT = unicode('Exit')
+
+STATUS_STOPPED = 'stopped'
+STATUS_STARTED = 'started'
+STATUS_SYNCING = 'syncing'
+
+DAEMON_PORT = 8880
+
+MGMT_CLI_RUNCMD = [sys.executable, MGMT_CLI_PATH]
+ENV = copy.copy(os.environ)
+ENV['IDB_LIB_PATH'] = LIB_DIR
 
 
 class SystemTrayIcon(QSystemTrayIcon):
-    sync_data_inprogress = Signal()
-    no_sync_data = Signal()
+    changed_service_status = Signal(str)
 
     def __init__(self, parent=None):
         super(SystemTrayIcon, self).__init__(parent)
 
-        self.webdav_mounter = WebdavMounter()
-
-        self.is_login = False
-        self.sync_status = False
-
-        self.sync_data_inprogress.connect(self.on_sync_data_inprogress)
-        self.no_sync_data.connect(self.on_no_sync_data)
+        self.changed_service_status.connect(self.on_changed_service_status)
 
         self.login_icon = QIcon(LOGIN_ICON)
         self.logout_icon = QIcon(LOGOUT_ICON)
         self.syncdata_icon = QIcon(SYNCDATA_ICON)
 
-        self.login_act = QAction(QIcon(MENU_LOGIN_ICON), LM_LOGIN, parent)
-        self.login_act.triggered.connect(self.onLoginLogout)
-        self.sync_info_act = QAction(QIcon(SYNCDATA_ICON), LM_SYNC_INFO, parent)
-        self.sync_info_act.triggered.connect(self.onSyncInfo)
-        self.settings_act = QAction(QIcon(MENU_SETTING_ICON), LM_SETTINGS, parent)
-        self.settings_act.triggered.connect(self.onSettings)
-        self.about_act = QAction(QIcon(MENU_ABOUT_ICON), LM_ABOUT, parent)
-        self.about_act.triggered.connect(self.onAbout)
+        self.manage_act = QAction(QIcon(MENU_MANAGE_ICON), LM_MANAGE, parent)
+        self.manage_act.triggered.connect(self.onManage)
         self.exit_act = QAction(QIcon(MENU_EXIT_ICON), LM_EXIT, parent)
         self.exit_act.triggered.connect(self.onClose)
 
         self.tray_menu = QMenu(parent)
-        self.tray_menu.addAction(self.login_act)
-        self.tray_menu.addAction(self.sync_info_act)
-        self.tray_menu.addAction(self.settings_act)
-        self.tray_menu.addSeparator()
-        self.tray_menu.addAction(self.about_act)
+        self.tray_menu.addAction(self.manage_act)
         self.tray_menu.addSeparator()
         self.tray_menu.addAction(self.exit_act)
 
         self.setIcon(self.logout_icon)
-        self.setContextMenu( self.tray_menu )
+        self.setContextMenu(self.tray_menu)
 
-        self.configure_service()
+        proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
+        cout, cerr = proc.communicate()
+        if proc.returncode:
+            self.show_error('Management console does not started!\nDetails: %s'%cerr)
+            raise Exception('mgmt server does not started by %s'%MGMT_CLI_RUNCMD)
 
         self.show()
-
-        self.idepositbox_client = IdepositboxClient()
-        if Config().security_provider_type == SPT_FILE_BASED:
-            self.service_login()
 
         self.check_sync_status_thr = CheckSyncStatusThread(self)
         self.check_sync_status_thr.start()
 
-    def configure_service(self):
-        config = Config()
-        if config.key_storage_path:
-            return
+    def onManage(self):
+        dialog = WebViewDialog(None, 'http://127.0.0.1:%s/'%DAEMON_PORT)
+        dialog.exec_()
 
-        dialog = SettingsDialog()
-        ret = dialog.exec_()
-        if not ret:
-            raise Exception('Security provider does not configured!')
+    def on_changed_service_status(self, status):
+        if status == STATUS_STOPPED:
+            self.setIcon(self.logout_icon)
+        elif status == STATUS_STARTED:
+            self.setIcon(self.login_icon)
+        elif status == STATUS_SYNCING:
+            self.setIcon(self.syncdata_icon)
+        else:
+            raise Exception('Unexpected service status "%s"'%status)
 
-
-    def on_token_event(self, event, data):
-        if event == UTE_TOKEN_INSERTED:
-            self.service_login()
-        elif event == UTE_TOKEN_REMOVED:
-            self.service_logout()
 
     def show_information(self, title, message):
         if self.supportsMessages():
@@ -139,84 +128,21 @@ class SystemTrayIcon(QSystemTrayIcon):
         else:
             return False
 
-    def get_password(self, message):
-        msg, is_ok = QInputDialog.getText(None, 'Password', message, QLineEdit.Password, flags=Qt.WindowStaysOnTopHint)
-        if is_ok:
-            return msg
-        return None
-
-    def onLoginLogout(self):
-        if self.is_login:
-            self.service_logout()
-        else:
-            self.service_login()
-
-    def service_login(self):
-        try:
-            passws = self.get_password('Please, enter password for key storage')
-            if passws is None:
-                return
-
-            self.idepositbox_client.start(passws)
-
-            self.webdav_mounter.mount()
-
-            self.login_act.setText(LM_LOGOUT)
-            self.login_act.setIcon(QIcon(MENU_LOGOUT_ICON))
-            self.setIcon(self.login_icon)
-            self.is_login = True
-        except Exception, err:
-            self.show_error('Service does not started.\nDetails: %s'%err)
-        else:
-            self.show_information('Service information', \
-                    'iDepositBox service is started!\nWebDav directory is mounted' )
-
-    def service_logout(self):
-        try:
-            self.webdav_mounter.unmount()
-
-            self.idepositbox_client.stop()
-
-            self.login_act.setText(LM_LOGIN)
-            self.login_act.setIcon(QIcon(MENU_LOGIN_ICON))
-            self.setIcon(self.logout_icon)
-            self.is_login = False
-        except Exception, err:
-            self.show_error('Service does not stopped.\nDetails: %s'%err)
-        finally:
-            self.check_sync_status_thr.stop()
-            self.check_sync_status_thr.wait()
-
-    def on_sync_data_inprogress(self):
-        self.sync_status = True
-        self.setIcon(self.syncdata_icon)
-
-    def on_no_sync_data(self):
-        if not self.sync_status:
-            return
-
-        self.setIcon(self.login_icon)
-
-    def onSyncInfo(self):
-        f_inprogress_dialog = FilesInprogressDialog(self.idepositbox_client.nibbler)
-        f_inprogress_dialog.exec_()
-
     def onClose(self):
         if not self.show_question('Exit?', 'Are you sure that you want to exit?!'):
             return
 
         try:
-            self.service_logout()
-        except Exception, err:
-            self.show_error('Service does not stopped.\nDetails: %s'%err)
+            proc = Popen(MGMT_CLI_RUNCMD+['stop'], stdout=PIPE, stderr=PIPE, env=ENV)
+            cout, cerr = proc.communicate()
+            if proc.returncode:
+                self.show_error('Management console does not stopped!\nDetails: %s'%cerr)
+
+            self.check_sync_status_thr.stop()
+            self.check_sync_status_thr.wait()
         finally:
             qApp.exit()
 
-    def onSettings(self):
-        SettingsDialog().exec_()
-
-    def onAbout(self):
-        AboutDialog(ABOUT_ICON, ABOUT_BG, '0.1.1').exec_()
 
 class CheckSyncStatusThread(QThread):
     def __init__(self, tray):
@@ -226,20 +152,39 @@ class CheckSyncStatusThread(QThread):
 
     def run(self):
         self.stopped = False
+        old_status = None
+        mgmt_addr = '127.0.0.1:%s'%DAEMON_PORT
+        time.sleep(2)
         while not self.stopped:
             try:
-                if not self.tray.idepositbox_client.nibbler:
-                    continue
+                conn = httplib.HTTPConnection(mgmt_addr)
+                try:
+                    conn.request('GET', '/get_service_status')
+                    response = conn.getresponse()
+                    if response.status != 200:
+                        raise Exception('mgmt service error! [%s %s] %s'%(response.status, response.reason, response.read()))
+                    data = response.read()
+                except socket.error, err:
+                    raise Exception('Mgmt server does not respond! Details: %s'%err)
+                finally:
+                    conn.close()
 
-                ops = self.tray.idepositbox_client.nibbler.has_incomlete_operations()
-                if ops:
-                    self.tray.sync_data_inprogress.emit()
+                data = json.loads(data)
+                if data.get('service_status', CS_FAILED) != CS_STARTED:
+                    status = STATUS_STOPPED
                 else:
-                    self.tray.no_sync_data.emit()
+                    if data.get('sync_status', SS_SYNC_PROGRESS):
+                        status = STATUS_SYNCING
+                    else:
+                        status = STATUS_STARTED
+
+                if status != old_status:
+                    self.tray.changed_service_status.emit(status)
+                old_status = status
             except Exception, err:
                 logger.error('CheckSyncStatusThread: %s'%err)
             finally:
-                time.sleep(1)
+                time.sleep(2)
 
     def stop(self):
         self.stopped = True
@@ -247,6 +192,7 @@ class CheckSyncStatusThread(QThread):
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
     try:
         tray = SystemTrayIcon()
     except Exception, err:

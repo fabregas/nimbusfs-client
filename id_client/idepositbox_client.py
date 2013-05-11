@@ -197,12 +197,17 @@ class IdepositboxClient:
         if not sm_class:
             raise Exception('Unsupported key chain type: "%s"'%ks_type)
 
-        resp = self.__ca_call('/get_payment_info', {'payment_key': act_key})
-        if resp.status == 505: #not found err_code
-            raise Exception('Activation key %s does not found!'%act_key)
-        if resp.status != 200:
-            raise Exception('CA service error! [%s %s] %s'%(resp.status, resp.reason, resp.read()))
-        data = resp.read()
+        conn = self.__ca_call('/get_payment_info', {'payment_key': act_key})
+        try:
+            response = conn.getresponse()
+            if resp.status == 505: #not found err_code
+                raise Exception('Activation key %s does not found!'%act_key)
+            if resp.status != 200:
+                raise Exception('CA service error! [%s %s] %s'%(resp.status, resp.reason, resp.read()))
+            data = resp.read()
+        finally:
+            conn.close()
+
         try:
             p_info = json.loads(data)
         except Exception, err:
@@ -214,13 +219,18 @@ class IdepositboxClient:
         sm = sm_class(ks_path, password)
         cert_req = sm.generate_cert_request(p_info['cert_cn'])
 
-        resp = self.__ca_call('/generate_certificate', \
+        conn = self.__ca_call('/generate_certificate', \
                 {'cert_req_pem': cert_req, 'payment_key': act_key})
 
-        if resp.status != 200:
-            raise Exception('CA service error! Generate certificate: [%s %s] %s'%\
-                    (resp.status, resp.reason, resp.read()))
-        cert = resp.read()
+        try:
+            response = conn.getresponse()
+            if resp.status != 200:
+                raise Exception('CA service error! Generate certificate: [%s %s] %s'%\
+                        (resp.status, resp.reason, resp.read()))
+            cert = resp.read()
+        finally:
+            conn.close()
+
         sm.append_certificate(ks_path, password, cert)
 
     def __ca_call(self, path, params={}, method='POST'):
@@ -229,11 +239,10 @@ class IdepositboxClient:
             conn = httplib.HTTPConnection(ca_addr)
             params = urllib.urlencode(params)
             conn.request(method, path, params)
-            response = conn.getresponse()
         except socket.error, err:
             raise Exception('CA service does not respond! Details: %s'%err)
 
-        return response
+        return conn
 
     @IDLock
     def stop(self):

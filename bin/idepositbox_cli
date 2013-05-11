@@ -18,7 +18,12 @@ import tempfile
 import subprocess
 from datetime import datetime
 
-client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
+client_dir = os.environ.get('IDB_LIB_PATH', None)
+if not client_dir:
+    client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
+else:
+    sys.path.append(os.path.join(client_dir, 'lib-dynload'))
+
 daemon_script = os.path.join(client_dir, 'id_client/client_daemon.py')
 sys.path.append(client_dir)
 
@@ -45,9 +50,9 @@ def start_daemon():
         sys.exit(1)
 
     t0 = datetime.now()
-    cmd = 'nohup python %s &' % daemon_script
+    cmd = 'nohup %s %s &' % (sys.executable, daemon_script)
     devnull = open('/dev/null', 'r+')
-    sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull)
+    sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull, env=os.environ)
     open(get_pid_file(), 'w').write(str(sp.pid))
 
     print('iDepositBox management console is started at 0.0.0.0:%s'%DAEMON_PORT)

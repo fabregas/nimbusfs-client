@@ -32,7 +32,7 @@ class MediaStorage:
 class AbstractMediaStoragesManager:
     @classmethod
     def get_available_storages(cls):
-        '''return list of available storages for saving 
+        '''return list of available storages for saving
             key chain (objects of MediaStorage)
         '''
         home_path = os.path.expanduser('~')
@@ -48,11 +48,10 @@ class AbstractMediaStoragesManager:
         pass
 
 
-class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
+class UnixMediaStoragesManager(AbstractMediaStoragesManager):
     @classmethod
-    def get_removable_storages(cls):
+    def get_mounted_devices(cls):
         mounted_map = {}
-        st_list = []
         df_res = cmd_call('df')
         for line in df_res.splitlines():
             if line[0] != '/':
@@ -65,6 +64,13 @@ class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
                 dev = os.path.join('/dev', os.readlink(dev))
 
             mounted_map[dev] = parts[-1]
+        return mounted_map
+
+class LinuxMediaStoragesManager(UnixMediaStoragesManager):
+    @classmethod
+    def get_removable_storages(cls):
+        st_list = []
+        mounted_map = cls.get_mounted_devices()
 
         for dev in os.listdir('/sys/block/'):
             removable_flag = '/sys/block/%s/removable' % dev
@@ -82,10 +88,30 @@ class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
 
         return st_list
 
+class MacOsMediaStoragesManager(UnixMediaStoragesManager):
+    @classmethod
+    def get_removable_storages(cls):
+        st_list = []
+        mounted_map = cls.get_mounted_devices()
+        for dev, path in mounted_map.items():
+            res = cmd_call('diskutil info %s'%dev)
+            vol_name = None
+            for line in res.splitlines():
+                line = line.strip()
+                if line.startswith('Volume Name:'):
+                    vol_name = line.split('Volume Name:')[-1]
+                if not line.startswith('Ejectable:'):
+                    continue
+                if 'No' in line:
+                    break
+                st_list.append(MediaStorage(vol_name, path))
+        return st_list
 
 def get_media_storage_manager():
     if sys.platform.startswith('linux'):
         return LinuxMediaStoragesManager
+    elif sys.platform == 'darwin':
+        return MacOsMediaStoragesManager
     else:
         raise Exception('Unsupported platform "%s"!'%sys.platform)
 

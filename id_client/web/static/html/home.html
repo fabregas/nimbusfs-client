@@ -179,6 +179,7 @@
     }
 
     $(function () { 
+        $('#wind').stopTime();
         $('#wind').everyTime(5000, reload_content);
         $('#startstop').click(start_stop_service);
         $('#pwdEdit').keypress(function (e) {
