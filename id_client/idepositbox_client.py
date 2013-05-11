@@ -234,13 +234,15 @@ class IdepositboxClient:
         sm.append_certificate(ks_path, password, cert)
 
     def __ca_call(self, path, params={}, method='POST'):
-        ca_addr = '%s:8888'%self.__config.fabnet_hostname
+        ca_addr = self.__config.ca_address
+        if ':' not in ca_addr:
+            ca_addr += ':8888' #Defult CA port
         try:
             conn = httplib.HTTPConnection(ca_addr)
             params = urllib.urlencode(params)
             conn.request(method, path, params)
         except socket.error, err:
-            raise Exception('CA service does not respond! Details: %s'%err)
+            raise Exception('CA service does not respond at http://%s%s\n%s'%(ca_addr, path, err))
 
         return conn
 

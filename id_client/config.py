@@ -69,7 +69,8 @@ class Config(dict):
                 'webdav_bind_port': '8080',
                 'mount_type': MOUNT_LOCAL,
                 'cache_dir': tempfile.gettempdir(),
-                'cache_size': 0}
+                'cache_size': 0,
+                'ca_address': 'ca.idepositbox.com'}
 
     def __getattr__(self, attr):
         try:
@@ -90,10 +91,12 @@ class Config(dict):
         config.add_section('CACHE')
         config.add_section('SECURITY_PROVIDER')
         config.add_section('WEBDAV')
+        config.add_section('CA')
 
         config.set('LOG', 'log_level', self['log_level'])
 
         config.set('FABNET', 'fabnet_url', self['fabnet_hostname'])
+        config.set('CA', 'ca_address', self['ca_address'])
         config.set('FABNET', 'parallel_put_count', self['parallel_put_count'])
         config.set('FABNET', 'parallel_get_count', self['parallel_get_count'])
         config.set('CACHE', 'cache_dir', self['cache_dir'])

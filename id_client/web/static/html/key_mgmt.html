@@ -216,7 +216,7 @@
                     $('#info_form').removeClass('hidden');
                     $('#first_form').addClass('hidden');            
                 } else {
-                    show_alert('#alert_field', data['ret_message']);
+                    show_alert('#alert_field', mkbr(data['ret_message']));
                 }
                 $('#pwdModal').modal('hide');
             }
@@ -230,7 +230,7 @@
             $.post('/apply_settings', data,
                 function(html) {
                     if (html['ret_code'] != 0) {
-                        show_alert('#alert_field', 'Settings are not applied! Details: '+data['ret_message']);
+                        show_alert('#alert_field', 'Settings are not applied! Details: '+mkbr(data['ret_message']));
                     }
                 });
         });
@@ -293,7 +293,7 @@
                     html ='<div class="alert alert-error">'+
                       '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
                       '<h4>Error!</h4>'+
-                      '<span id="err_msg">Details: '+html['ret_message']+'</span>'+
+                      '<span id="err_msg">Details: '+mkbr(html['ret_message'])+'</span>'+
                     '</div>';
                     $('#gen_alert_field').html(html);        
                 }

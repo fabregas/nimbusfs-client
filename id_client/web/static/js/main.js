@@ -1,4 +1,8 @@
 
+function mkbr(message) {
+    return message.replace(/\n/g, "<br/>")
+}
+
 function load_menu() {
     $.getJSON('/get_menu', function(data) {
           var items = [];

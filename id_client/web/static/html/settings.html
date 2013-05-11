@@ -118,7 +118,7 @@
                     $('#err_msg').attr('class', 'alert alert-success').html(close_btn+'<strong>Done!</strong> Settings are applied!');
                     $('#apply_btn').attr('disabled', 'disabled');
                 } else {
-                    $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> '+html['ret_message']+'');
+                    $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> '+mkbr(html['ret_message'])+'');
                 }
             });
         return false;
