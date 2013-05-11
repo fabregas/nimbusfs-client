@@ -9,7 +9,8 @@ out, _ = p.communicate()
 APP = ['./id_client/gui/main_window.py']
 OPTIONS = {'argv_emulation': False,
            'iconfile': './id_client/gui/resources/app-icon.icns',
-           'plist': {'CFBundleShortVersionString': out.strip(),},
+           'plist': {'CFBundleShortVersionString': out.strip(),
+                     'NSHumanReadableCopyright': 'Copyright 2012-2013 iDepositBox software'},
            'includes' : ('PySide.QtGui', 'PySide.QtCore', 'PySide.QtWebKit', 'PySide.QtNetwork', 'wsgidav', 'cherrypy', 'Crypto'),
            #'semi_standalone': 'False',
            'compressed' : 'True',

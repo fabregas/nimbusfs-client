@@ -16,7 +16,7 @@ import tempfile
 import ConfigParser
 from ConfigParser import RawConfigParser
 
-from constants import SPT_TOKEN_BASED, MOUNT_LOCAL
+from constants import SPT_FILE_BASED, MOUNT_LOCAL
 
 class Config(dict):
     def __init__(self):
@@ -63,7 +63,7 @@ class Config(dict):
                 'fabnet_hostname': 'lb.idepositbox.com',
                 'parallel_put_count': '3',
                 'parallel_get_count': '3',
-                'security_provider_type': SPT_TOKEN_BASED,
+                'security_provider_type': SPT_FILE_BASED,
                 'key_storage_path': '',
                 'webdav_bind_host': '127.0.0.1',
                 'webdav_bind_port': '8080',

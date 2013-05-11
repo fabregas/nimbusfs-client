@@ -73,9 +73,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.syncdata_icon = QIcon(SYNCDATA_ICON)
 
         self.manage_act = QAction(QIcon(MENU_MANAGE_ICON), LM_MANAGE, parent)
-        self.manage_act.triggered.connect(self.onManage)
         self.exit_act = QAction(QIcon(MENU_EXIT_ICON), LM_EXIT, parent)
-        self.exit_act.triggered.connect(self.onClose)
 
         self.tray_menu = QMenu(parent)
         self.tray_menu.addAction(self.manage_act)
@@ -84,21 +82,6 @@ class SystemTrayIcon(QSystemTrayIcon):
 
         self.setIcon(self.logout_icon)
         self.setContextMenu(self.tray_menu)
-
-        proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
-        cout, cerr = proc.communicate()
-        if proc.returncode:
-            self.show_error('Management console does not started!\nDetails: %s'%cerr)
-            raise Exception('mgmt server does not started by %s'%MGMT_CLI_RUNCMD)
-
-        self.show()
-
-        self.check_sync_status_thr = CheckSyncStatusThread(self)
-        self.check_sync_status_thr.start()
-
-    def onManage(self):
-        dialog = WebViewDialog(None, 'http://127.0.0.1:%s/'%DAEMON_PORT)
-        dialog.exec_()
 
     def on_changed_service_status(self, status):
         if status == STATUS_STOPPED:
@@ -110,38 +93,9 @@ class SystemTrayIcon(QSystemTrayIcon):
         else:
             raise Exception('Unexpected service status "%s"'%status)
 
-
     def show_information(self, title, message):
         if self.supportsMessages():
             self.showMessage(title, message)
-        else:
-            QMessageBox.information(None, title, message)
-
-    def show_error(self, message):
-        QMessageBox.critical(None, 'Error', message)
-
-    def show_question(self, title, message):
-        reply = QMessageBox.question(None, title, message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
-            return True
-        else:
-            return False
-
-    def onClose(self):
-        if not self.show_question('Exit?', 'Are you sure that you want to exit?!'):
-            return
-
-        try:
-            proc = Popen(MGMT_CLI_RUNCMD+['stop'], stdout=PIPE, stderr=PIPE, env=ENV)
-            cout, cerr = proc.communicate()
-            if proc.returncode:
-                self.show_error('Management console does not stopped!\nDetails: %s'%cerr)
-
-            self.check_sync_status_thr.stop()
-            self.check_sync_status_thr.wait()
-        finally:
-            qApp.exit()
 
 
 class CheckSyncStatusThread(QThread):
@@ -189,12 +143,65 @@ class CheckSyncStatusThread(QThread):
     def stop(self):
         self.stopped = True
 
+class MainWind(WebViewDialog):
+    def __init__(self, parent=None):
+        super(MainWind, self).__init__(parent)
+        self.systray = SystemTrayIcon(self)
+        self.systray.manage_act.triggered.connect(self.onManage)
+        self.systray.exit_act.triggered.connect(self.onClose)
+        self.setVisible(False)
+
+        proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
+        cout, cerr = proc.communicate()
+        print(cout)
+        if proc.returncode:
+            self.show_error('Management console does not started!\nDetails: %s'%cerr)
+            raise Exception('mgmt server does not started by %s'%MGMT_CLI_RUNCMD)
+
+        self.check_sync_status_thr = CheckSyncStatusThread(self.systray)
+        self.check_sync_status_thr.start()
+
+        self.systray.show()
+        self.systray.show_information('', 'iDepostiBox client was started successfully')
+
+    def onManage(self):
+        self.load('http://127.0.0.1:%s/'%DAEMON_PORT)
+        self.setVisible(True)
+
+    def show_error(self, message):
+        QMessageBox.critical(self, 'Error', message)
+
+    def show_question(self, title, message):
+        reply = QMessageBox.question(self, title, message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            return True
+        else:
+            return False
+
+    def onClose(self):
+        if not self.show_question('Exit?', 'Are you sure that you want to exit?!'):
+            return
+
+        try:
+            proc = Popen(MGMT_CLI_RUNCMD+['stop'], stdout=PIPE, stderr=PIPE, env=ENV)
+            cout, cerr = proc.communicate()
+            print (cout)
+            if proc.returncode:
+                self.show_error('Management console does not stopped!\nDetails: %s'%cerr)
+
+            self.check_sync_status_thr.stop()
+            self.check_sync_status_thr.wait()
+        finally:
+            qApp.exit()
+
+
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
     try:
-        tray = SystemTrayIcon()
+        mw = MainWind()
     except Exception, err:
         print err
         sys.exit(1)

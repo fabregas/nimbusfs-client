@@ -1,4 +1,5 @@
 
+VER=`git describe --always --tag`
 TEST_RUNNER:=./tests/runTests
 
 export PYTHONPATH=./
@@ -19,4 +20,4 @@ generate_forms:
 
 build_mac:
 	python setup_mac.py py2app
-	hdiutil create -srcfolder dist/Idepositbox.app dist/iDepositBox.dmg
+	hdiutil create -srcfolder dist/Idepositbox.app dist/iDepositBox-${VER}.dmg

@@ -15,12 +15,13 @@ from PySide.QtGui import QDialog
 from forms.web_view_form import Ui_WebView
 
 class WebViewDialog(QDialog):
-    def __init__(self, parent=None, url='about:blank'):
+    def __init__(self, parent=None):
         super(WebViewDialog, self).__init__(parent)
 
         self.ui = Ui_WebView()
         self.ui.setupUi(self)
 
+    def load(self, url):
         self.ui.webView.load(QUrl(url))
         self.ui.webView.loadFinished.connect(self.on_page_loaded)
 
