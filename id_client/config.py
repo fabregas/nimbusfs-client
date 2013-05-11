@@ -52,6 +52,7 @@ class Config(dict):
             self.__get_conf_val('WEBDAV', 'bind_hostname', 'webdav_bind_host')
             self.__get_conf_val('WEBDAV', 'bind_port', 'webdav_bind_port')
             self.__get_conf_val('WEBDAV', 'mount_type', 'mount_type')
+            self.__get_conf_val('CA', 'ca_address', 'ca_address')
         except ConfigParser.Error, msg:
             raise Exception('ConfigParser: %s' % msg)
 

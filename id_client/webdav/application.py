@@ -25,6 +25,7 @@ from wsgidav.util import BASE_LOGGER_NAME
 from cherrypy import wsgiserver, __version__ as cp_version
 
 from fabnet_dav_provider import FabnetProvider
+from ks_domain_controller import KSDomainController
 from id_client.base_external_api import BaseExternalAPI
 from nimbus_client.core.logger import logger
 
@@ -66,7 +67,7 @@ class WebDavAPI(BaseExternalAPI):
 
         wsgi_logger.setLevel(logging.INFO)
 
-    def run(self):
+    def main_loop(self):
         provider = FabnetProvider(self.nibbler)
 
         config = DEFAULT_CONFIG.copy()
@@ -78,7 +79,9 @@ class WebDavAPI(BaseExternalAPI):
             "enable_loggers": [],
             "propsmanager": True,      # True: use property_manager.PropertyManager                    
             "locksmanager": True,      # True: use lock_manager.LockManager                   
-            "domaincontroller": None,  # None: domain_controller.WsgiDAVDomainController(user_mapping)
+            "acceptdigest": False,     # Allow digest authentication, True or False
+            "defaultdigest": False,    # True (default digest) or False (default basic)
+            "domaincontroller": KSDomainController(self.nibbler.get_security_provider()),  
             })
 
 

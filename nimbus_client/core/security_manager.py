@@ -43,6 +43,7 @@ class AbstractSecurityManager:
         pass
 
     def __init__(self, ks_path, passwd):
+        self._ks_path = ks_path
         self._client_cert = None
         self._client_prikey = None
 
@@ -68,6 +69,9 @@ class AbstractSecurityManager:
         pass
 
     def append_certificate(self, ks_path, ks_pwd, cert):
+        pass
+
+    def validate(self, password):
         pass
 
 
@@ -161,3 +165,9 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         cert_file.close()
         if ret:
             raise Exception('Can not update key chain at %s'%ks_path)
+
+    def validate(self, password):
+        ret = os.system('openssl pkcs12 -in %s -password pass:%s -info -noout -nodes'%(self._ks_path, password))
+        if ret:
+            return False
+        return True

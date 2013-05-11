@@ -93,6 +93,9 @@ class Nibbler:
 
         self.journal = Journal(self.metadata_key, \
                 self.db_cache.get_static_cache_path('journal.bin'), self.fabnet_gateway)
+
+    def get_security_provider(self):
+        return self.security_provider
         
     def start(self):
         if not self.journal.foreign_exists():

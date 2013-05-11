@@ -21,12 +21,12 @@ import socket
 import json
 import subprocess
 import threading
+import string
 
 from nimbus_client.core.security_manager import FileBasedSecurityManager, AbstractSecurityManager
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.logger import logger
-
 
 from id_client.webdav.application import WebDavAPI
 from id_client.config import Config
@@ -35,6 +35,8 @@ from id_client.media_storage import get_media_storage_manager
 from id_client.webdav_mounter import WebdavMounter
 
 SM_TYPES_MAP = {SPT_TOKEN_BASED: None, SPT_FILE_BASED: FileBasedSecurityManager}
+
+ALLOWED_PWD_CHARS = set(string.letters + string.digits + '@#$%^&+=')
 
 IDLock = LockObject()
 
@@ -190,13 +192,19 @@ class IdepositboxClient:
             raise Exception(cerr)
         return cout
 
+    def __validate_password(self, password):
+        if (len(password) < 4):
+            raise Exception("Password is too short")
+        if any(ch not in ALLOWED_PWD_CHARS for ch in password):
+            raise Exception("Password contains illegal characters")
 
-    @IDLock
     def generate_key_storage(self, ks_type, ks_path, act_key, password):
         sm_class = SM_TYPES_MAP.get(ks_type, None)
         if not sm_class:
             raise Exception('Unsupported key chain type: "%s"'%ks_type)
 
+        self.__validate_password(password)
+        
         conn = self.__ca_call('/get_payment_info', {'payment_key': act_key})
         try:
             response = conn.getresponse()
