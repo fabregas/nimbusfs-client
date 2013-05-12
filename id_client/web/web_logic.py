@@ -17,6 +17,7 @@ from wsgi_app import WSGIApplication
 from id_client.constants import *
 from id_client.media_storage import AbstractMediaStoragesManager
 from id_client.idepositbox_client import logger
+from nimbus_client.core.exceptions import NoCertFound
 
 class StaticPage(UrlHandler):
     def on_process(self, env, *args):
@@ -205,6 +206,8 @@ class GetKsInfoHandler(UrlHandler):
 
             cert = idepositbox_client.get_key_storage_info(ks_type, ks_path, ks_pwd)
             resp = {'ret_code': 0, 'cert': cert}
+        except NoCertFound, err:
+            resp = {'ret_code': 123, 'ret_message':str(err)}
         except Exception, err:
             resp = {'ret_code': 1, 'ret_message': str(err)}
         return self.json_source(resp)
@@ -220,6 +223,8 @@ class GenerateKeyStorageHandler(UrlHandler):
                     ks_type, ks_path,
                     data['act_key'], data['password'])
             resp = {'ret_code': 0}
+        except NoCertFound, err:
+            resp = {'ret_code': 123, 'ret_message':str(err)}
         except Exception, err:
             resp = {'ret_code': 1, 'ret_message': str(err)}
         return self.json_source(resp)

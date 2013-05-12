@@ -71,3 +71,6 @@ class NoLocalFileFound(NimbusException):
 
 class InvalidPasswordException(NimbusException):
     pass
+
+class NoCertFound(NimbusException):
+    pass

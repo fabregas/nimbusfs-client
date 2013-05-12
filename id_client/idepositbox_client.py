@@ -220,9 +220,9 @@ class IdepositboxClient:
             p_info = json.loads(data)
         except Exception, err:
             raise Exception('Invalid CA response: "%s"'%data)
-        if p_info['status'] != 'WAIT_FOR_USER':
-            raise Exception('Activation key %s is already processed!'%act_key)
 
+        #if p_info['status'] == 'WAIT_FOR_USER':
+        #    raise Exception('Activation key %s is already processed!'%act_key)
         sm_class.initiate_key_storage(ks_path, password)
         sm = sm_class(ks_path, password)
         cert_req = sm.generate_cert_request(p_info['cert_cn'])

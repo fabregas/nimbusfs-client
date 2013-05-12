@@ -23,7 +23,7 @@ from subprocess import Popen, PIPE, STDOUT
 from nimbus_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 from nimbus_client.core.encdec_provider import EncDecProvider
 from nimbus_client.core import pycrypto_enc_engine
-from nimbus_client.core.exceptions import InvalidPasswordException
+from nimbus_client.core.exceptions import InvalidPasswordException, NoCertFound
 from nimbus_client.core.logger import logger
 
 CLIENT_CERT_FILENAME = 'client_certificate.pem'
@@ -56,6 +56,8 @@ class AbstractSecurityManager:
         pass
 
     def get_client_cert(self):
+        if not self._client_cert:
+            raise NoCertFound('No client certificate found in key chain!')
         return self._client_cert
 
     def get_client_cert_key(self):
@@ -127,7 +129,11 @@ class FileBasedSecurityManager(AbstractSecurityManager):
     def initiate_key_storage(cls, ks_path, ks_pwd):
         ks_path = os.path.abspath(ks_path)
         if os.path.exists(ks_path):
-            raise Exception('File "%s" is already exists'%ks_path)
+            try:
+                FileBasedSecurityManager(ks_path, ks_pwd)
+            except Exception, err:
+                raise Exception('Key chain at "%s" is already exists'%ks_path)
+            return
 
         dirname = os.path.dirname(ks_path)
         if not os.path.exists(dirname):
@@ -195,6 +201,7 @@ class FileBasedSecurityManager(AbstractSecurityManager):
     def append_certificate(self, ks_path, ks_pwd, cert):
         pkey_file = tempfile.NamedTemporaryFile()
         cert_file = tempfile.NamedTemporaryFile()
+        new_ks_file = tempfile.NamedTemporaryFile()
         pkey_file.write(self._client_prikey)
         pkey_file.flush()
         cert_file.write(cert)
@@ -202,13 +209,16 @@ class FileBasedSecurityManager(AbstractSecurityManager):
 
         try:
             retcode, out =  self.exec_openssl(['pkcs12', '-export', \
-                    '-inkey', pkey_file.name, '-in', cert_file.name, '-out', ks_path, \
+                    '-inkey', pkey_file.name, '-in', cert_file.name, '-out', new_ks_file.name, \
                     '-password', 'stdin'], ks_pwd)
             if retcode:
-                raise Exception('Can not update key chain at %s'%ks_path)
+                raise Exception('Can not update key chain at %s\n%s'%(ks_path, out))
+
+            shutil.copy(new_ks_file.name, ks_path)
         finally:
             pkey_file.close()
             cert_file.close()
+            new_ks_file.close()
 
     def validate(self, password):
         retcode, out = self.exec_openssl(['pkcs12', '-in', self._ks_path, \

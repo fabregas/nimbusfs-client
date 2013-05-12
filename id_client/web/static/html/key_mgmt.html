@@ -58,6 +58,7 @@
 </div>
 
 <div class="hero-unit" id="gen_form">
+    <div id="nk_alert_field"></div>
     <div class="alert alert-success">
         <h4>New key chain generation!</h4>
         <p>You need to have activation key in order to access iDepositBox cloud service.</p>
@@ -202,10 +203,11 @@
           '<span id="err_msg"/>'+
         '</div>';
         $(alert_field).html(html);
-        $('#err_msg').html(msg);
+        $(alert_field +' #err_msg').html(msg);
     }
 
     function show_ks_info() {
+        $('#nk_alert_field').html(''); 
         $.post("/get_ks_info",
             {'__key_storage': $('#ksPath').val(),
             'password': $('#pwdEdit').val()
@@ -215,8 +217,12 @@
                     $('#cert_txt').html(data['cert']);
                     $('#info_form').removeClass('hidden');
                     $('#first_form').addClass('hidden');            
-                } else {
-                    show_alert('#alert_field', mkbr(data['ret_message']));
+                } else {if (data['ret_code'] == 123){
+                        show_new_ks();
+                        show_alert('#nk_alert_field', 'Invalid key chain: '+ mkbr(data['ret_message']) + '<br/>You can try fix it using your activation key');
+                    } else {
+                       show_alert('#alert_field', mkbr(data['ret_message'])); 
+                    }
                 }
                 $('#pwdModal').modal('hide');
             }
@@ -279,7 +285,7 @@
 
         $('#spinModal').modal();
         $.post('/generate_key_storage', 
-            {'__key_storage': $('#ksNewPath').val(),
+            {'__key_storage': $('#ksNewPath').val() || $('#ksPath').val(),
             'password': $('#password').val(),
             'act_key': $('#act_key').val(),
             },            
