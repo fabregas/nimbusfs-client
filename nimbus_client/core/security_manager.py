@@ -59,7 +59,7 @@ class AbstractSecurityManager:
         return self._client_cert
 
     def get_client_cert_key(self):
-        return Cipher.load_serial_number(self._client_cert)
+        pass
 
     def get_prikey(self):
         return self._client_prikey
@@ -86,7 +86,8 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         ##    return cls.KSS_INVALID
         return cls.KSS_EXISTS
 
-    def exec_openssl(self, command, stdin=None, cwd=None):
+    @classmethod
+    def exec_openssl(cls, command, stdin=None, cwd=None):
         '''Run openssl command. PKI_OPENSSL_BIN doesn't need to be specified'''
         c = ['openssl']
         c.extend(command)
@@ -100,6 +101,27 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         if proc.returncode != 0:
             logger.debug('OpenSSL error: %s'%out)
         return proc.returncode, out
+
+
+    def get_client_cert_key(self):
+        cert_file = tempfile.NamedTemporaryFile()
+        cert_file.write(self._client_cert)
+        cert_file.flush()
+        try:
+            retcode, out = self.exec_openssl(['x509', '-in', cert_file.name, '-subject', '-noout'])
+            if retcode:
+                raise Exception('Can not retrieve subject from client certificate')
+
+            for item in out.split('/'):
+                parts = item.split('=')
+                if parts[0] == 'CN':
+                    try:
+                        return int(parts[1])
+                    except ValueError:
+                        raise Exception('Invalid subject CN in client certificate!')
+        finally:
+            cert_file.close()
+
 
     @classmethod
     def initiate_key_storage(cls, ks_path, ks_pwd):
@@ -120,12 +142,12 @@ class FileBasedSecurityManager(AbstractSecurityManager):
             raise Exception('Can not write to "%s"'%ks_path)
 
         pkey_file = tempfile.NamedTemporaryFile()
-        retcode, out = self.exec_openssl(['genrsa', '-out', pkey_file.name, '1024'])
+        retcode, out = cls.exec_openssl(['genrsa', '-out', pkey_file.name, '1024'])
         if retcode:
             raise Exception('Can not generate private key using openssl command')
 
         try:
-            retcode, out = self.exec_openssl(['pkcs12', '-export', '-inkey', pkey_file.name, \
+            retcode, out = cls.exec_openssl(['pkcs12', '-export', '-inkey', pkey_file.name, \
                 '-nocerts', '-out', ks_path, '-password', 'stdin'], ks_pwd)
             if retcode:
                 raise Exception('Can not create key chain at %s'%ks_path)
@@ -138,7 +160,7 @@ class FileBasedSecurityManager(AbstractSecurityManager):
 
         tmp_file = tempfile.NamedTemporaryFile()
         try:
-            retcode, out = self .exec_openssl(['pkcs12', '-in', ks_path, '-out', tmp_file.name, '-password', 'stdin', '-nodes'], passwd)
+            retcode, out = self.exec_openssl(['pkcs12', '-in', ks_path, '-out', tmp_file.name, '-password', 'stdin', '-nodes'], passwd)
             if retcode:
                 raise InvalidPasswordException('Can not open key chain! Maybe pin-code is invalid!')
             data = open(tmp_file.name).read()

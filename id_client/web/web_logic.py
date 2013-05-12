@@ -10,11 +10,13 @@ Copyright (C) 2013 Konstantin Andrusenko
 """
 
 import os
+import traceback
 
 from wsgi_app import UrlHandler
 from wsgi_app import WSGIApplication
 from id_client.constants import *
 from id_client.media_storage import AbstractMediaStoragesManager
+from id_client.idepositbox_client import logger
 
 class StaticPage(UrlHandler):
     def on_process(self, env, *args):

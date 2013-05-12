@@ -207,7 +207,7 @@ class IdepositboxClient:
         
         conn = self.__ca_call('/get_payment_info', {'payment_key': act_key})
         try:
-            response = conn.getresponse()
+            resp = conn.getresponse()
             if resp.status == 505: #not found err_code
                 raise Exception('Activation key %s does not found!'%act_key)
             if resp.status != 200:
@@ -231,7 +231,7 @@ class IdepositboxClient:
                 {'cert_req_pem': cert_req, 'payment_key': act_key})
 
         try:
-            response = conn.getresponse()
+            resp = conn.getresponse()
             if resp.status != 200:
                 raise Exception('CA service error! Generate certificate: [%s %s] %s'%\
                         (resp.status, resp.reason, resp.read()))
