@@ -15,6 +15,7 @@ from nimbus_client.core.logger import logger
 class KSDomainController(SimpleDomainController):
     def __init__(self, key_storage):
         self.key_storage = key_storage
+        self.__pwd = None
 
     def getDomainRealm(self, inputURL, environ):
         """Resolve a relative url to the  appropriate realm name."""
@@ -23,7 +24,7 @@ class KSDomainController(SimpleDomainController):
     def requireAuthentication(self, realmname, environ):
         """Return True if this realm requires authentication or False if it is 
         available for general access."""
-        if environ.get('REMOTE_ADDR', '') in ('127.0.0.1', 'localhost'):
+        if environ.get('REMOTE_ADDR', '') == '127.0.0.1':
             return False
         return True 
     
@@ -41,4 +42,10 @@ class KSDomainController(SimpleDomainController):
     def authDomainUser(self, realmname, username, password, environ):
         """Returns True if this username/password pair is valid for the realm, 
         False otherwise. Used for basic authentication."""
-        return self.key_storage.validate(password)
+        if self.__pwd and self.__pwd == password:
+            return True
+        is_valid = self.key_storage.validate(password)
+        if is_valid:
+            #caching valid key storage password
+            self.__pwd = password
+        return is_valid
