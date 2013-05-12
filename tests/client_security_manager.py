@@ -103,7 +103,7 @@ class TestSecManager(unittest.TestCase):
     def test_inc_encode_decode(self):
         ks = FileBasedSecurityManager(CLIENT_KS_1024_PATH, PASSWD)
         key = ks.get_client_cert_key()
-        self.assertEqual(key, 107)
+        self.assertEqual(key, 63)
         data = ''.join(random.choice(string.letters) for i in xrange(1024))
         TEST_LEN = 10000
         encdec = ks.get_encoder(TEST_LEN)

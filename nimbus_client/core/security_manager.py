@@ -167,12 +167,12 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         finally:
             tmp_file.close()
 
-        pkey_s = re.search('(-----BEGIN PRIVATE KEY-----(\w|\W)+-----END PRIVATE KEY-----)', data)
+        pkey_s = re.search('(-----BEGIN \w*\s*PRIVATE KEY-----(\w|\W)+-----END \w*\s*PRIVATE KEY-----)', data)
         if not pkey_s:
             raise Exception('Private key does not found in key chain!')
         self._client_prikey = pkey_s.groups()[0]
 
-        cert_s = re.search('(-----BEGIN CERTIFICATE-----(\w|\W)+-----END CERTIFICATE-----)', data)
+        cert_s = re.search('(-----BEGIN \w*\s*CERTIFICATE-----(\w|\W)+-----END \w*\s*CERTIFICATE-----)', data)
         if cert_s:
             self._client_cert = cert_s.groups()[0]
 
