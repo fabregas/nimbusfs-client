@@ -119,11 +119,10 @@
 <div id="succGenCertModal" class="modal hide fade">
     <div class="modal-body">
         <p><h3>Key chain is generated successfully!</h3></p>
-        <p>Do you want update settings with generated key chain?</p>
+        <p>You can start iDepositBox service using this key chain</p>
     </div>
   <div class="modal-footer">
-      <a onclick="update_settings();" class="btn btn-success">Yes</a>
-      <a onclick="close_ok_modal();" class="btn">No</a>
+      <a onclick="close_ok_modal();" class="btn">Ok</a>
     </div>
 </div>
 
@@ -146,7 +145,7 @@
     }
 
     function init_page_reload() {
-        $.getJSON('/get_settings', function(data) {
+        $.getJSON('/get_media_devices', function(data) {
             $('#ks_info_select_alert').html('');
             $('#ks_gen_select_alert').html('');
             $('#open_btn').removeClass('disabled');
@@ -228,19 +227,6 @@
             }
         );
         $('#pwdModal').modal('hide');
-    }
-
-    function update_settings() {
-        $.getJSON('/get_settings', function(data) {
-            data['__key_storage'] = $('#ksNewPath').val();
-            $.post('/apply_settings', data,
-                function(html) {
-                    if (html['ret_code'] != 0) {
-                        show_alert('#alert_field', 'Settings are not applied! Details: '+mkbr(data['ret_message']));
-                    }
-                });
-        });
-        $('#succGenCertModal').modal('hide');
     }
 
     $(function () {

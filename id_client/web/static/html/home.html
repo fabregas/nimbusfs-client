@@ -1,27 +1,40 @@
 
 <div class="hero-unit" id="stat_panel">
 
-<div class="row-fluid" id="alert_field">
-</div>
+  <div class="row-fluid" id="alert_field">
+  </div>
 
-<div class="row-fluid">
-    <div class="span4 text-right" ><h4>Key chain status:</h4></div>
-    <div class="span8"><h4 id="ks_status"></h4></div>
-</div>
+  <div class="form-horizontal">
+      <div class="control-group">
+          <label class="control-label" for="ksPath">Key chain:</label>
+            <div class="controls">
+                <select class="input-xlarge" id="ksPath">
+                    <option value="INVALID">Not found</option>
+                </select>
+            </div>
+      </div>
 
-<div class="row-fluid">
-    <div class="span4 text-right" ><h4>Service status:</h4></div>
-    <div class="span8"><h4 id="serv_status"></h4></div>
-</div>
-<div class="row-fluid">
-    <div class="span4 text-right" ><h4>Synchronization status:</h4></div>
-    <div class="span8"><h4 id="sync_status"></h4></div>
-</div>
+      <div class="control-group">
+          <label class="control-label" for="serv_status">Service status:</label>
+            <div class="controls">
+                <div id="serv_status"></div>
+            </div>
+      </div>
 
-<div class="row-fluid">
-    <div class="span4 text-right" ></div>
-    <div class="span8"><a id="startstop"></a></div>
-</div>
+      <div class="control-group">
+          <label class="control-label" for="sync_status">Synchronization status:</label>
+            <div class="controls">
+                <div id="sync_status"></div>
+            </div>
+      </div>
+
+      <div class="control-group">
+            <div class="controls">
+                <a id="startstop"></a>
+            </div>
+      </div>
+  </div>
+
 </div>
 
 <div id="pwdModal" class="modal hide fade">
@@ -48,6 +61,10 @@
 
 
 <SCRIPT type="text/javascript">
+    $.fn.hasAttr = function(name) {  
+           return this.attr(name) !== undefined;
+    }
+
     function show_alert(msg) {
         html ='<div class="alert alert-error">'+
           '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
@@ -59,7 +76,7 @@
     }
 
     function start_service() {
-        if ($('#startstop').hasClass('disabled')) {return;}
+        if ($('#startstop').hasAttr('disabled')) {return;}
 
         var pwd=$('#pwdEdit').val();
 
@@ -69,7 +86,9 @@
             $('#pwdModal').modal('hide');
             $('#spinModal').modal();
 
-            $.post("/start_service", { password: pwd },
+            $.post("/start_service", { 
+                    '__key_storage': $('#ksPath').val(),
+                    'password': pwd },
                     function(data) {
                         if (data['ret_code'] == 0) {
                             reload_content();
@@ -92,7 +111,7 @@
     }
 
     function stop_service() {
-        if ($('#startstop').hasClass('disabled')) {return;}
+        if ($('#startstop').hasAttr('disabled')) {return;}
 
         $('#spinModal').modal();
         $.post("/stop_service",
@@ -135,17 +154,52 @@
         $(label_id).attr('class', bcl).addClass(label_type).html(text);
     }
 
+    $.global_vars = { 
+            last_available_ks : [] 
+    }; 
+
+    function is_equal_arrays(array_obj) {
+       if ($.global_vars.last_available_ks.length != array_obj.length) {return false;}
+       for (var i=0; i<array_obj.length; i++) {
+           for (var j=0; j<3; j++) {
+                if (array_obj[i][j] != $.global_vars.last_available_ks[i][j]) {return false;}
+           }
+       }
+       return true;
+    }
+
     function reload_content(){
         var SS_ALL_SYNC = 0,
             SS_SYNC_PENDING = 1;
+
+        $.getJSON('/get_media_devices', function(data) {
+            if (is_equal_arrays(data['__available_ks_list'])) {
+                return;
+           }
+           $.global_vars.last_available_ks = data['__available_ks_list'];
+           $('#ksPath').html('');
+           for (var i=0; i<data['__available_ks_list'].length; i++) {
+               if (data['__available_ks_list'][i][2]) {
+                $('#ksPath').append('<option value="'+data['__available_ks_list'][i][1]+'">'+data['__available_ks_list'][i][0]+'</option>');
+               }
+           }
+           if ($('#ksPath').html() == '') {
+             $('#ksPath').append('<option value="INVALID">Not found</option>');
+             $('#startstop').attr('disabled', 'disabled');
+           } else {
+             $('#startstop').removeAttr('disabled');
+           }
+        });
 
         $.getJSON('/get_service_status', function(data) {
             if (data['service_status'] == 'started') {
                 update_label('#serv_status', 'label-success', 'Started');
                 update_label('#startstop', 'btn-danger', 'Stop service');
+                $('#ksPath').attr('disabled', 'disabled');
             } else {
                 update_label('#serv_status', 'label-important', 'Stopped');
                 update_label('#startstop', 'btn-success', 'Start service');
+                $('#ksPath').removeAttr('disabled');
             }
 
             if (data['sync_status'] == SS_ALL_SYNC) {
@@ -155,25 +209,8 @@
             } else {
                 update_label('#sync_status', 'label-warning', 'Unknown');
             }
-
-            if (data['has_keystorage'] == 1) {
-                update_label('#ks_status', 'label-success', 'Inserted');
-                if ($('#startstop').hasClass('disabled')) { 
-                    $('#startstop').removeClass('disabled');
-                }
-            } else {
-                if (data['has_keystorage'] == 0) {
-                    update_label('#ks_status', 'label-important', 'Absent');
-                } else {
-                    update_label('#ks_status', 'label-important', 'Invalid');
-                }
-                if (! $('#startstop').hasClass('disabled')) { 
-                    $('#startstop').addClass('disabled');
-                }
-            }
         }).fail(function() {
             update_label('#sync_status', 'label-warning', 'Unknown');
-            update_label('#ks_status', 'label-warning', 'Unknown');
             update_label('#serv_status', 'label-warning', 'Unknown');
         });
     }

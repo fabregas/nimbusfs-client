@@ -3,14 +3,6 @@
     <form class="form-horizontal">
 
       <div class="control-group">
-        <label class="control-label" for="ksPath">Key chain</label>
-        <div class="controls">
-            <select class="input-xlarge" id="ksPath">
-            </select>
-        </div>
-      </div>
-      <hr>
-      <div class="control-group">
           <label class="control-label" for="parDownCnt">Simultaneous downloads</label>
             <div class="controls">
               <input type="number" max="10" min="1" id="parDownCnt">
@@ -71,18 +63,8 @@
     $(function () {
         $('#wind').stopTime();
         $('input').change(allow_applying);
-        $('#ksPath').change(allow_applying);
         $('#mountType').change(on_mount_type_change);
         $.getJSON('/get_settings', function(data) {
-           $('#ksPath').html('');
-           if (data['__has_ks'] != 1) {
-             $('#ksPath').append('<option value="INVALID">Not found</option>');
-           }
-           for (var i=0; i<data['__available_ks_list'].length; i++) {
-               if (data['__available_ks_list'][i][2]) {
-                $('#ksPath').append('<option value="'+data['__available_ks_list'][i][1]+'">'+data['__available_ks_list'][i][0]+'</option>');
-               }
-           }
            $('#webdavHost').val(data['webdav_bind_host']); 
            $('#webdavPort').val(data['webdav_bind_port']); 
            $('#parDownCnt').val(data['parallel_get_count']); 
@@ -93,21 +75,13 @@
         });
     });
     $('form').submit(function() {
-        var ksPath = $('#ksPath').val();
-        if (ksPath == 'INVALID') {
-            $('#err_msg').remove();
-            $('#apply_btn').before('<div id="err_msg"></div>');
-            var close_btn = '<button type="button" class="close" data-dismiss="alert">×</button>';
-            $('#err_msg').attr('class', 'alert alert-error').html(close_btn+'<strong>ERROR!</strong> Please, select key chain!');
-            return false;
-        }
         $.post('/apply_settings', 
-            {'__key_storage': ksPath,
-            'webdav_bind_host': $('#webdavHost').val(),
-            'webdav_bind_port': $('#webdavPort').val(),
-            'parallel_get_count': $('#parDownCnt').val(),
-            'parallel_put_count': $('#parUpCnt').val(),
-            'mount_type': $('#mountType').val() 
+            {
+                'webdav_bind_host': $('#webdavHost').val(),
+                'webdav_bind_port': $('#webdavPort').val(),
+                'parallel_get_count': $('#parDownCnt').val(),
+                'parallel_put_count': $('#parUpCnt').val(),
+                'mount_type': $('#mountType').val() 
             },            
             function(html) {
                 $('#err_msg').remove();

@@ -48,6 +48,8 @@ class IdepositboxClient:
         self.__status = CS_STOPPED
         self.__ms_mgr = get_media_storage_manager()
         self.__check_kss_thrd = None
+        self.__last_ks_type = None
+        self.__last_ks_path = None
 
     def __set_log_level(self):
         log_level = self.__config.log_level.lower()
@@ -67,7 +69,15 @@ class IdepositboxClient:
         return self.__status
 
     @IDLock
-    def start(self, ks_passwd):
+    def get_last_key_storage_type(self):
+        return self.__last_ks_type
+
+    @IDLock
+    def get_last_key_storage_path(self):
+        return self.__last_ks_path
+
+    @IDLock
+    def start(self, ks_type, ks_path, ks_passwd):
         if self.__status == CS_STARTED:
             raise Exception('IdepositboxClient is already started')
 
@@ -75,13 +85,12 @@ class IdepositboxClient:
         config = self.__config
         try:
             self.__set_log_level()
-            if config.security_provider_type == SPT_TOKEN_BASED:
-                raise Exception('not implemented') #FIXME: token based security manager should be returned
-            elif SPT_FILE_BASED:
-                security_provider = FileBasedSecurityManager(config.key_storage_path, ks_passwd)
-            else:
-                raise Exception('Unexpected security provider type: "%s"'%config.security_provider_type)
-
+            sm_class = SM_TYPES_MAP.get(ks_type, None)
+            if not sm_class:
+                raise Exception('Unsupported key chain type: "%s"'%ks_type)
+            security_provider = sm_class(ks_path, ks_passwd)
+            self.__last_ks_path = ks_path
+            self.__last_ks_type = ks_type
             
             self.__nibbler = Nibbler(config.fabnet_hostname, security_provider, \
                                 config.parallel_put_count, config.parallel_get_count, \
@@ -163,16 +172,14 @@ class IdepositboxClient:
     @IDLock
     def key_storage_status(self, ks_type=None, ks_path=''):
         if ks_type is None:
-            self.__config.refresh()
-            config = self.__config
-            ks_type = config.security_provider_type
-            ks_path = config.key_storage_path
-
+            if not self.__last_ks_type:
+                return AbstractSecurityManager.KSS_NOT_FOUND
+            ks_type = self.__last_ks_type
+            ks_path = self.__last_ks_path
         sm = SM_TYPES_MAP.get(ks_type, None)
         if not sm:
             raise Exception('Unsupported key chain type: "%s"'%ks_type)
         return sm.get_ks_status(ks_path)
-
 
     @IDLock
     def get_key_storage_info(self, ks_type, ks_path, ks_pwd):

@@ -41,10 +41,8 @@ class GetServiceStatusHandler(UrlHandler):
         sync_stat = SS_UNKNOWN
         if idepositbox_client is not None:
             status = idepositbox_client.get_status()
-            has_ks = idepositbox_client.key_storage_status()
         else:
             status = 'stopped'
-            has_ks = False
 
         if status == 'started':
             if idepositbox_client.get_nibbler().has_incomlete_operations():
@@ -53,8 +51,7 @@ class GetServiceStatusHandler(UrlHandler):
                 sync_stat = SS_ALL_SYNC
 
         return self.json_source({'service_status': status,
-                                    'sync_status': sync_stat,
-                                    'has_keystorage': has_ks})
+                                    'sync_status': sync_stat})
 
 def parse_ks(data):
     key_storage = data.get('__key_storage', None)
@@ -72,30 +69,6 @@ class GetSettingsHandler(UrlHandler):
     def on_process(self, env, *args):
         idepositbox_client = env['idepositbox_app']
         config = idepositbox_client.get_config()
-
-        has_configured = False
-        ms_list = idepositbox_client.get_available_media_storages()
-        available_ks_list = []
-        for ms in ms_list:
-            label = []
-            if ms.label:
-                label.append(ms.label)
-            if ms.path:
-                label.append(ms.path)
-            label = ' - '.join(label)
-            kss = idepositbox_client.key_storage_status(ms.ks_type, ms.path)
-            item = (label, '%s:%s'%(ms.ks_type, ms.path), kss)
-            if config.security_provider_type == ms.ks_type and config.key_storage_path == ms.path:
-                has_configured = True
-                available_ks_list.insert(0, item)
-            else:
-                available_ks_list.append(item)
-
-        has_ks = idepositbox_client.key_storage_status(config.security_provider_type, config.key_storage_path)
-        if not has_configured and has_ks:
-            available_ks_list.insert(0, (config.key_storage_path, \
-                    '%s:%s'%(config.security_provider_type, config.key_storage_path), 1))
-
         resp = {
                 'fabnet_hostname': config.fabnet_hostname,
                 'parallel_get_count': config.parallel_get_count,
@@ -103,7 +76,26 @@ class GetSettingsHandler(UrlHandler):
                 'webdav_bind_host': config.webdav_bind_host,
                 'webdav_bind_port': config.webdav_bind_port,
                 'mount_type': config.mount_type,
-                '__has_ks': has_ks,
+                }
+        return self.json_source(resp)
+
+class GetMediaDevicesHandler(UrlHandler):
+    def on_process(self, env, *args):
+        idepositbox_client = env['idepositbox_app']
+        ms_list = idepositbox_client.get_available_media_storages()
+        available_ks_list = []
+        for ms in ms_list:
+            label = '%s (%s)'%(ms.label, ms.path)
+            ks_status = idepositbox_client.key_storage_status(ms.ks_type, ms.path)
+            item = (label, '%s:%s'%(ms.ks_type, ms.path), ks_status)
+
+            if idepositbox_client.get_last_key_storage_type() == ms.ks_type \
+                    and idepositbox_client.get_last_key_storage_path() == ms.path:
+                available_ks_list.insert(0, item)
+            else:
+                available_ks_list.append(item)
+
+        resp = {
                 '__available_ks_list': available_ks_list
                 }
         return self.json_source(resp)
@@ -140,15 +132,6 @@ class ApplySettingsHandler(UrlHandler):
             if data.get('mount_type') not in (MOUNT_LOCAL, MOUNT_EXPORT):
                 raise Exception('Invalid mount type!')
 
-            security_provider_type, key_storage_path = parse_ks(data)
-            kss = idepositbox_client.key_storage_status(security_provider_type, key_storage_path)
-            if kss == 0:
-                raise Exception('Key chain does not found at %s'%key_storage_path)
-            elif kss == -1:
-                raise Exception('Invalid key chain at %s'%key_storage_path)
-            data['key_storage_path'] = key_storage_path
-            data['security_provider_type'] = security_provider_type
-
             idepositbox_client.update_config(data) 
             
             resp = {'ret_code':0}
@@ -163,7 +146,15 @@ class StartServiceHandler(UrlHandler):
         try:
             idepositbox_client = env['idepositbox_app']
             data = self.get_post_form(env)
-            idepositbox_client.start(data.get('password', ''))
+
+            security_provider_type, key_storage_path = parse_ks(data)
+            kss = idepositbox_client.key_storage_status(security_provider_type, key_storage_path)
+            if kss == 0:
+                raise Exception('Key chain does not found at %s'%key_storage_path)
+            elif kss == -1:
+                raise Exception('Invalid key chain at %s'%key_storage_path)
+
+            idepositbox_client.start(security_provider_type, key_storage_path, data.get('password', ''))
             resp = {'ret_code':0}
         except Exception, err:
             resp = {'ret_code':1, 'ret_message': str(err)}
@@ -239,6 +230,7 @@ HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/is_ks_exists', IsKsExistsHandler()),
                 ('/get_ks_info', GetKsInfoHandler()),
                 ('/generate_key_storage', GenerateKeyStorageHandler()),
+                ('/get_media_devices', GetMediaDevicesHandler()),
                 ('/get_page/(.+)', GetPageHandler()),
                 ('/static/(.+)', StaticPage()),
                 ('/(\w*)', MainPage())]
