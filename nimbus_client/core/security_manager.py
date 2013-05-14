@@ -13,21 +13,12 @@ This module contains the implementation of security manager
 import os
 import re
 import tempfile
-import zipfile
-import struct
-import shutil
-from datetime import datetime
-from base64 import b64encode, b64decode
 from subprocess import Popen, PIPE, STDOUT
 
-from nimbus_client.core.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
 from nimbus_client.core.encdec_provider import EncDecProvider
 from nimbus_client.core import pycrypto_enc_engine
 from nimbus_client.core.exceptions import InvalidPasswordException, NoCertFound
 from nimbus_client.core.logger import logger
-
-CLIENT_CERT_FILENAME = 'client_certificate.pem'
-CLIENT_PRIKEY_FILENAME = 'client_prikey'
 
 Cipher = pycrypto_enc_engine.PythonCryptoEngine
 
@@ -79,14 +70,55 @@ class AbstractSecurityManager:
         pass
 
 
+
+class SimpleFile:
+    def __init__(self, path):
+        self.__path = path
+
+    def exists(self):
+        return os.path.exists(self.__path)
+
+    def create_empty(self):
+        dirname = os.path.dirname(self.__path)
+        if not os.path.exists(dirname):
+            try:
+                os.mkdir(dirname)
+            except IOError:
+                raise Exception('Can not make directory "%s"'%dirname)
+
+        self.write('')
+
+    def copy_from(self, dest_file):
+        data = self.__int_read(dest_file)
+        self.write(data)
+
+    def write(self, data):
+        try:
+            open(self.__path, 'w').write(data)
+        except IOError:
+            raise Exception('Can not write to "%s"'%ks_path)
+
+    def read(self):
+        return self.__int_read(self.__path)
+
+    def __int_read(self, path):
+        try:
+            data = open(path, 'rb').read()
+        except IOError:
+            raise Exception('Can not read from "%s"'%path)
+        return data
+        
+
 class FileBasedSecurityManager(AbstractSecurityManager):
+    ks_file_class = SimpleFile
+
     @classmethod
     def get_ks_status(cls, ks_path):
-        if not os.path.exists(ks_path):
+        ks_file = cls.ks_file_class(ks_path)
+        if not ks_file.exists():
             return cls.KSS_NOT_FOUND
-        ##if not zipfile.is_zipfile(ks_path):
-        ##    return cls.KSS_INVALID
         return cls.KSS_EXISTS
+        ##?? cls.KSS_INVALID
 
     @classmethod
     def exec_openssl(cls, command, stdin=None, cwd=None):
@@ -127,51 +159,51 @@ class FileBasedSecurityManager(AbstractSecurityManager):
 
     @classmethod
     def initiate_key_storage(cls, ks_path, ks_pwd):
-        ks_path = os.path.abspath(ks_path)
-        if os.path.exists(ks_path):
+        ks_file = cls.ks_file_class(ks_path)
+        if ks_file.exists():
             try:
                 FileBasedSecurityManager(ks_path, ks_pwd)
             except Exception, err:
-                raise Exception('Key chain at "%s" is already exists'%ks_path)
+                raise Exception('Key chain at "%s" is already exists'\
+                                ' and can not be opened with this pin-code'%ks_path)
             return
 
-        dirname = os.path.dirname(ks_path)
-        if not os.path.exists(dirname):
-            try:
-                os.mkdir(dirname)
-            except IOError:
-                raise Exception('Can not make directory "%s"'%dirname)
-
-        try:
-            open(ks_path, 'w').close()
-        except IOError:
-            raise Exception('Can not write to "%s"'%ks_path)
+        ks_file.create_empty()
 
         pkey_file = tempfile.NamedTemporaryFile()
+        ks_tmp_file = tempfile.NamedTemporaryFile()
         retcode, out = cls.exec_openssl(['genrsa', '-out', pkey_file.name, '1024'])
         if retcode:
             raise Exception('Can not generate private key using openssl command')
 
         try:
             retcode, out = cls.exec_openssl(['pkcs12', '-export', '-inkey', pkey_file.name, \
-                '-nocerts', '-out', ks_path, '-password', 'stdin'], ks_pwd)
+                '-nocerts', '-out', ks_tmp_file.name, '-password', 'stdin'], ks_pwd)
             if retcode:
-                raise Exception('Can not create key chain at %s'%ks_path)
+                raise Exception('Can not create key chain! Details: %s'%out)
+            ks_file.copy_from(ks_tmp_file.name)
         finally:
             pkey_file.close()
+            ks_tmp_file.close()
 
     def _load_key_storage(self, ks_path, passwd):
-        if not os.path.exists(ks_path):
-            raise Exception('Key chain file %s does not found!'%ks_path)
+        ks_file = self.ks_file_class(ks_path)
+        if not ks_file.exists():
+            raise Exception('Key chain does not found at %s!'%ks_path)
 
         tmp_file = tempfile.NamedTemporaryFile()
+        ks_tmp_file = tempfile.NamedTemporaryFile()
         try:
-            retcode, out = self.exec_openssl(['pkcs12', '-in', ks_path, '-out', tmp_file.name, '-password', 'stdin', '-nodes'], passwd)
+            ks_tmp_file.write(ks_file.read())
+            ks_tmp_file.flush()
+            retcode, out = self.exec_openssl(['pkcs12', '-in', ks_tmp_file.name, '-out', \
+                    tmp_file.name, '-password', 'stdin', '-nodes'], passwd)
             if retcode:
                 raise InvalidPasswordException('Can not open key chain! Maybe pin-code is invalid!')
             data = open(tmp_file.name).read()
         finally:
             tmp_file.close()
+            ks_tmp_file.close()
 
         pkey_s = re.search('(-----BEGIN \w*\s*PRIVATE KEY-----(\w|\W)+-----END \w*\s*PRIVATE KEY-----)', data)
         if not pkey_s:
@@ -212,18 +244,26 @@ class FileBasedSecurityManager(AbstractSecurityManager):
                     '-inkey', pkey_file.name, '-in', cert_file.name, '-out', new_ks_file.name, \
                     '-password', 'stdin'], ks_pwd)
             if retcode:
-                raise Exception('Can not update key chain at %s\n%s'%(ks_path, out))
+                raise Exception('Can not update key chain! Details: %s'%out)
 
-            shutil.copy(new_ks_file.name, ks_path)
+            ks_file = self.ks_file_class(ks_path)
+            ks_file.copy_from(new_ks_file.name)
         finally:
             pkey_file.close()
             cert_file.close()
             new_ks_file.close()
 
     def validate(self, password):
-        retcode, out = self.exec_openssl(['pkcs12', '-in', self._ks_path, \
-                '-password', 'stdin', '-info', '-noout', '-nodes'], password)
-        if retcode:
-            return False
-        return True
+        ks_file = self.ks_file_class(self._ks_path)
+        ks_tmp_file = tempfile.NamedTemporaryFile()
+        try:
+            ks_tmp_file.write(ks_file.read())
+            ks_tmp_file.flush()
+            retcode, out = self.exec_openssl(['pkcs12', '-in', ks_tmp_file.name, \
+                    '-password', 'stdin', '-info', '-noout', '-nodes'], password)
+            if retcode:
+                return False
+            return True
+        finally:
+            ks_tmp_file.close()
 

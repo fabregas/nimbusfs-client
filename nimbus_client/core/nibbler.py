@@ -28,6 +28,7 @@ from nimbus_client.core.workers_manager import WorkersManager, PutWorker, GetWor
 from nimbus_client.core.smart_file_object import SmartFileObject
 from nimbus_client.core.data_block import DataBlock, DBLocksManager
 from nimbus_client.core.utils import to_str
+from nimbus_client.core.security_manager import AbstractSecurityManager
 
 
 class InprogressOperation:
@@ -72,6 +73,8 @@ class FSItem:
 class Nibbler:
     def __init__(self, fabnet_host, security_provider, parallel_put_count=3, \
             parallel_get_count=3, cache_dir='/tmp', cache_size=None):
+        if not isinstance(security_provider, AbstractSecurityManager):
+            raise Exception('Invalid security provider type!')
         self.__parallel_put_count = parallel_put_count
         self.__parallel_get_count = parallel_get_count
         self.security_provider = security_provider
