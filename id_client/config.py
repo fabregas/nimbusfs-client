@@ -16,7 +16,7 @@ import tempfile
 import ConfigParser
 from ConfigParser import RawConfigParser
 
-from constants import SPT_FILE_BASED, MOUNT_LOCAL
+from constants import MOUNT_LOCAL
 
 class Config(dict):
     def __init__(self):
@@ -42,8 +42,6 @@ class Config(dict):
             self.__config.read(config_file)
 
             self.__get_conf_val('LOG','log_level', 'log_level')
-            self.__get_conf_val('SECURITY_PROVIDER', 'provider_type', 'security_provider_type')
-            self.__get_conf_val('SECURITY_PROVIDER', 'key_storage_path', 'key_storage_path')
             self.__get_conf_val('FABNET', 'fabnet_url', 'fabnet_hostname')
             self.__get_conf_val('FABNET', 'parallel_put_count', 'parallel_put_count', int)
             self.__get_conf_val('FABNET', 'parallel_get_count', 'parallel_get_count', int)
@@ -64,8 +62,6 @@ class Config(dict):
                 'fabnet_hostname': 'lb.idepositbox.com',
                 'parallel_put_count': '3',
                 'parallel_get_count': '3',
-                'security_provider_type': SPT_FILE_BASED,
-                'key_storage_path': '',
                 'webdav_bind_host': '127.0.0.1',
                 'webdav_bind_port': '8080',
                 'mount_type': MOUNT_LOCAL,
@@ -90,7 +86,6 @@ class Config(dict):
         config.add_section('LOG')
         config.add_section('FABNET')
         config.add_section('CACHE')
-        config.add_section('SECURITY_PROVIDER')
         config.add_section('WEBDAV')
         config.add_section('CA')
 
@@ -102,8 +97,6 @@ class Config(dict):
         config.set('FABNET', 'parallel_get_count', self['parallel_get_count'])
         config.set('CACHE', 'cache_dir', self['cache_dir'])
         config.set('CACHE', 'cache_size', self['cache_size'])
-        config.set('SECURITY_PROVIDER', 'provider_type', self['security_provider_type'])
-        config.set('SECURITY_PROVIDER', 'key_storage_path', self['key_storage_path'])
         config.set('WEBDAV', 'bind_hostname', self['webdav_bind_host'])
         config.set('WEBDAV', 'bind_port', self['webdav_bind_port'])
         config.set('WEBDAV', 'mount_type', self['mount_type'])

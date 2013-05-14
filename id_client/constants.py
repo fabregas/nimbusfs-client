@@ -2,6 +2,7 @@
 #security provider types
 SPT_TOKEN_BASED = 'token'
 SPT_FILE_BASED = 'file'
+SPT_BLOCKDEV_BASED = 'blockdev'
 
 #mount types
 MOUNT_LOCAL = 'local'
