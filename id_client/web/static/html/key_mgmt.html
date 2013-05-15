@@ -65,7 +65,7 @@
         <p>To get one, goto http://idepositbox.com</p>
     </div>
     <div id="gen_alert_field"/>
-    <form class="form-horizontal">
+    <div class="form-horizontal">
       <div class="control-group">
         <label class="control-label" for="act_key">Activation key</label>
         <div class="controls">
@@ -95,12 +95,12 @@
     <div class="control-group">
         <div id="pwd_alert_field"/>
         <div class="controls">
-            <button type="submit" id="generate_btn" class="btn btn-primary btn-large">Continue</button>
+            <button id="generate_btn" class="btn btn-primary btn-large" onclick="sumbit_generation()">Continue</button>
             <button id="cancel_btn" class="btn btn-large" onclick="init_page()">Cancel</button>
         </div>
      </div>
 
-    </form>
+    </div>
 </div>
 
 <div id="pwdModal" class="modal hide fade">
@@ -302,7 +302,7 @@
             });
     }
 
-    $('#gen_form form').submit(function() {
+    function sumbit_generation() {
         if ($('#generate_btn').hasClass('disabled')) {return false;}
         $('#pwd_alert_field').html(''); 
         $('#gen_alert_field').html('');
@@ -324,6 +324,6 @@
             generate_new_key_chain();
         }
         return false;
-    });
+    }
     
 </SCRIPT>

@@ -9,6 +9,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 @date May 15, 2013
 """
 import os
+import sys
 import struct
 import logging
 from subprocess import Popen, PIPE
@@ -152,10 +153,10 @@ class BlockDevice:
     @classmethod
     def format_device(cls, device_path):
         cur_os = cls.get_current_os()
-        if cur_os == MAC_OS:
+        if cur_os == cls.MAC_OS:
             block_dev = BlockDevice(device_path)
             block_dev.format()
-        elif cur_os == LINUX: 
+        elif cur_os == cls.LINUX: 
             proc = Popen([SUID_DEVICE_FORMATTER, device_path], shell=False, stdin=PIPE, stdout=PIPE)
             stdout_value, stderr_value = proc.communicate(stdin)
             if proc.returncode != 0:
@@ -179,12 +180,12 @@ class BlockDevice:
             raise Exception('Device %s is not removable!'%self.__dev_path)
 
     def unmount_partitions(self):
-        cur_os = cls.get_current_os()
-        if cur_os == MAC_OS:
+        cur_os = self.get_current_os()
+        if cur_os == self.MAC_OS:
             ret = os.system('diskutil unmountDisk %s'%self.__dev_path)
             if ret:
                 raise Exception('Volumes at %s does not unmounted!'%self.__dev_path)
-        elif cur_os == LINUX:
+        elif cur_os == self.LINUX:
             import glob
             for partition in glob.glob('%s*'%self.__dev_path):
                 ret = os.system('umount %s'%partition)
@@ -226,7 +227,7 @@ class BlockDevice:
         part.num_sectors = 2049
 
         master_br.partition_table.partitions[2] = PartitionEntry()
-        master_br.partition_table.partitions[4] = PartitionEntry()
+        master_br.partition_table.partitions[3] = PartitionEntry()
 
         '''
         Disk: /dev/disk2geometry: 981/128/63 [7913472 sectors]
@@ -258,7 +259,7 @@ class BlockDevice:
             fd.seek(512)
             fd.write(ZipFile(FAT_PART_FILE).read(FAT_PART_NAME))
         except IOError, err:
-            raise Exception('Can not update MBR at block device: %s'%err)
+            raise Exception('Can not restore FAT partition at block device: %s'%err)
         finally:
             fd.close()
 
