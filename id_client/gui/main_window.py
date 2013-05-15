@@ -150,6 +150,7 @@ class MainWind(WebViewDialog):
         self.systray.manage_act.triggered.connect(self.onManage)
         self.systray.exit_act.triggered.connect(self.onClose)
         self.setVisible(False)
+        self.setWindowState(Qt.WindowMaximized)
 
         proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
         cout, cerr = proc.communicate()

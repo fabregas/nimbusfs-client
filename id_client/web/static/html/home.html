@@ -229,7 +229,6 @@
     $(function () { 
         $('#ksPath').hide();
         $('#ksPathLabel').css('display', 'inline');
-        $('#ksPathLabel').hide();
         $('#wind').stopTime();
         $('#wind').everyTime(5000, reload_content);
         $('#startstop').click(start_stop_service);
@@ -241,6 +240,10 @@
         $('#pwdModal').on('hide', function () {
             $('#pwdEdit').val('');    
         });
+
+        update_label('#sync_status', 'label-warning', 'Unknown');
+        update_label('#serv_status', 'label-warning', 'Unknown');
+        update_label('#ksPathLabel', 'label-important', 'Not found');
 
         reload_content();
     });
