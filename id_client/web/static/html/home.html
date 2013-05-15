@@ -6,8 +6,9 @@
 
   <div class="form-horizontal">
       <div class="control-group">
-          <label class="control-label" for="ksPath">Key chain:</label>
+          <label class="control-label" for="ksPath">Key chain media:</label>
             <div class="controls">
+                <div id="ksPathLabel"></div>
                 <select class="input-xlarge" id="ksPath">
                     <option value="INVALID">Not found</option>
                 </select>
@@ -184,10 +185,20 @@
                }
            }
            if ($('#ksPath').html() == '') {
-             $('#ksPath').append('<option value="INVALID">Not found</option>');
              $('#startstop').attr('disabled', 'disabled');
+             $('#ksPath').hide();
+             $('#ksPathLabel').show();
+             update_label('#ksPathLabel', 'label-important', 'Not found');
            } else {
              $('#startstop').removeAttr('disabled');
+             if ($('#ksPath').children().length > 1) {
+                $('#ksPathLabel').hide();
+                $('#ksPath').show();
+             } else {
+                $('#ksPath').hide();
+                $('#ksPathLabel').show();
+                update_label('#ksPathLabel', 'label', $('#ksPath').children().first().html());
+             }
            }
         });
 
@@ -216,6 +227,9 @@
     }
 
     $(function () { 
+        $('#ksPath').hide();
+        $('#ksPathLabel').css('display', 'inline');
+        $('#ksPathLabel').hide();
         $('#wind').stopTime();
         $('#wind').everyTime(5000, reload_content);
         $('#startstop').click(start_stop_service);
