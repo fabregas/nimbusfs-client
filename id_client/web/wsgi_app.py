@@ -36,7 +36,7 @@ class UrlHandler:
         except Exception, err:
             status = '500 Internal Server Error'
             cont_type = 'text/plain'
-            resp = str(err.replace('\n', '<br/>'))
+            resp = str(err).replace('\n', '<br/>')
 
         headers = [('Content-type', cont_type), ('Content-length', str(len(resp)))]
         start_response(status, headers)

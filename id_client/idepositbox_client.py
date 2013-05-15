@@ -32,9 +32,12 @@ from id_client.webdav.application import WebDavAPI
 from id_client.config import Config
 from id_client.constants import *
 from id_client.media_storage import get_media_storage_manager
+from id_client.security.block_device_based_ks import BlockDeviceBasedSecurityManager
 from id_client.webdav_mounter import WebdavMounter
 
-SM_TYPES_MAP = {SPT_TOKEN_BASED: None, SPT_FILE_BASED: FileBasedSecurityManager}
+SM_TYPES_MAP = {SPT_TOKEN_BASED: None,
+                SPT_BLOCKDEV_BASED: BlockDeviceBasedSecurityManager,
+                SPT_FILE_BASED: FileBasedSecurityManager}
 
 ALLOWED_PWD_CHARS = set(string.letters + string.digits + '@#$%^&+=')
 

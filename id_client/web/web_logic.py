@@ -85,7 +85,7 @@ class GetMediaDevicesHandler(UrlHandler):
         ms_list = idepositbox_client.get_available_media_storages()
         available_ks_list = []
         for ms in ms_list:
-            label = '%s (%s)'%(ms.label, ms.path)
+            label = ms.label
             ks_status = idepositbox_client.key_storage_status(ms.ks_type, ms.path)
             item = (label, '%s:%s'%(ms.ks_type, ms.path), ks_status)
 

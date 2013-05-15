@@ -12,7 +12,7 @@ import os
 import sys
 import subprocess
 
-from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED
+from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED, SPT_BLOCKDEV_BASED
 
 KS_PATH = 'iDepositBox/key.ks'
 
@@ -36,11 +36,8 @@ class AbstractMediaStoragesManager:
             key chain (objects of MediaStorage)
         '''
         home_path = os.path.expanduser('~')
-        st_list = [MediaStorage('HOME', home_path)]
+        st_list = [MediaStorage('HOME - %s'%home_path, os.path.join(home_path, KS_PATH))]
         st_list += cls.get_removable_storages()
-        for item in st_list:
-            item.path = os.path.join(item.path, KS_PATH)
-
         return st_list
 
     @classmethod
@@ -48,63 +45,77 @@ class AbstractMediaStoragesManager:
         pass
 
 
-class UnixMediaStoragesManager(AbstractMediaStoragesManager):
+class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
     @classmethod
-    def get_mounted_devices(cls):
-        mounted_map = {}
-        df_res = cmd_call('df')
-        for line in df_res.splitlines():
-            if line[0] != '/':
-                continue
-            parts = line.split()
-            if parts[-1] in ('/', '/home'):
-                continue
-            dev = parts[0]
-            if os.path.islink(dev):
-                dev = os.path.join('/dev', os.readlink(dev))
+    def is_removable(self, device):
+        dev = device.split('/')[-1]
+        removable_flag = '/sys/block/%s/removable' % dev
+        dev_type_fp = '/sys/block/%s/device/type' % dev
+        if not os.path.exists(removable_flag):
+            return False
+        if int(open(removable_flag).read()) == 0:
+            return False
+        if not os.path.exists(dev_type_fp):
+            return False
+        if int(open(dev_type_fp).read()) != 0: #TYPE_DISK, include/scsi/scsi.h 
+            return False
+        return True
 
-            mounted_map[dev] = parts[-1]
-        return mounted_map
+    @classmethod
+    def get_device_label(self, device):
+        dev = device.split('/')[-1]
+        vendor_fp = '/sys/block/%s/device/vendor' % dev
+        model_fp = '/sys/block/%s/device/model' % dev
+        if not (os.path.exists(model_fp) and os.path.exists(vendor_fp)):
+            return 'unknown device /dev/%s'%dev
+        return '%s %s (/dev/%s)'%(open(vendor_fp).read(), open(model_fp).read(), dev)
 
-class LinuxMediaStoragesManager(UnixMediaStoragesManager):
     @classmethod
     def get_removable_storages(cls):
         st_list = []
-        mounted_map = cls.get_mounted_devices()
-
         for dev in os.listdir('/sys/block/'):
-            removable_flag = '/sys/block/%s/removable' % dev
-            if not os.path.exists(removable_flag):
+            if not cls.is_removable(dev):
                 continue
-            if int(open(removable_flag).read()) == 0:
-                continue
-
-            for mdev in mounted_map:
-                if dev in mdev:
-                    st_list.append(MediaStorage(None, mounted_map[mdev]))
-                    break
-            #else:
-            #    print 'found removable device %s but it does not mounted...'%dev
-
+            label = cls.get_device_label(dev)
+            st_list.append(MediaStorage(label, '/dev/%s'%dev, SPT_BLOCKDEV_BASED))
         return st_list
 
-class MacOsMediaStoragesManager(UnixMediaStoragesManager):
+class MacOsMediaStoragesManager(AbstractMediaStoragesManager):
+    @classmethod
+    def is_removable(self, device):
+        dev = device.split('/')[-1]
+        res = cmd_call('diskutil info %s'%dev)
+        vol_name = None
+        for line in res.splitlines():
+            line = line.strip()
+            if not line.startswith('Ejectable:'):
+                continue
+            if 'No' in line:
+                return False
+            return True
+
+    @classmethod
+    def get_device_label(self, device):
+        dev = device.split('/')[-1]
+        res = cmd_call('diskutil info %s'%dev)
+        vol_name = None
+        for line in res.splitlines():
+            line = line.strip()
+            if line.startswith('Media Name:'):
+                return line.split('Media Name:')[-1].split()
+
     @classmethod
     def get_removable_storages(cls):
         st_list = []
-        mounted_map = cls.get_mounted_devices()
-        for dev, path in mounted_map.items():
-            res = cmd_call('diskutil info %s'%dev)
-            vol_name = None
-            for line in res.splitlines():
-                line = line.strip()
-                if line.startswith('Volume Name:'):
-                    vol_name = line.split('Volume Name:')[-1]
-                if not line.startswith('Ejectable:'):
-                    continue
-                if 'No' in line:
-                    break
-                st_list.append(MediaStorage(vol_name, path))
+        res = cmd_call('diskutil list')
+        for line in res.splitlines():
+            line = line.strip()
+            if not line.startswith('/dev'):
+                continue
+            device = line
+            if not cls.is_removable(device):
+                continue
+            st_list.append(MediaStorage(cls.get_device_label(device), device, SPT_BLOCKDEV_BASED))
         return st_list
 
 def get_media_storage_manager():
