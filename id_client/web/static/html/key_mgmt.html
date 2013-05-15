@@ -126,6 +126,19 @@
     </div>
 </div>
 
+<div id="blockDevAskModal" class="modal hide fade">
+    <div class="modal-header">
+        <h3 class="text-warning">Warning</h3>
+    </div>
+    <div class="modal-body">
+        <h4 id="warning_msg"/>
+    </div>
+  <div class="modal-footer">
+      <a onclick="generate_new_key_chain();" class="btn btn-danger">Yes</a>
+      <a onclick="close_ok_modal();" class="btn btn-primary">No</a>
+    </div>
+</div>
+
 <div id="spinModal" class="modal hide fade">
     <div class="modal-header">
         <h3>Processing request...</h3>
@@ -143,7 +156,7 @@
         $('#info_form').addClass('hidden');
         $('#first_form').removeClass('hidden');
     }
-
+    
     function init_page_reload() {
         $.getJSON('/get_media_devices', function(data) {
             $('#ks_info_select_alert').html('');
@@ -173,7 +186,7 @@
     }
 
     function close_ok_modal() {
-        $('#succGenCertModal').modal('hide');
+        $('.modal').modal('hide');
     }
 
     function show_new_ks() {
@@ -217,6 +230,9 @@
                     $('#info_form').removeClass('hidden');
                     $('#first_form').addClass('hidden');            
                 } else {if (data['ret_code'] == 123){
+                        $.gen_ks_info.ks_path = $('#ksPath').val();
+                        $.gen_ks_info.ks_label = $('#ksPath :selected').text();
+
                         show_new_ks();
                         show_alert('#nk_alert_field', 'Invalid key chain: '+ mkbr(data['ret_message']) + '<br/>You can try fix it using your activation key');
                     } else {
@@ -230,6 +246,10 @@
     }
 
     $(function () {
+        $.gen_ks_info = {
+            ks_path: '',
+            ks_label: ''
+        }
         $('#wind').stopTime();
         $('#pwdEdit').keypress(function (e) {
             if (e.which == 13) {
@@ -242,7 +262,10 @@
 
     $('#ks_gen_select_form').submit(function() {
         if ($('#gen_btn').hasClass('disabled')) {return false;}
+        $.gen_ks_info.ks_path = $('#ksNewPath').val();
+        $.gen_ks_info.ks_label = $('#ksNewPath :selected').text();
         show_new_ks();
+        $('#act_key').focus();
         return false;
     });
 
@@ -254,24 +277,11 @@
         return false;
     });
 
-
-    $('#gen_form form').submit(function() {
-        if ($('#generate_btn').hasClass('disabled')) {return false;}
-        $('#pwd_alert_field').html(''); 
-        $('#gen_alert_field').html('');
-        if ($('#password').val() != $('#re_password').val()) {
-            html ='<div class="alert alert-error">'+
-              '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
-              '<h4>Error!</h4>'+
-              '<span id="err_msg">Pin-codes are not equal!</span>'+
-            '</div>';
-            $('#pwd_alert_field').html(html);        
-            return false;
-        }
-
+    function generate_new_key_chain() {
+        $('.modal').modal('hide');
         $('#spinModal').modal();
         $.post('/generate_key_storage', 
-            {'__key_storage': $('#ksNewPath').val() || $('#ksPath').val(),
+            {'__key_storage': $.gen_ks_info.ks_path, 
             'password': $('#password').val(),
             'act_key': $('#act_key').val(),
             },            
@@ -290,6 +300,29 @@
                     $('#gen_alert_field').html(html);        
                 }
             });
+    }
+
+    $('#gen_form form').submit(function() {
+        if ($('#generate_btn').hasClass('disabled')) {return false;}
+        $('#pwd_alert_field').html(''); 
+        $('#gen_alert_field').html('');
+        if ($('#password').val() != $('#re_password').val()) {
+            html ='<div class="alert alert-error">'+
+              '<button type="button" class="close" data-dismiss="alert">&times;</button>'+
+              '<h4>Error!</h4>'+
+              '<span id="err_msg">Pin-codes are not equal!</span>'+
+            '</div>';
+            $('#pwd_alert_field').html(html);        
+            return false;
+        }
+
+        if ($.gen_ks_info.ks_path.indexOf('blockdev') == 0) {
+            var w_msg = '<p>Device <span class="text-error">'+$.gen_ks_info.ks_label+'</span> will be formatted and ALL DATA on this device will be lost!</p><p>Do you really want to continue?</p>'
+            $('#blockDevAskModal #warning_msg').html(w_msg);
+            $('#blockDevAskModal').modal();
+        } else {
+            generate_new_key_chain();
+        }
         return false;
     });
     

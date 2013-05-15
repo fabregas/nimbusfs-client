@@ -21,13 +21,13 @@ class KSSignature:
 
     @classmethod
     def dump(cls, ks_len):
-        return struct.pack(self.SIGN_STRUCT, self.SING_ID, ks_len)
+        return struct.pack(cls.SIGN_STRUCT, cls.SING_ID, ks_len)
 
     def __init__(self, dumped=None):
         self.sign_id = None
         self.ks_len = None
         if dumped:
-            sef.load(dumped)
+            self.load(dumped)
 
     def load(self, dumped):
         self.sign_id, self.ks_len = struct.unpack(self.SIGN_STRUCT, dumped)
@@ -90,13 +90,15 @@ class FileOnBlockDevice:
             fd.close()
         
     def create_empty(self):
+        block_dev = BlockDevice(self.__path)
+        block_dev.format()
         self.__write('')
 
     def copy_from(self, dest_file):
         try:
-            data = open(path, 'rb').read()
+            data = open(dest_file, 'rb').read()
         except IOError:
-            raise IOError('Can not read from "%s"'%path)
+            raise IOError('Can not read from "%s"'%dest_file)
         self.__write(data)
 
     def read(self):
@@ -113,11 +115,4 @@ class FileOnBlockDevice:
 
 class BlockDeviceBasedSecurityManager(FileBasedSecurityManager):
     ks_file_class = FileOnBlockDevice
-
-    @classmethod
-    def initiate_key_storage(cls, ks_path, ks_pwd):
-        block_dev = BlockDevice(ks_path)
-        block_dev.format()
-
-        FileBasedSecurityManager.initiate_key_storage(ks_path, ks_pwd)
 

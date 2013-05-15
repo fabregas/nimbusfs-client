@@ -9,6 +9,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 @date May 15, 2013
 """
 import struct
+from id_client.idepositbox_client import logger
 
 DATA_START_SEEK = 2050 * 512 #start at 2050 sector 
 
@@ -130,7 +131,6 @@ class BlockDevice:
         self.change_mbr()
         self.restore_fat_partition()
 
-
     def check_removable(self):
         pass
 
@@ -141,7 +141,7 @@ class BlockDevice:
         try:
             data = open(self.__dev_path, 'rb').read(512)
         except IOError, err:
-            raise Exception('Can not read MBR from block device: %s'(self.__dev_path, err))
+            raise Exception('Can not read MBR from block device %s: %s'%(self.__dev_path, err))
 
         master_br = MBR()
         master_br.parse(data)

@@ -16,7 +16,7 @@ from wsgi_app import UrlHandler
 from wsgi_app import WSGIApplication
 from id_client.constants import *
 from id_client.media_storage import AbstractMediaStoragesManager
-from id_client.idepositbox_client import logger
+from id_client.idepositbox_client import logger, SM_TYPES_MAP
 from nimbus_client.core.exceptions import NoCertFound
 
 class StaticPage(UrlHandler):
@@ -60,7 +60,7 @@ def parse_ks(data):
     idx = key_storage.find(':')
     security_provider_type = key_storage[:idx]
     key_storage_path = key_storage[idx+1:]
-    if security_provider_type not in (SPT_TOKEN_BASED, SPT_FILE_BASED):
+    if security_provider_type not in SM_TYPES_MAP.keys():
         raise Exception('Invalid security provider type "%s"'%security_provider_type)
     return security_provider_type, key_storage_path
 

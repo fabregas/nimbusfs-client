@@ -162,7 +162,7 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         ks_file = cls.ks_file_class(ks_path)
         if ks_file.exists():
             try:
-                FileBasedSecurityManager(ks_path, ks_pwd)
+                cls(ks_path, ks_pwd)
             except Exception, err:
                 raise Exception('Key chain at "%s" is already exists'\
                                 ' and can not be opened with this pin-code'%ks_path)

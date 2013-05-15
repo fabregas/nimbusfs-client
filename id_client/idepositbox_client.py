@@ -231,11 +231,15 @@ class IdepositboxClient:
         except Exception, err:
             raise Exception('Invalid CA response: "%s"'%data)
 
+        logger.info('Activation code is verified...')
+
         #if p_info['status'] == 'WAIT_FOR_USER':
         #    raise Exception('Activation key %s is already processed!'%act_key)
         sm_class.initiate_key_storage(ks_path, password)
+        logger.info('key chain is initiated...')
         sm = sm_class(ks_path, password)
         cert_req = sm.generate_cert_request(p_info['cert_cn'])
+        logger.info('certificate request is generated...')
 
         conn = self.__ca_call('/generate_certificate', \
                 {'cert_req_pem': cert_req, 'payment_key': act_key})
@@ -248,8 +252,9 @@ class IdepositboxClient:
             cert = resp.read()
         finally:
             conn.close()
-
+        logger.info('certificate is received from CA')
         sm.append_certificate(ks_path, password, cert)
+        logger.info('certificate is saved to key chain')
 
     def __ca_call(self, path, params={}, method='POST'):
         ca_addr = self.__config.ca_address

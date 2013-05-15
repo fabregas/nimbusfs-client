@@ -98,11 +98,10 @@ class MacOsMediaStoragesManager(AbstractMediaStoragesManager):
     def get_device_label(self, device):
         dev = device.split('/')[-1]
         res = cmd_call('diskutil info %s'%dev)
-        vol_name = None
         for line in res.splitlines():
             line = line.strip()
-            if line.startswith('Media Name:'):
-                return line.split('Media Name:')[-1].split()
+            if 'Media Name:' in line:
+                return '%s (/dev/%s)'%(line.split('Media Name:')[-1].strip(), dev)
 
     @classmethod
     def get_removable_storages(cls):
