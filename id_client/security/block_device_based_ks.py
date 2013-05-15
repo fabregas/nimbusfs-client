@@ -12,7 +12,7 @@ import os
 import struct
 
 from nimbus_client.core.security_manager import FileBasedSecurityManager
-from id_client.security.block_device import BlockDevice, DATA_START_SEEK
+from id_client.security.block_device import DATA_START_SEEK
 
 class KSSignature:
     SIGN_STRUCT = '<6sH'
@@ -90,8 +90,7 @@ class FileOnBlockDevice:
             fd.close()
         
     def create_empty(self):
-        block_dev = BlockDevice(self.__path)
-        block_dev.format()
+        BlockDevice.format_device(self.__path)
         self.__write('')
 
     def copy_from(self, dest_file):

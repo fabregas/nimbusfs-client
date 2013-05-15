@@ -15,6 +15,11 @@ clean:
 test:
 	@$(TEST_RUNNER)
 
+make_suid_app:
+	gcc -o ./bin/rbd_format suid_disk_format.c
+	sudo chown root:root ./bin/rbd_format
+	sudo chmod 4755 ./bin/rbd_format
+
 generate_forms:
 	python generate_forms.py id_client/gui/forms/
 

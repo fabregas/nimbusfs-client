@@ -44,6 +44,9 @@ class AbstractMediaStoragesManager:
     def get_removable_storages(cls):
         pass
 
+    @classmethod
+    def is_removable(self, device):
+        return False
 
 class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
     @classmethod

@@ -8,8 +8,19 @@ Copyright (C) 2013 Konstantin Andrusenko
 @author Konstantin Andrusenko
 @date May 15, 2013
 """
+import os
 import struct
-from id_client.idepositbox_client import logger
+import logging
+from subprocess import Popen, PIPE
+from zipfile import ZipFile
+
+from id_client.media_storage import get_media_storage_manager
+
+logger = logging.getLogger('fabnet-client')
+curdir = os.path.abspath(os.path.dirname(__file__))
+SUID_DEVICE_FORMATTER = os.path.join(curdir, 'rbd_format')
+FAT_PART_FILE = os.path.join(curdir, 'fat_img.zip')
+FAT_PART_NAME = 'fat.img'
 
 DATA_START_SEEK = 2050 * 512 #start at 2050 sector 
 
@@ -120,8 +131,39 @@ class MBR:
         return self.disk_sig      
                       
 
-
 class BlockDevice:
+    MAC_OS = 'mac'
+    LINUX = 'linux'
+
+    cur_os = None
+
+    @classmethod
+    def get_current_os(cls):
+        if cls.cur_os:
+            return cls.cur_os
+        
+        if sys.platform.startswith('linux'):
+            cls.cur_os = cls.LINUX
+        elif sys.platform == 'darwin':
+            cls.cur_os = cls.MAC_OS
+        return cls.cur_os
+
+
+    @classmethod
+    def format_device(cls, device_path):
+        cur_os = cls.get_current_os()
+        if cur_os == MAC_OS:
+            block_dev = BlockDevice(device_path)
+            block_dev.format()
+        elif cur_os == LINUX: 
+            proc = Popen([SUID_DEVICE_FORMATTER, device_path], shell=False, stdin=PIPE, stdout=PIPE)
+            stdout_value, stderr_value = proc.communicate(stdin)
+            if proc.returncode != 0:
+                out = stdout_value
+                if stderr_value:
+                    out += '\n%s'%stderr_value
+                raise Exception(out)
+
     def __init__(self, dev_path):
         self.__dev_path = dev_path
 
@@ -132,10 +174,22 @@ class BlockDevice:
         self.restore_fat_partition()
 
     def check_removable(self):
-        pass
+        ms = get_media_storage_manager()
+        if not ms.is_removable(self.__dev_path):
+            raise Exception('Device %s is not removable!'%self.__dev_path)
 
     def unmount_partitions(self):
-        pass
+        cur_os = cls.get_current_os()
+        if cur_os == MAC_OS:
+            ret = os.system('diskutil unmountDisk %s'%self.__dev_path)
+            if ret:
+                raise Exception('Volumes at %s does not unmounted!'%self.__dev_path)
+        elif cur_os == LINUX:
+            import glob
+            for partition in glob.glob('%s*'%self.__dev_path):
+                ret = os.system('umount %s'%partition)
+                if ret:
+                    logger.error('Can not unmount %s...'%partition)
 
     def change_mbr(self):
         try:
@@ -171,6 +225,9 @@ class BlockDevice:
         part.LBA = 2050
         part.num_sectors = 2049
 
+        master_br.partition_table.partitions[2] = PartitionEntry()
+        master_br.partition_table.partitions[4] = PartitionEntry()
+
         '''
         Disk: /dev/disk2geometry: 981/128/63 [7913472 sectors]
         Signature: 0xABA55
@@ -195,7 +252,14 @@ class BlockDevice:
         except IOError, err:
             raise Exception('Can not update MBR at block device: %s'%err)
 
-
     def restore_fat_partition(self):
-        pass
+        fd = open(self.__dev_path,'r+b')
+        try:
+            fd.seek(512)
+            fd.write(ZipFile(FAT_PART_FILE).read(FAT_PART_NAME))
+        except IOError, err:
+            raise Exception('Can not update MBR at block device: %s'%err)
+        finally:
+            fd.close()
+
 
