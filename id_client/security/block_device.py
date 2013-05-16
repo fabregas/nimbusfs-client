@@ -25,7 +25,7 @@ if not logger.handlers:
     logger.addHandler(console)
 
 curdir = os.path.abspath(os.path.dirname(__file__))
-SUID_BLOCKDEV_MGR = os.path.join(curdir, '../../bin/%s/rbd_manage')
+SUID_BLOCKDEV_MGR = os.path.join(curdir, '../../bin/rbd_manage')
 FAT_PART_FILE = os.path.join(curdir, 'fat_img.zip')
 FAT_PART_NAME = 'fat.img'
 
@@ -34,9 +34,9 @@ DATA_START_SEEK = 2050 * 512 #start at 2050 sector
                       
 
 class KSSignature:
-    SIGN_STRUCT = '<6sH'
+    SIGN_STRUCT = '<6sI'
     SIGN_LEN = struct.calcsize(SIGN_STRUCT)
-    SING_ID = 'OFFS01'
+    SING_ID = 'OIFS01' #one item file system...
 
     @classmethod
     def dump(cls, ks_len):
@@ -72,9 +72,7 @@ class BlockDevice:
             self.cur_os = self.MAC_OS
 
     def __bdm_call(self, *params):
-        import platform
-        m = platform.machine()
-        cmd_p = [SUID_BLOCKDEV_MGR % m]
+        cmd_p = [SUID_BLOCKDEV_MGR]
         cmd_p.extend(params)
         proc = Popen(cmd_p, shell=False, stdin=PIPE, stdout=PIPE)
         stdout_value, stderr_value = proc.communicate()
@@ -132,10 +130,10 @@ class BlockDevice:
             data = fd.read(KSSignature.SIGN_LEN)
             sign = KSSignature(data)
             if not sign.is_valid():
-                raise Exception('Key chain does not found at %s'%self.__path)
+                raise Exception('Key chain does not found at %s'%self.__dev_path)
             return fd.read(sign.ks_len)
         except IOError:
-            raise IOError('Device %s can not be read!'%self.__path)
+            raise IOError('Device %s can not be read!'%self.__dev_path)
 
     def write(self, data, file_path=None):
         if self.cur_os == self.MAC_OS:

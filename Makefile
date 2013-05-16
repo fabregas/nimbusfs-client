@@ -16,12 +16,17 @@ clean:
 test:
 	@$(TEST_RUNNER)
 
+make_test_suid_app:
+	rm -rf ./bin/rbd_manage
+	gcc -o ./bin/rbd_manage suid_disk_manage.c
+	sudo chown root:root ./bin/rbd_manage
+	sudo chmod 4755 ./bin/rbd_manage
+
 make_suid_app:
-	rm -rf ./bin/$M
-	mkdir ./bin/$M
-	gcc -o ./bin/$M/rbd_manage suid_disk_manage.c
-	sudo chown root:root ./bin/$M/rbd_manage
-	sudo chmod 4755 ./bin/$M/rbd_manage
+	mkdir -p ./bin/${ARCH}
+	rm -rf ./bin/${ARCH}/rbd_manage
+	${CC} ${CFLAGS} -o ./bin/${ARCH}/rbd_manage suid_disk_manage.c
+	strip ./bin/${ARCH}/rbd_manage
 
 generate_forms:
 	python generate_forms.py id_client/gui/forms/
