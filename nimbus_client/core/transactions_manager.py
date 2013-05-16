@@ -115,6 +115,14 @@ class Transaction:
         return (p_size * 100.) / t_size
 
     @TLock
+    def progress_size(self):
+        p_size = 0
+        for _,data_block,_,finished in self.__data_blocks_info.values():
+            seek, exp_s = data_block.get_progress()
+            p_size += seek
+        return p_size
+
+    @TLock
     def append_data_block(self, seek, size, data_block, foreign_name=None, no_transfer=False):
         if size == 0:
             raise RuntimeError('Data block with size=0 is not supported!')
@@ -219,7 +227,7 @@ class TransactionsManager:
 
             for transaction in tr_list:
                 yield transaction.is_uploading(), transaction.get_file_path(), \
-                        transaction.get_status(), transaction.total_size(), transaction.progress_perc()
+                        transaction.get_status(), transaction.total_size(), transaction.progress_size()
         finally:
             GTLock.unlock()
 

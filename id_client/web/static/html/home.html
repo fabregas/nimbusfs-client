@@ -25,9 +25,35 @@
       <div class="control-group">
           <label class="control-label" for="sync_status">Synchronization status:</label>
             <div class="controls">
-                <div id="sync_status"></div>
+                <table>
+                    <tr>
+                    <td>
+                        <span id="sync_status">
+                        </span>
+                    </td>
+                    <td width="100%">
+                        <a id="pr_tl" style="display: none; margin-left:5px;width:260px;" rel="tooltip" title="click for displaying information about inprogress files">
+                            <div class="progress progress-success" id="d_pr">
+                                <span class="progressbar-back-text">70%</span>
+                                  <div class="bar" style="width: 70%;"></div>
+                            </div>
+                        </a>
+                    </td>
+                </tr>
+            </table>
+
+                <table id="inpr_tbl" class="table table-condensed" style="display: none;">
+                    <tbody>
+                        <tr>
+                            <th>File name</th>
+                            <th>Size</th>
+                            <th>Transferred</th>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
       </div>
+
 
       <div class="control-group">
             <div class="controls">
@@ -142,7 +168,10 @@
         }
     }
 
-    function update_label(label_id, label_type, text) {
+    function update_label(label_id, label_type, text, ic) {
+        if (ic) {
+            text = text + '&nbsp;<span class="'+ic+' icon-white" style="margin-top: 4px;"></span>';
+        }
         if ($(label_id).hasClass(label_type) && ($(label_id).html() == text)) {
             return;
         }
@@ -168,6 +197,7 @@
        }
        return true;
     }
+
 
     function reload_content(){
         var SS_ALL_SYNC = 0,
@@ -215,10 +245,41 @@
 
             if (data['sync_status'] == SS_ALL_SYNC) {
                 update_label('#sync_status', 'label-success', 'All files are synchronized');
+                if ($('#pr_tl').css('display') != 'none') {
+                    $('#pr_tl').css('display', 'none');
+                }
             } else if (data['sync_status'] == SS_SYNC_PENDING) {
-                update_label('#sync_status', 'label-warning', 'Some files are not synchronized yet');
+                reload_inp_files();
+
+                var icn, perc;
+                if (data['download_progress'] != 100) {
+                    icn = 'icon-arrow-down';
+                    perc = data['download_progress'];
+                    $('#sync_status').attr('title', 'download files...');
+                } 
+                if (data['upload_progress'] != 100) {
+                    if (icn) {
+                        perc = (perc + data['upload_progress'])/2;
+                        icn = 'icon-refresh';
+                        $('#sync_status').attr('title', 'upload and download files...');
+                    } else {
+                        icn = 'icon-arrow-up'
+                        perc = data['upload_progress'];
+                        $('#sync_status').attr('title', 'upload files...');
+                    }
+                }
+                update_label('#sync_status', 'label-warning', 'In progress', icn);
+                $('#pr_tl .bar').css('width', perc+'%');
+                $('#pr_tl span').html(perc+'%');
+
+                if ($('#pr_tl').css('display') == 'none') {
+                    $('#pr_tl').css('display', 'block');
+                }
             } else {
                 update_label('#sync_status', 'label-warning', 'Unknown');
+                if ($('#pr_tl').css('display') != 'none') {
+                    $('#pr_tl').css('display', 'none');
+                }
             }
         }).fail(function() {
             update_label('#sync_status', 'label-warning', 'Unknown');
@@ -226,7 +287,58 @@
         });
     }
 
+    function update_progress_table(new_data) {
+        var trs = $('#inpr_tbl tr');
+        var cur_ni = 0;
+        for (var i=1; i<trs.length; i++) {
+            if (cur_ni >= new_data.length) {
+                 trs[i].remove();   
+            } else {
+                $(trs[i]).html(form_inp_file_row(new_data[cur_ni]));
+                cur_ni++;
+            }
+        }
+        while (cur_ni < new_data.length) {
+            $('#inpr_tbl tbody').append('<tr>'+form_inp_file_row(new_data[cur_ni])+'</tr>');
+            cur_ni++;
+        }
+    }
+
+    function form_inp_file_row(inp_file_info) {
+        //inp_file_info struct === (is_upload, file_name, status, size, tr_size) 
+        var icn;
+        if (inp_file_info[0] == 1) { //upload file
+            icn = '<span class="icon-arrow-up" title="uploading"></span>';
+            if (inp_file_info[2] == 0) { //crypting data blocks in progress...
+                icn = icn + '<span class="icon-fire" title="encrypting..."></span>';
+            } else {
+                icn = icn + '<span class="icon-globe" title="encryption done"></span>';
+            }
+        } else {
+            icn = '<span class="icon-arrow-down" title="downloading"></span>';
+        }
+        return '<td>'+icn+'&nbsp;'+inp_file_info[1]+'</td><td>'+inp_file_info[3]+'</td><td>'+inp_file_info[4]+'</td>';
+    }
+
+    function reload_inp_files() {
+        $.getJSON('/get_inprogress_files', function(data) {
+            update_progress_table(data['inprogress_list']);
+        });
+    }
+    
+    function show_inpr_files() {
+        if ($("#inpr_tbl").css('display') == 'none') {
+            $("#inpr_tbl").show();
+            $('#pr_tl').css('width', '100%');
+        } else {
+            $("#inpr_tbl").toggle(400);
+            $('#pr_tl').css('width', '260px');
+        }
+    }
+
     $(function () { 
+        $("body").tooltip({selector: 'a[rel=tooltip]', placement: 'top', delay: { show: 500, hide: 100 }});
+        $("#pr_tl").click(show_inpr_files);
         $('#ksPath').hide();
         $('#ksPathLabel').css('display', 'inline');
         $('#wind').stopTime();

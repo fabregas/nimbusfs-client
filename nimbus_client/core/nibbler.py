@@ -32,12 +32,12 @@ from nimbus_client.core.security_manager import AbstractSecurityManager
 
 
 class InprogressOperation:
-    def __init__(self, is_upload, file_path, status, size, progress_perc):
+    def __init__(self, is_upload, file_path, status, size, progress_size):
         self.is_upload = is_upload
         self.file_path = file_path
         self.status = status
         self.size = size
-        self.progress_perc = progress_perc
+        self.progress_size = progress_size
 
     def __repr__(self):
         return '[%s][%s][%s perc] %s'%('UPLOAD' if self.is_upload else 'DOWNLOAD', \
@@ -253,10 +253,12 @@ class Nibbler:
         file_path = to_str(file_path)
         return SmartFileObject(file_path, for_write)
 
-    def inprocess_operations(self):
+    def inprocess_operations(self, only_inprogress=True):
         ret_list = []
-        for is_upload, file_path, status, size, progress_perc in self.transactions_manager.iterate_transactions():
-            ret_list.append(InprogressOperation(is_upload, file_path, status, size, progress_perc))
+        for is_upload, file_path, status, size, progress_size in self.transactions_manager.iterate_transactions():
+            if only_inprogress and status not in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
+                continue
+            ret_list.append(InprogressOperation(is_upload, file_path, status, size, progress_size))
         return ret_list
 
     def has_incomlete_operations(self):
@@ -264,4 +266,29 @@ class Nibbler:
             if status not in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
                 return True
         return False
+
+    def transactions_progress(self):
+        f_down_size = 0
+        p_down_size = 0
+        f_up_size = 0
+        p_up_size = 0
+        for is_upload, _, status, size, progress_size in self.transactions_manager.iterate_transactions():
+            if status not in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
+                if is_upload:
+                    f_up_size += size
+                    p_up_size += progress_size
+                else:
+                    f_down_size += size
+                    p_down_size += progress_size
+
+        if f_up_size == 0:
+            up_perc = 100 #all data is upladed
+        else:
+            up_perc = (p_up_size * 100) / f_up_size
+        if f_down_size == 0:
+            down_perc = 100 #all data is downloaded
+        else:
+            down_perc = (p_down_size * 100) / f_down_size
+        return up_perc, down_perc
+
 

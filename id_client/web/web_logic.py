@@ -19,6 +19,10 @@ from id_client.media_storage import AbstractMediaStoragesManager
 from id_client.idepositbox_client import logger, SM_TYPES_MAP
 from nimbus_client.core.exceptions import NoCertFound
 
+KB = 1024
+MB = 1024.*KB
+GB = 1024.*MB
+
 class StaticPage(UrlHandler):
     def on_process(self, env, *args):
         return self.file_source(args[0])
@@ -44,14 +48,40 @@ class GetServiceStatusHandler(UrlHandler):
         else:
             status = 'stopped'
 
+        up_perc = down_perc = 100
         if status == 'started':
-            if idepositbox_client.get_nibbler().has_incomlete_operations():
+            up_perc, down_perc = idepositbox_client.get_nibbler().transactions_progress()
+            if up_perc != 100 or down_perc != 100:
                 sync_stat = SS_SYNC_PROGRESS
             else:
                 sync_stat = SS_ALL_SYNC
 
         return self.json_source({'service_status': status,
+                                    'upload_progress': up_perc,
+                                    'download_progress': down_perc,
                                     'sync_status': sync_stat})
+
+
+def file_size(size):
+    if size < KB:
+        return '%i b'%size
+    if size < MB:
+        return '%i Kb'%(size/KB)
+    if size < GB:
+        return '%.1f Mb'%(size/MB)
+    return '%.2f Gb'%(size/GB)
+
+class GetInprogressFilesHandler(UrlHandler):
+    def on_process(self, env, *args):
+        idepositbox_client = env['idepositbox_app']
+        ret_list = []
+        if idepositbox_client.get_status() == 'started':
+            operations = idepositbox_client.get_nibbler().inprogress_operations()
+            for oper in operations:
+                ret_list.append((oper.is_upload, os.path.basename(oper.file_path), \
+                        oper.status, file_size(oper.size), file_size(oper.progress_size)))
+
+        return self.json_source({'inprogress_list': ret_list})
 
 def parse_ks(data):
     key_storage = data.get('__key_storage', None)
@@ -225,6 +255,7 @@ class GenerateKeyStorageHandler(UrlHandler):
 
 HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/get_service_status', GetServiceStatusHandler()),
+                ('/get_inprogress_files', GetInprogressFilesHandler()),
                 ('/start_service', StartServiceHandler()),
                 ('/stop_service', StopServiceHandler()),
                 ('/get_settings', GetSettingsHandler()),
