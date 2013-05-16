@@ -1,5 +1,6 @@
 
 VER=`git describe --always --tag`
+M=`uname -m`
 TEST_RUNNER:=./tests/runTests
 
 export PYTHONPATH=./
@@ -16,9 +17,11 @@ test:
 	@$(TEST_RUNNER)
 
 make_suid_app:
-	gcc -o ./bin/rbd_format suid_disk_format.c
-	sudo chown root:root ./bin/rbd_format
-	sudo chmod 4755 ./bin/rbd_format
+	rm -rf ./bin/$M
+	mkdir ./bin/$M
+	gcc -o ./bin/$M/rbd_manage suid_disk_manage.c
+	sudo chown root:root ./bin/$M/rbd_manage
+	sudo chmod 4755 ./bin/$M/rbd_manage
 
 generate_forms:
 	python generate_forms.py id_client/gui/forms/

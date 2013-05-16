@@ -12,161 +12,83 @@ import os
 import sys
 import struct
 import logging
+import tempfile
 from subprocess import Popen, PIPE
 from zipfile import ZipFile
 
 from id_client.media_storage import get_media_storage_manager
+from id_client.security.mbr import *
 
 logger = logging.getLogger('fabnet-client')
+if not logger.handlers:
+    console = logging.StreamHandler()
+    logger.addHandler(console)
+
 curdir = os.path.abspath(os.path.dirname(__file__))
-SUID_DEVICE_FORMATTER = os.path.join(curdir, 'rbd_format')
+SUID_BLOCKDEV_MGR = os.path.join(curdir, '../../bin/%s/rbd_manage')
 FAT_PART_FILE = os.path.join(curdir, 'fat_img.zip')
 FAT_PART_NAME = 'fat.img'
 
+IDEPOSITBOX_MBR_SIG = 0x42445049 #IDPB
 DATA_START_SEEK = 2050 * 512 #start at 2050 sector 
-
-def read_ub(data):
-    # Read an unsigned byte from data block
-    return struct.unpack('B', data[0])[0]
-  
-def read_us(data):
-    # Read an unsigned short int (2 bytes) from data block    
-    return struct.unpack('<H', data[0:2])[0]
-
-def read_ui(data):
-    # Read an unsigned int (4 bytes) from data block    
-    return struct.unpack('<I', data[0:4])[0]
-
-class PartitionEntry:
-    def __init__(self):
-        self.status = 0x00
-        self.start_head = 0x00
-        self.start_sector = 0x00
-        self.start_cylinder = 0x00
-        self.part_type = 0x00
-        self.end_head = 0x00
-        self.end_sector = 0x00
-        self.end_cylinder = 0x00
-        self.LBA = 0x00
-        self.num_sectors = 0x00
-
-    def generate(self):
-        start_sc_spl = ((self.start_sector & 0x3F) | ((self.start_cylinder >> 2) & 0xC0)) | ((self.start_cylinder & 0xFF) << 8)
-        ebs_sc_spl = ((self.end_sector & 0x3F) | ((self.end_cylinder >> 2) & 0xC0)) | ((self.end_cylinder & 0xFF) << 8)
-
-        return struct.pack('<BBHBBHII', self.status, self.start_head, start_sc_spl, self.part_type,
-                self.end_head, ebs_sc_spl, self.LBA, self.num_sectors)
-
-    def parse(self, data):
-        self.status = read_ub(data)
-        self.start_head = read_ub(data[1])
-        tmp = read_ub(data[2])
-        self.start_sector = tmp & 0x3F
-        self.start_cylinder = (((tmp & 0xC0)>>6)<<8) + read_ub(data[3])
-        self.part_type = read_ub(data[4])
-        self.end_head = read_ub(data[5])
-        tmp = read_ub(data[6])
-        self.end_sector = tmp & 0x3F
-        self.end_cylinder = (((tmp & 0xC0)>>6)<<8) + read_ub(data[7])
-        self.LBA = read_ui(data[8:12])
-        self.num_sectors = read_ui(data[12:16])    
-    
-    def print_partition(self):
-        self.check_status()
-        print "CHS of first sector: %d %d %d" % \
-            (self.start_cylinder, self.start_head, self.start_sector)
-        print "Part type: 0x%02X" % self.part_type
-        print "CHS of last sector: %d %d %d" % \
-            (self.end_cylinder, self.end_head, self.end_sector)
-        print "LBA of first absolute sector: %d" % (self.LBA)
-        print "Number of sectors in partition: %d" % (self.num_sectors)
-                
-    def check_status(self):
-        if (self.status == 0x00):
-            print 'Non bootable'
-        else:
-            if (self.status == 0x80):
-                print 'Bootable'
-            else: 
-                print 'Invalid bootable byte'
-        
-# Table of four primary partitions        
-class PartitionTable:
-    def __init__(self):
-        self.partitions = [PartitionEntry() for i in range (0, 4)]
-
-    def parse(self, data):
-        for i in range(0, 4):
-            self.partitions[i].parse(data[16*i:16*(i+1)])
-
-    def generate(self):
-        return struct.pack('<16s16s16s16s', *[p.generate() for p in self.partitions])
-
-
-# Master Boot Record        
-class MBR:
-    def __init__(self):
-        self.boot_code = '\x00'*440
-        self.disk_sig = 0x0A0CFF09
-        self.partition_table = PartitionTable()
-        self.MBR_sig = 0xAA55
-
-    def generate(self):
-        return struct.pack('<440sIH64sH', self.boot_code, self.disk_sig, 0, self.partition_table.generate(), self.MBR_sig)
-
-    def parse(self, data):
-        self.boot_code = data[:440]        
-        self.disk_sig = read_ui(data[440:444])
-        unused = data[444:446]        
-        self.partition_table.parse(data[446:510])        
-        self.MBR_sig = read_us(data[510:512])
-        
-    def check_mbr_sig(self):
-        mbr_sig = self.MBR_sig
-        if (mbr_sig == 0xAA55):
-            return True
-        else:
-            return False
-            
-    def get_disk_sig(self):        
-        return self.disk_sig      
                       
+
+class KSSignature:
+    SIGN_STRUCT = '<6sH'
+    SIGN_LEN = struct.calcsize(SIGN_STRUCT)
+    SING_ID = 'OFFS01'
+
+    @classmethod
+    def dump(cls, ks_len):
+        return struct.pack(cls.SIGN_STRUCT, cls.SING_ID, ks_len)
+
+    def __init__(self, dumped=None):
+        self.sign_id = None
+        self.ks_len = None
+        if dumped:
+            self.load(dumped)
+
+    def load(self, dumped):
+        self.sign_id, self.ks_len = struct.unpack(self.SIGN_STRUCT, dumped)
+
+    def is_valid(self):
+        if self.sign_id == self.SING_ID and self.ks_len > 0:
+            return True
+        return False
+
+
 
 class BlockDevice:
     MAC_OS = 'mac'
     LINUX = 'linux'
 
-    cur_os = None
-
-    @classmethod
-    def get_current_os(cls):
-        if cls.cur_os:
-            return cls.cur_os
-        
-        if sys.platform.startswith('linux'):
-            cls.cur_os = cls.LINUX
-        elif sys.platform == 'darwin':
-            cls.cur_os = cls.MAC_OS
-        return cls.cur_os
-
-
-    @classmethod
-    def format_device(cls, device_path):
-        cur_os = cls.get_current_os()
-        if cur_os == cls.MAC_OS:
-            block_dev = BlockDevice(device_path)
-            block_dev.format()
-        elif cur_os == cls.LINUX: 
-            proc = Popen([SUID_DEVICE_FORMATTER, device_path], shell=False, stdin=PIPE, stdout=PIPE)
-            stdout_value, stderr_value = proc.communicate(stdin)
-            if proc.returncode != 0:
-                out = stdout_value
-                if stderr_value:
-                    out += '\n%s'%stderr_value
-                raise Exception(out)
-
     def __init__(self, dev_path):
         self.__dev_path = dev_path
+        self.cur_os = None
+    
+        if sys.platform.startswith('linux'):
+            self.cur_os = self.LINUX
+        elif sys.platform == 'darwin':
+            self.cur_os = self.MAC_OS
+
+    def __bdm_call(self, *params):
+        import platform
+        m = platform.machine()
+        cmd_p = [SUID_BLOCKDEV_MGR % m]
+        cmd_p.extend(params)
+        proc = Popen(cmd_p, shell=False, stdin=PIPE, stdout=PIPE)
+        stdout_value, stderr_value = proc.communicate()
+        if proc.returncode != 0:
+            out = stdout_value
+            if stderr_value:
+                out += '\n%s'%stderr_value
+            raise Exception(out)
+
+    def format_device(self):
+        if self.cur_os == self.MAC_OS:
+            self.format()
+        elif self.cur_os == self.LINUX: 
+            self.__bdm_call(self.__dev_path, 'format')
 
     def format(self):
         self.check_removable()
@@ -180,29 +102,123 @@ class BlockDevice:
             raise Exception('Device %s is not removable!'%self.__dev_path)
 
     def unmount_partitions(self):
-        cur_os = self.get_current_os()
-        if cur_os == self.MAC_OS:
+        if self.cur_os == self.MAC_OS:
             ret = os.system('diskutil unmountDisk %s'%self.__dev_path)
             if ret:
                 raise Exception('Volumes at %s does not unmounted!'%self.__dev_path)
-        elif cur_os == self.LINUX:
+        elif self.cur_os == self.LINUX:
             import glob
             for partition in glob.glob('%s*'%self.__dev_path):
-                ret = os.system('umount %s'%partition)
+                if partition == self.__dev_path:
+                    continue
+                ret = os.system('mount | grep -q %s && umount %s'%(partition,partition))
                 if ret:
-                    logger.error('Can not unmount %s...'%partition)
+                    logger.debug('Can not unmount %s...'%partition)
 
-    def change_mbr(self):
+    def __open_dev(self, read_only=False):
+        flags = 'rb'
+        if not read_only:
+            flags += '+'
         try:
-            data = open(self.__dev_path, 'rb').read(512)
+            return open(self.__dev_path, flags)
+        except IOError:
+            raise IOError('Device %s does not opened for %s!'%(self.__dev_path,\
+                    'read' if read_only else 'write'))
+
+    def int_read(self):
+        fd = self.__open_dev(read_only=True)
+        try:
+            fd.seek(DATA_START_SEEK)
+            data = fd.read(KSSignature.SIGN_LEN)
+            sign = KSSignature(data)
+            if not sign.is_valid():
+                raise Exception('Key chain does not found at %s'%self.__path)
+            return fd.read(sign.ks_len)
+        except IOError:
+            raise IOError('Device %s can not be read!'%self.__path)
+
+    def write(self, data, file_path=None):
+        if self.cur_os == self.MAC_OS:
+            if file_path:
+                try:
+                    data = open(file_path, 'rb').read()
+                except IOError:
+                    raise IOError('Can not read from "%s"'%file_path)
+            self.int_write(data)
+        elif self.cur_os == self.LINUX:
+            tmp_file = None
+            if file_path is None: 
+                tmp_file = tempfile.NamedTemporaryFile()
+                tmp_file.write(data)
+                tmp_file.flush()
+                file_path = tmp_file.name
+            try:
+                self.__bdm_call(self.__dev_path, 'write', file_path)
+            finally:
+                if tmp_file:
+                    tmp_file.close()
+
+    def int_write(self, data):
+        fd = self.__open_dev()
+        try:
+            fd.seek(DATA_START_SEEK)
+            fd.write(KSSignature.dump(len(data)))
+            fd.write(data)
+        except IOError:
+            raise IOError('Key chain does not write to device %s!'%self.__dev_path)
+        finally:
+            fd.close()
+
+    def write_from_file(self, source_file):
+        self.write(None, source_file)
+
+    def read(self):
+        if self.cur_os == self.MAC_OS:
+            return self.int_read()
+        elif self.cur_os == self.LINUX:
+            tmp_file = tempfile.NamedTemporaryFile()
+            file_path = tmp_file.name
+            try:
+                self.__bdm_call(self.__dev_path, 'read', file_path)
+                data = open(file_path, 'rb').read()
+                return data
+            finally:
+                if tmp_file:
+                    tmp_file.close()
+        
+    def is_valid(self):
+        try:
+            data = self.read()
+            if not data:
+                return False
+            return True
+        except Exception, err:
+            return False
+
+    def read_mbr(self):
+        fd = self.__open_dev(read_only=True)
+        try:
+            data = fd.read(512)
         except IOError, err:
             raise Exception('Can not read MBR from block device %s: %s'%(self.__dev_path, err))
-
+        finally:
+            fd.close()
         master_br = MBR()
         master_br.parse(data)
+        return master_br
+
+    def check_id_mbr(self):
+        master_br = self.read_mbr()
+        if master_br.disk_sig != IDEPOSITBOX_MBR_SIG:
+            raise Exception('Device %s does not formatted as iDepositBox key chain!'%self.__dev_path)
+    
+    def change_mbr(self):
+        master_br = self.read_mbr()
         if not master_br.check_mbr_sig():
             logger.info('No valid MBR found at device %s. Recreating it..'%self.__dev_path)
             master_br = MBR()
+
+        master_br.disk_sig = IDEPOSITBOX_MBR_SIG
         part = master_br.partition_table.partitions[0]
 
         part.start_head = 0

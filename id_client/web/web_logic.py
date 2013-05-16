@@ -217,6 +217,8 @@ class GenerateKeyStorageHandler(UrlHandler):
         except NoCertFound, err:
             resp = {'ret_code': 123, 'ret_message':str(err)}
         except Exception, err:
+            logger.write = logger.error
+            traceback.print_exc(file=logger)
             resp = {'ret_code': 1, 'ret_message': str(err)}
         return self.json_source(resp)
 

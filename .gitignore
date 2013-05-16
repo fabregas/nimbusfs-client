@@ -29,4 +29,6 @@ pip-log.txt
 UPGRADE_VERSION
 third-party
 bootstrap
-bin/rbd_format
+bin/rbd_*
+bin/i686/*
+bin/x86_64
