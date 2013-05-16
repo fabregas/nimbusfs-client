@@ -41,13 +41,11 @@ class TestIdepositbox(unittest.TestCase):
             os.remove('/tmp/test_idepositbox.conf')
         Config.get_config_file_path = lambda a: '/tmp/test_idepositbox.conf'
         config = Config()
-        config.security_provider_type = SPT_FILE_BASED
-        config.key_storage_path = CLIENT_KS_PATH
         config.webdav_bind_port = 8080
         config.save()
         TestIdepositbox.CLIENT = IdepositboxClient()
 
-        TestIdepositbox.CLIENT.start(PASSWD)
+        TestIdepositbox.CLIENT.start(SPT_FILE_BASED, CLIENT_KS_PATH, PASSWD)
 
         self.assertEqual(TestIdepositbox.CLIENT.get_status(), CS_STARTED)
 

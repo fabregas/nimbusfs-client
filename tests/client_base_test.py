@@ -40,12 +40,12 @@ TMP_FILE = '/tmp/test_file.out'
 def wait_oper_status(inprocess_operations_func, file_path, status):
     for i in xrange(20):
         time.sleep(.1)
-        op_list = inprocess_operations_func()
+        op_list = inprocess_operations_func(only_inprogress=False)
         for oper_info in op_list:
             if oper_info.status == status and oper_info.file_path == file_path:
                 return
     else:
-        op_list = inprocess_operations_func()
+        op_list = inprocess_operations_func(only_inprogress=False)
         for oper_info in op_list:
             print oper_info
         raise Exception('wait_oper_status(%s, %s) failed!'%(file_path, status))
@@ -211,15 +211,15 @@ class BaseNibblerTest(unittest.TestCase):
         f_obj.write(data[100:])
         f_obj.close()
 
-        op_list = nibbler.inprocess_operations()
+        op_list = nibbler.inprocess_operations(only_inprogress=False)
         self.assertEqual(len(op_list), 1)
         oper_info = op_list[0]
         self.assertEqual(oper_info.is_upload, True)
         self.assertEqual(oper_info.file_path, '/my_first_dir/my_first_subdir/test_file.out')
         self.assertEqual(oper_info.status, Transaction.TS_LOCAL_SAVED, oper_info)
         self.assertEqual(oper_info.size, len(data))
-        self.assertEqual(oper_info.progress_perc > 0, True)
-        self.assertEqual(oper_info.progress_perc < 100, True)
+        self.assertEqual(oper_info.progress_size > 0, True)
+        self.assertEqual(oper_info.progress_size < oper_info.size, True)
 
         fs_item = nibbler.find('/my_first_dir/my_first_subdir/test_file.out')
         self.assertEqual(fs_item.name, 'test_file.out')
@@ -231,7 +231,7 @@ class BaseNibblerTest(unittest.TestCase):
 
         for i in xrange(20):
             time.sleep(.1)
-            op_list = nibbler.inprocess_operations()
+            op_list = nibbler.inprocess_operations(only_inprogress=False)
             oper_info = op_list[0]
             if oper_info.status == Transaction.TS_FINISHED:
                 break
