@@ -10,8 +10,13 @@ export PATH
 
 IDEPO=/opt/idepositbox/bin/idepositbox_cli
 run() {
-  su idepositbox -s /bin/bash -c "$1 "
+  if id -u "idepositbox" >/dev/null 2>&1; then
+	su idepositbox -s /bin/bash -c "$1 "
+  else	
+	exec "$1"
+  fi
 }
+
 case "$1" in
     start)
         run "$IDEPO start"
