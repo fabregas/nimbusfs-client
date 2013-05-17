@@ -1,0 +1,37 @@
+#!/bin/bash
+# idepositbox
+# (C) iDepositBox http://idepositbox.com
+# chkconfig: - 98 02
+#
+# processname: idepositbox_cli
+
+PATH=/usr/bin:/sbin:/bin:/usr/sbin
+export PATH
+
+IDEPO=/opt/idepositbox/bin/idepositbox_cli
+run() {
+  su idepositbox -s /bin/bash -c "$1 "
+}
+case "$1" in
+    start)
+        run "$IDEPO start"
+    ;;
+    stop)
+        run "$IDEPO stop"
+    ;;
+    restart)
+        run "$IDEPO stop"
+	run "$IDEPO start"
+    ;;
+    reload|force-reload)
+        run "$IDEPO reload"
+    ;;
+    status)
+        run "$IDEPO status"
+    ;;
+    *)
+        echo $"Usage: $0 {start|stop|status|restart|reload}"
+        exit 1
+esac
+
+exit $RETVAL
