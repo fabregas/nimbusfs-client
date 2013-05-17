@@ -21,6 +21,7 @@ from nimbus_client.core.metadata import AbstractMetadataObject, DirectoryMD
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.logger import logger
 from nimbus_client.core.constants import JOURNAL_SYNC_CHECK_TIME
+from nimbus_client.core.events import events_provider
 
 JLock = LockObject()
 
@@ -67,9 +68,9 @@ class Journal:
             self.__no_foreign = False
             self.__is_sync = True
             self.__journal.close() #next __journal.write reopen data block
-            logger.info("Journal is received from NimbusFS backend")
+            events_provider.info("journal", "Journal is received from NimbusFS backend")
         else:
-            logger.warning("Can't receive journal from NimbusFS backend")
+            events_provider.warning("journal", "Can't receive journal from NimbusFS backend")
             self.__no_foreign = True
 
     def close(self):
@@ -208,7 +209,7 @@ class JournalSyncThread(threading.Thread):
                 try:
                     self.__journal._synchronize()
                 except Exception, err:
-                    logger.error('journal synchronization is failed with message: %s'%err)
+                    events_provider.error('journal', 'journal synchronization is failed with message: %s'%err)
 
             for i in xrange(JOURNAL_SYNC_CHECK_TIME):
                 if self.__stop_flag.is_set():

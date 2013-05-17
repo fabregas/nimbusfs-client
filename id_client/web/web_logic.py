@@ -48,6 +48,7 @@ class GetServiceStatusHandler(UrlHandler):
         else:
             status = 'stopped'
 
+        events_count = idepositbox_client.get_events_count()
         up_perc = down_perc = 100
         if status == 'started':
             up_perc, down_perc = idepositbox_client.get_nibbler().transactions_progress()
@@ -59,7 +60,8 @@ class GetServiceStatusHandler(UrlHandler):
         return self.json_source({'service_status': status,
                                     'upload_progress': up_perc,
                                     'download_progress': down_perc,
-                                    'sync_status': sync_stat})
+                                    'sync_status': sync_stat,
+                                    'events_count': events_count})
 
 
 def file_size(size):
@@ -252,6 +254,21 @@ class GenerateKeyStorageHandler(UrlHandler):
             resp = {'ret_code': 1, 'ret_message': str(err)}
         return self.json_source(resp)
 
+class GetEventsHandler(UrlHandler):
+    def on_process(self, env, *args):
+        try:
+            idepositbox_client = env['idepositbox_app']
+            events_obj = idepositbox_client.get_events()
+            events = []
+            for event_obj in events_obj:
+                events.append((event_obj.get_datetime().strftime("%d-%m-%y %H:%M:%S"),\
+                        event_obj.get_message()))
+            events.reverse()
+            resp = {'ret_code': 0, 'events': events}
+        except Exception, err:
+            resp = {'ret_code': 1, 'ret_message': str(err)}
+        return self.json_source(resp)
+
 
 HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/get_service_status', GetServiceStatusHandler()),
@@ -264,6 +281,7 @@ HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/get_ks_info', GetKsInfoHandler()),
                 ('/generate_key_storage', GenerateKeyStorageHandler()),
                 ('/get_media_devices', GetMediaDevicesHandler()),
+                ('/get_events', GetEventsHandler()),
                 ('/get_page/(.+)', GetPageHandler()),
                 ('/static/(.+)', StaticPage()),
                 ('/(\w*)', MainPage())]

@@ -14,8 +14,9 @@ import time
 import threading
 from Queue import Queue
 
-from constants import MAX_DATA_BLOCK_SIZE, FG_ERROR_TIMEOUT
-from logger import logger
+from nimbus_client.core.constants import FG_ERROR_TIMEOUT
+from nimbus_client.core.logger import logger
+from nimbus_client.core.events import events_provider
 
 QUIT_JOB = None
 
@@ -56,7 +57,7 @@ class PutWorker(threading.Thread):
 
                 self.transactions_manager.update_transaction(transaction.get_id(), seek, is_failed=False, foreign_name=key)
             except Exception, err:
-                logger.error('[PutWorker][%s] %s'%(job, err))
+                events_provider.critical('PutWorker', '%s failed: %s'%(transaction, err))
                 try:
                     if transaction:
                         self.transactions_manager.update_transaction(transaction.get_id(), seek, \
@@ -105,7 +106,7 @@ class GetWorker(threading.Thread):
                 self.transactions_manager.update_transaction(transaction.get_id(), seek, \
                             is_failed=False, foreign_name=data_block.get_name())
             except Exception, err:
-                logger.error('[GetWorker][%s] %s'%(job, err))
+                events_provider.error('GetWorker','%s failed: %s'%(transaction, err))
                 try:
                     if transaction and data_block:
                         self.transactions_manager.update_transaction(transaction.get_id(), seek, \

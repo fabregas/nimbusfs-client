@@ -27,6 +27,7 @@ from nimbus_client.core.security_manager import FileBasedSecurityManager, Abstra
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.logger import logger
+from nimbus_client.core.events import Event, events_provider
 
 from id_client.webdav.application import WebDavAPI
 from id_client.config import Config
@@ -53,6 +54,8 @@ class IdepositboxClient:
         self.__check_kss_thrd = None
         self.__last_ks_type = None
         self.__last_ks_path = None
+        self.__events = []
+        events_provider.append_listener(Event.ET_CRITICAL, self.on_critical_event)
 
     def __set_log_level(self):
         log_level = self.__config.log_level.lower()
@@ -62,6 +65,20 @@ class IdepositboxClient:
             logger.setLevel(logging.DEBUG)
         elif log_level == 'error':
             logger.setLevel(logging.ERROR)
+
+    @IDLock
+    def on_critical_event(self, event):
+        self.__events.append(event)
+
+    @IDLock
+    def get_events(self):
+        events = self.__events
+        self.__events = []
+        return events
+
+    @IDLock
+    def get_events_count(self):
+        return len(self.__events)
 
     @IDLock
     def get_nibbler(self):

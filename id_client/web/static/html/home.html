@@ -4,6 +4,11 @@
   <div class="row-fluid" id="alert_field">
   </div>
 
+  <div id="nimbus_alerts">
+  </div>
+
+
+
   <div class="form-horizontal">
       <div class="control-group">
           <label class="control-label" for="ksPath">Key chain media:</label>
@@ -86,6 +91,22 @@
     </div>
 </div>
 
+<div style="left:35%; width:800px;" id="events_list_modal" class="modal hide fade">
+    <div class="modal-header">
+        <h3>Alerts</h3>
+    </div>
+    <div class="modal-body text-center">
+        <table id="event_tbl" class="table table-condensed">
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+    <div class="modal-footer">
+        <a onclick="save_events();" class="btn btn-warning">Download as a file</a>
+        <a onclick="close_events();" class="btn">Close</a>
+    </div>
+</div>
+
 
 <SCRIPT type="text/javascript">
     $.fn.hasAttr = function(name) {  
@@ -104,7 +125,6 @@
 
     function start_service() {
         if ($('#startstop').hasAttr('disabled')) {return;}
-
         var pwd=$('#pwdEdit').val();
 
         $('#alert_field').html('');
@@ -281,10 +301,56 @@
                     $('#pr_tl').css('display', 'none');
                 }
             }
+            if (data['events_count'] > 0) {
+                var msg = '<div class="alert alert-error"><p class="text-center"><strong>Warning!</strong> You have '+data['events_count']+
+                    ' an unread alerts! <button onclick="read_events();" class="btn btn-mini btn-danger" type="button">read</button></p><div>';
+                $('#nimbus_alerts').html(msg);
+            } else {
+                $('#nimbus_alerts').html('');
+            }
         }).fail(function() {
             update_label('#sync_status', 'label-warning', 'Unknown');
             update_label('#serv_status', 'label-warning', 'Unknown');
         });
+    }
+
+    function read_events() {
+        $('#event_tbl tbody').html('');
+        $.getJSON('/get_events', function(data) {
+            if (data['ret_code'] != 0) {
+                show_alert('Can not receive events list: '+data['ret_message']);
+            } else {
+                $('#event_tbl tbody').append('<tr><th width="20%">Event date</th><th>Message</th></tr>');
+                for (var i=0; i<data['events'].length; i++) { 
+                    $('#event_tbl tbody').append('<tr><td>'+data['events'][i][0]+'</td><td>'+data['events'][i][1]+'</td></tr>');
+                }
+            }
+        });
+        $('#events_list_modal').modal();        
+    }
+
+    function save_events() {
+        $.events = {
+            text: ""
+        };
+
+        $('#event_tbl tr').each(function(idx){
+            if (idx == 0) {return;}
+            var tds = $(this).children();
+            $.events.text = $.events.text + $(tds[0]).text() + ' - ' + $(tds[1]).text() + '\n';
+        });
+
+        var d = new Date();
+        var dt = d.toISOString();
+
+        downloadDataURI({
+            filename: "iDepositBox-alerts-"+dt+".txt", 
+            data: "data:application/octet-stream;base64," + $.base64.encode($.events.text)
+        });
+    }
+
+    function close_events() {
+        $('#events_list_modal').modal('hide');
     }
 
     function update_progress_table(new_data) {

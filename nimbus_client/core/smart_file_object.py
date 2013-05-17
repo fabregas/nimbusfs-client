@@ -17,6 +17,7 @@ from nimbus_client.core.transactions_manager import TransactionsManager, Transac
 from nimbus_client.core.constants import MAX_DATA_BLOCK_SIZE
 from nimbus_client.core.exceptions import ClosedFileException, PermissionsException
 from nimbus_client.core.logger import logger
+from nimbus_client.core.events import events_provider
 
 TMP_FILES_PATTERNS = [(re.compile('\._.+'), 4096)]
 
@@ -182,7 +183,9 @@ class SmartFileObject:
         self.__unsync = False
 
     def __failed_transaction(self, err):
-        #TODO: implement error writing to events log
+        events_provider.critical("File", "File %s IO error: %s"%\
+                            (self.__file_path, err))
+
         if self.__cur_data_block:
             self.__cur_data_block.remove()
 

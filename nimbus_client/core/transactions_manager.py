@@ -17,6 +17,7 @@ from datetime import datetime
 from Queue import Queue
 
 from nimbus_client.core.logger import logger
+from nimbus_client.core.events import events_provider
 from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.metadata import FileMD, ChunkMD
 from nimbus_client.core.base_safe_object import LockObject
@@ -386,17 +387,19 @@ class TransactionsManager:
                     self.__mv_local_data_blocks(transaction)
                     self.__save_metadata(transaction)
                 except Exception, err:
-                    #FIXME log message...
-                    logger.error("Can't update metadata! Details: %s"%err)
+                    events_provider.critical("Metadata", "Can't update metadata! Details: %s"%err)
                     return self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
             elif status == Transaction.TS_FAILED:
+                if transaction.get_status() != Transaction.TS_FAILED:
+                    events_provider.critical("Transaction", "File %s was not uploaded to NimbusFS backend!"%\
+                            transaction.get_file_path())
                 #should be removed data block from backend
                 for _,_,data_block, foreign_name in transaction.iter_data_blocks():
                     self.__cancel_data_block_upload(foreign_name, data_block)
 
-        transaction.change_status(status)
-
-        self.__tr_log_update_state(transaction.get_id(), status)
+        if transaction.get_status() != status: 
+            transaction.change_status(status)
+            self.__tr_log_update_state(transaction.get_id(), status)
 
 
     @GTLock
