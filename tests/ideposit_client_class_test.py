@@ -19,7 +19,7 @@ from tinydav import WebDAVClient, HTTPUserError, HTTPServerError
 from  nimbus_client.core import fabnet_gateway
 from id_client.idepositbox_client import IdepositboxClient, \
             CS_STARTED, CS_STOPPED, Config
-from id_client.constants import SPT_FILE_BASED, SPT_TOKEN_BASED
+from id_client.constants import SPT_FILE_BASED, SPT_TOKEN_BASED, MOUNT_EXPORT
 
 from client_base_test import MockedFriClient, wait_oper_status, Transaction
 fabnet_gateway.FriClient = MockedFriClient
@@ -41,6 +41,7 @@ class TestIdepositbox(unittest.TestCase):
             os.remove('/tmp/test_idepositbox.conf')
         Config.get_config_file_path = lambda a: '/tmp/test_idepositbox.conf'
         config = Config()
+        Config.mount_type = MOUNT_EXPORT
         config.webdav_bind_port = 8080
         config.save()
         TestIdepositbox.CLIENT = IdepositboxClient()
