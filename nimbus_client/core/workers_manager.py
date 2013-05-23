@@ -47,10 +47,12 @@ class PutWorker(threading.Thread):
                     raise Exception('Data block %s does not found at local cache!'%data_block.get_name())
 
                 try:
-                    key = self.fabnet_gateway.put(data_block, replica_count=transaction.get_replica_count(), allow_rewrite=False)
+                    key = self.fabnet_gateway.put(data_block, replica_count=transaction.get_replica_count(), \
+                            allow_rewrite=False)
                 except Exception, err:
                     logger.error('Put data block error: %s'%err)
-                    logger.error('Cant put data block from file %s. Wait %s seconds and try again...'%(transaction.get_file_path(), FG_ERROR_TIMEOUT))
+                    logger.error('Cant put data block from file %s. Wait %s seconds and try again...'%\
+                            (transaction.get_file_path(), FG_ERROR_TIMEOUT))
                     time.sleep(FG_ERROR_TIMEOUT)
                     self.queue.put(job)
                     continue

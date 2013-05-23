@@ -78,7 +78,7 @@ class GetInprogressFilesHandler(UrlHandler):
         idepositbox_client = env['idepositbox_app']
         ret_list = []
         if idepositbox_client.get_status() == 'started':
-            operations = idepositbox_client.get_nibbler().inprogress_operations()
+            operations = idepositbox_client.get_nibbler().inprocess_operations()
             for oper in operations:
                 ret_list.append((oper.is_upload, os.path.basename(oper.file_path), \
                         oper.status, file_size(oper.size), file_size(oper.progress_size)))

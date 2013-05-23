@@ -256,7 +256,7 @@ class Nibbler:
     def inprocess_operations(self, only_inprogress=True):
         ret_list = []
         for is_upload, file_path, status, size, progress_size in self.transactions_manager.iterate_transactions():
-            if only_inprogress and status not in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
+            if only_inprogress and status in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
                 continue
             ret_list.append(InprogressOperation(is_upload, file_path, status, size, progress_size))
         return ret_list

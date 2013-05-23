@@ -205,7 +205,7 @@
     }
 
     $.global_vars = { 
-            last_available_ks : [] 
+            last_available_ks : ['undef'] 
     }; 
 
     function is_equal_arrays(array_obj) {
@@ -265,6 +265,9 @@
 
             if (data['sync_status'] == SS_ALL_SYNC) {
                 update_label('#sync_status', 'label-success', 'All files are synchronized');
+                if ($("#inpr_tbl").css('display') != 'none') {
+                    $('#inpr_tbl').css('display', 'none');
+                }
                 if ($('#pr_tl').css('display') != 'none') {
                     $('#pr_tl').css('display', 'none');
                 }
@@ -296,6 +299,9 @@
                     $('#pr_tl').css('display', 'block');
                 }
             } else {
+                if ($("#inpr_tbl").css('display') != 'none') {
+                    $('#inpr_tbl').css('display', 'none');
+                }
                 update_label('#sync_status', 'label-warning', 'Unknown');
                 if ($('#pr_tl').css('display') != 'none') {
                     $('#pr_tl').css('display', 'none');
@@ -315,6 +321,7 @@
     }
 
     function read_events() {
+        $('#nimbus_alerts').html('');
         $('#event_tbl tbody').html('');
         $.getJSON('/get_events', function(data) {
             if (data['ret_code'] != 0) {
@@ -356,11 +363,16 @@
     function update_progress_table(new_data) {
         var trs = $('#inpr_tbl tr');
         var cur_ni = 0;
+        var cur_tr, new_tr;
         for (var i=1; i<trs.length; i++) {
             if (cur_ni >= new_data.length) {
-                 trs[i].remove();   
+                 $(trs[i]).remove();   
             } else {
-                $(trs[i]).html(form_inp_file_row(new_data[cur_ni]));
+                cur_tr = $(trs[i]).html();
+                new_tr = form_inp_file_row(new_data[cur_ni]);
+                if (cur_tr != new_tr) {
+                    $(trs[i]).html(new_tr);
+                }
                 cur_ni++;
             }
         }

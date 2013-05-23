@@ -6,12 +6,17 @@ import sys
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('.')
 
+if len(sys.argv) > 1 and sys.argv[1] == 'with_web':
+    skip_web_tests = 'false'
+else:
+    skip_web_tests = 'true'
+
 for item in os.listdir(path):
-    if not item.endswith('.py'):
+    if (not item.endswith('.py')) or item.startswith('util_') :
         continue
 
     print '===============> %s ...'%item
-    ret = os.system('python %s'%os.path.join(path, item))
+    ret = os.system('SKIP_WEB_TESTS="%s" python %s'%(skip_web_tests, os.path.join(path, item)))
     if ret:
         print('[ERROR] Tests failed!')
         sys.exit(1)

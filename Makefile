@@ -3,7 +3,7 @@ VER=`git describe --always --tag`
 M=`uname -m`
 TEST_RUNNER:=./tests/runTests
 
-export PYTHONPATH=./
+export PYTHONPATH=./:./third-party
 
 compile:
 	@echo 'This method is not implemented' 
@@ -15,6 +15,9 @@ clean:
 
 test:
 	@$(TEST_RUNNER)
+
+test_all:
+	@$(TEST_RUNNER) with_web
 
 make_test_suid_app:
 	rm -rf ./bin/rbd_manage

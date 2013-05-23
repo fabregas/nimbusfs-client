@@ -43,8 +43,9 @@ SM_TYPES_MAP = {SPT_TOKEN_BASED: None,
 ALLOWED_PWD_CHARS = set(string.letters + string.digits + '@#$%^&+=')
 
 IDLock = LockObject()
+IDEventLock = LockObject()
 
-class IdepositboxClient:
+class IdepositboxClient(object):
     def __init__(self):
         self.__nibbler = None
         self.__api_list = []
@@ -66,17 +67,17 @@ class IdepositboxClient:
         elif log_level == 'error':
             logger.setLevel(logging.ERROR)
 
-    @IDLock
+    @IDEventLock
     def on_critical_event(self, event):
         self.__events.append(event)
 
-    @IDLock
+    @IDEventLock
     def get_events(self):
         events = self.__events
         self.__events = []
         return events
 
-    @IDLock
+    @IDEventLock
     def get_events_count(self):
         return len(self.__events)
 
@@ -115,6 +116,7 @@ class IdepositboxClient:
             self.__nibbler = Nibbler(config.fabnet_hostname, security_provider, \
                                 config.parallel_put_count, config.parallel_get_count, \
                                 config.cache_dir, config.cache_size)
+
 
             try:
                 registered = self.__nibbler.is_registered()
@@ -170,7 +172,7 @@ class IdepositboxClient:
             logger.error('init fabnet provider error: %s'%err)
             self.__status = CS_FAILED
             self.stop()
-            logger.write = logger.info
+            logger.write = logger.debug
             traceback.print_exc(file=logger)
             raise err
         self.__status = CS_STARTED
