@@ -11,6 +11,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 This module contains the implementation of Metadata class
 """
 import os
+import glob
 import anydbm
 
 from nimbus_client.core.metadata import *
@@ -192,6 +193,10 @@ class MetadataFile:
         self.__valid = False
         self.__load_md_db(md_file_path)
 
+    def __remove_md_file(self, file_path):
+        for real_file_path in glob.glob('%s*'%file_path):
+            os.remove(real_file_path)
+
     def __load_md_db(self, md_file_path):
         self.db =  anydbm.open(md_file_path, 'c')
         self.__last_item_id = long(self.__get_db_val('last_item_id', 0))
@@ -200,7 +205,7 @@ class MetadataFile:
             j_key = self.__get_db_val('journal_key', None)
             if j_key != self.__journal.get_journal_key():
                 logger.info('Invalid journal key in metadata database! Recreating it...')
-                os.remove(md_file_path)
+                self.__remove_md_file(md_file_path)
                 self.db = anydbm.open(md_file_path, 'c')
                 self.db['journal_key'] = self.__journal.get_journal_key()
                 self.__last_item_id = 0
@@ -212,7 +217,7 @@ class MetadataFile:
             logger.error('Metadata was not restored from journal! Details: %s'%err)
 
             logger.info('Trying restoring full journal records...')
-            os.remove(md_file_path)
+            self.__remove_md_file(md_file_path)
             self.db = anydbm.open(md_file_path, 'c')
             self.__init_from_journal(0)
 
