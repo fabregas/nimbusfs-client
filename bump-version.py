@@ -11,6 +11,14 @@ if __name__ == '__main__':
         sys.exit(1)
 
     version = sys.argv[1]
+    open(VER_FILE, 'w').write('#I am an auto-generated file! Dont touch me!!!\n\nVERSION="%s"'%version)
+    os.system('git reset HEAD')
+    os.system('git add %s'%VER_FILE)
+    ret = os.system('git commit -m "updated version.py for %s"'%version)
+    if ret:
+        print ('ERROR! Can not commit changes!')
+        sys.exit(1)
+
     ret = os.system('git tag -a %s'%version)
     if ret:
         print ('ERROR! Can not set new tag "%s"'%version)
@@ -22,7 +30,6 @@ if __name__ == '__main__':
         print ('ERROR! "git describe --always --tags" failed: %s'%cerr)
         sys.exit(1)
 
-    open(VER_FILE, 'w').write('#I am an auto-generated file! Dont touch me!!!\n\nVERSION="%s"'%tag.strip())
     print ('Version "%s" is bumped ;)'%version)
     sys.exit(0)
 
