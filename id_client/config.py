@@ -76,10 +76,10 @@ class Config(dict):
             raise  AttributeError(attr)
 
     def __setattr__(self, attr, value):
-        if attr in self:
+        if not attr.startswith('_') and attr in self:
             self[attr] = value
         else:
-            self.__setitem__(attr, value)
+            dict.__setattr__(self, attr, value)
 
     def save(self):
         config = RawConfigParser()

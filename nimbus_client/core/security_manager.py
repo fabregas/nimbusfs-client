@@ -244,7 +244,7 @@ class FileBasedSecurityManager(AbstractSecurityManager):
                     '-inkey', pkey_file.name, '-in', cert_file.name, '-out', new_ks_file.name, \
                     '-password', 'stdin'], ks_pwd)
             if retcode:
-                raise Exception('Can not update key chain! Details: %s'%out)
+                raise Exception('Can not update key chain! %s'%out)
 
             ks_file = self.ks_file_class(ks_path)
             ks_file.copy_from(new_ks_file.name)

@@ -153,13 +153,17 @@ class ApplySettingsHandler(UrlHandler):
 
             try:
                 data['parallel_get_count'] = int(data.get('parallel_get_count', 2))
+                if data['parallel_get_count'] not in range(1, 21): 
+                    raise ValueError()
             except ValueError:
-                raise Exception('Invalid parallel downloads count number!')
+                raise Exception('Invalid simultaneous downloads count number! Expecting numeric value in range [1-20]')
 
             try:
                 data['parallel_put_count'] = int(data.get('parallel_put_count', 2))
+                if data['parallel_put_count'] not in range(1, 21): 
+                    raise ValueError()
             except ValueError:
-                raise Exception('Invalid parallel uploads count number!')
+                raise Exception('Invalid simultaneous uploads count number! Expecting numeric value in range [1-20]')
 
             if data.get('mount_type') not in (MOUNT_LOCAL, MOUNT_EXPORT):
                 raise Exception('Invalid mount type!')
@@ -249,7 +253,8 @@ class GenerateKeyStorageHandler(UrlHandler):
         except NoCertFound, err:
             resp = {'ret_code': 123, 'ret_message':str(err)}
         except Exception, err:
-            logger.write = logger.error
+            logger.error('GenerateKeyStorageHandler: %s'%err)
+            logger.write = logger.debug
             traceback.print_exc(file=logger)
             resp = {'ret_code': 1, 'ret_message': str(err)}
         return self.json_source(resp)

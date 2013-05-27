@@ -238,7 +238,7 @@ class IdepositboxClient(object):
         try:
             resp = conn.getresponse()
             if resp.status == 505: #not found err_code
-                raise Exception('Activation key %s does not found!'%act_key)
+                raise Exception('Activation key "%s" does not found!'%act_key)
             if resp.status != 200:
                 raise Exception('CA service error! [%s %s] %s'%(resp.status, resp.reason, resp.read()))
             data = resp.read()

@@ -93,7 +93,6 @@
         </div>
       </div>
     <div class="control-group">
-        <div id="pwd_alert_field"/>
         <div class="controls">
             <button id="generate_btn" class="btn btn-primary btn-large" onclick="sumbit_generation()">Continue</button>
             <button id="cancel_btn" class="btn btn-large" onclick="init_page()">Cancel</button>
@@ -304,7 +303,7 @@
 
     function sumbit_generation() {
         if ($('#generate_btn').hasClass('disabled')) {return false;}
-        $('#pwd_alert_field').html(''); 
+        $('#gen_alert_field').html(''); 
         $('#gen_alert_field').html('');
         if ($('#password').val() != $('#re_password').val()) {
             html ='<div class="alert alert-error">'+
@@ -312,7 +311,7 @@
               '<h4>Error!</h4>'+
               '<span id="err_msg">Pin-codes are not equal!</span>'+
             '</div>';
-            $('#pwd_alert_field').html(html);        
+            $('#gen_alert_field').html(html);        
             return false;
         }
 

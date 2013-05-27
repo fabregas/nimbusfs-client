@@ -11,6 +11,7 @@ from sst import runtests
 from tinydav import WebDAVClient, HTTPUserError, HTTPServerError
 
 from util_mocked_id_client import get_test_idepositbox_client, OK, WAIT, FAIL
+from util_mocked_ca_service import MockedCAServer
 from id_client.web.web_server import MgmtServer
 from id_client.media_storage import MediaStorage
 from id_client.constants import *
@@ -188,59 +189,203 @@ class MgmtConsoleTest(runtests.SSTTestCase):
         except Exception, err:
             print 'get_file error: %s'%err
 
+    def home_page_test(self):
+        self.home_check([], 'Stopped', 'Unknown')
+
+        media = MediaStorage(KEY_NAME, KS_PATH)
+        self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': [media]})
+        wait_for(assert_text, 'ksPathLabel', KEY_NAME) 
+        self.home_check([KEY_NAME], 'Stopped', 'Unknown')
+
+        self.home_click_start('fake')
+        self.home_click_start(KS_PASSWORD)
+        self.home_click_stop()
+
+        self.home_click_start(KS_PASSWORD)
+
+        self.send_file('test_file.txt', 344)
+        self.send_file('second_file_name.hmtl', 2331)
+
+        self.mocked_id_client.simulate_fabnet_gw(WAIT)
+        dyn_cache = os.path.join(self.mocked_id_client.get_config()['cache_dir'], 'dynamic_cache')
+        for item in os.listdir(dyn_cache):
+            os.remove(os.path.join(dyn_cache, item))
+        self.get_file('test_file.txt')
+
+        self.home_check([KEY_NAME], 'Started', 'In progress ', [('test_file.txt', 344, False)]) 
+
+        self.send_file('third_file.avi', 233)
+        self.home_check([KEY_NAME], 'Started', 'In progress ', [('test_file.txt', 344, False), 
+                                                        ('third_file.avi', 233, True)]) 
+        self.mocked_id_client.simulate_fabnet_gw(OK)
+        time.sleep(3.5)
+
+        self.mocked_id_client.simulate_fabnet_gw(WAIT)
+        self.send_file('last_file.kst', 666)
+
+        self.home_check([KEY_NAME], 'Started', 'In progress ', [('last_file.kst', 666, True)]) 
+        self.mocked_id_client.simulate_fabnet_gw(OK)
+
+        #read alert message
+        assert_text_contains(xpath('//*[@id="nimbus_alerts"]/div/p'), 'You have 1 an unread alerts!')
+        click_element(xpath('//*[@id="nimbus_alerts"]/div/p/button')) #read btn
+        wait_for(assert_displayed, 'events_list_modal')
+        assert_text(xpath('//*[@id="events_list_modal"]/div[1]/h3'), 'Alerts')
+    
+        assert_table_row_contains_text('event_tbl', 1, ('.*', 'File /test_file.txt IO error.*'), True)
+        
+        click_element(xpath('//*[@id="events_list_modal"]/div[3]/a[2]'))#Close btn
+            
+        self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': [],
+                                                        'key_storage_status': 0})
+        self.home_check([KEY_NAME], 'Stopped', 'Unknown') 
+
+    def settings_page_test(self):
+        cur_config = self.mocked_id_client.get_config()
+
+        go_to('http://127.0.0.1:9999/settings')
+        wait_for(assert_attribute, 'parDownCnt','value', str(cur_config['parallel_get_count']))
+        assert_attribute('parUpCnt', 'value', str(cur_config['parallel_get_count']))
+        assert_attribute(xpath("//*[@id='mountType']/option[@selected='selected']"), 'value', cur_config['mount_type'])
+        assert_attribute('webdavHost', 'value', str(cur_config['webdav_bind_host']))
+        assert_attribute('webdavPort', 'value', str(cur_config['webdav_bind_port']))
+        assert_attribute('apply_btn', 'disabled', 'true')
+
+        write_textfield('parUpCnt', '999')
+        click_element('apply_btn')
+        wait_for(assert_text_contains, 'err_msg', 'Invalid simultaneous uploads count number! Expecting numeric value in range')
+        new_config = self.mocked_id_client.get_config()
+        self.assertEqual(new_config, cur_config)
+
+        write_textfield('parUpCnt', '10')
+        write_textfield('parDownCnt', '5')
+        write_textfield('webdavHost', 'my_hostname')
+        write_textfield('webdavPort', '9876')
+        click_element('apply_btn')
+        wait_for(assert_text_contains, 'err_msg', 'Settings are applied!')
+        assert_attribute('apply_btn', 'disabled', 'true')
+        new_config = self.mocked_id_client.get_config()
+        self.assertEqual(new_config['parallel_get_count'], 5)
+        self.assertEqual(new_config['parallel_put_count'], 10)
+        self.assertEqual(new_config['webdav_bind_host'], 'my_hostname')
+        self.assertEqual(new_config['webdav_bind_port'], '9876')
+        self.assertEqual(new_config['mount_type'], cur_config['mount_type'])
+
+        click_element(xpath('//*[@id="err_msg"]/button'))
+        set_dropdown_value('mountType', value='local')
+        click_element('apply_btn')
+        wait_for(assert_text_contains, 'err_msg', 'Settings are applied!')
+        new_new_config = self.mocked_id_client.get_config()
+        self.assertEqual(new_new_config['mount_type'], 'local')
+        new_new_config['mount_type'] = new_config['mount_type']
+        self.assertEqual(new_config, new_new_config)
+
+        set_dropdown_value('mountType', value=new_config['mount_type'])
+        click_element('apply_btn')
+
+    def check_key_management_basic(self, act_ks=None, gen_ks=None):
+        assert_css_property('pwdModal', 'display', 'none')
+        assert_css_property('succGenCertModal', 'display', 'none')
+        assert_css_property('blockDevAskModal', 'display', 'none')
+        assert_css_property('spinModal', 'display', 'none')
+        assert_element(id='info_form', css_class='hidden')
+        assert_element(id='gen_form', css_class='hidden')
+        if not act_ks:
+            wait_for(get_element_by_xpath, '//*[@id="ks_info_select_alert"]/div/span')
+            assert_text_contains(xpath('//*[@id="ks_info_select_alert"]/div/span'), 'No key chain found!')
+            assert_element(id='open_btn', css_class='disabled')
+        else:
+            wait_for(get_element_by_xpath, '//*[@id="ksPath"]/option[1]')
+            assert_text(xpath('//*[@id="ksPath"]/option[1]'), act_ks)
+
+        if not gen_ks:
+            assert_text_contains(xpath('//*[@id="ks_gen_select_alert"]/div/span'), 'No suitable device found!')
+            assert_element(id='gen_btn', css_class='disabled')
+        else:
+            assert_text(xpath('//*[@id="ksNewPath"]/option[1]'), gen_ks)
+
+
+    def key_management_page_test(self):
+        self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': []}, flush=True)
+        go_to('http://127.0.0.1:9999/key_mgmt')
+        self.check_key_management_basic()
+
+        os.system('rm -rf /tmp/test.keystorage')
+        media = MediaStorage(KEY_NAME, '/tmp/test.keystorage')
+        self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': [media]})
+
+        go_to('http://127.0.0.1:9999/key_mgmt')
+        self.check_key_management_basic(gen_ks=KEY_NAME)
+        click_element('gen_btn')
+
+        ca_server = MockedCAServer(9998)
+        ca_server.start()
+        time.sleep(1)
+        try:
+            assert_element(id='generate_btn', css_class='disabled')
+            write_textfield('act_key', 'fake')
+            write_textfield('password', '123')
+            write_textfield('re_password', '12345') 
+            click_element('generate_btn')
+            wait_for(get_element_by_xpath, '//*[@id="gen_alert_field"]/div/span')
+            assert_text_contains(xpath('//*[@id="gen_alert_field"]/div/span'), 'Pin-codes are not equal!')
+            click_element(xpath('//*[@id="gen_alert_field"]/div/button'))
+
+            write_textfield('re_password', '123') 
+            click_element('generate_btn')
+            wait_for(get_element_by_xpath, '//*[@id="gen_alert_field"]/div/span')
+            assert_text_contains(xpath('//*[@id="gen_alert_field"]/div/span'), 'Password is too short')
+            click_element(xpath('//*[@id="gen_alert_field"]/div/button'))
+
+            write_textfield('password', 'qwerty123')
+            write_textfield('re_password', 'qwerty123') 
+            click_element('generate_btn')
+            wait_for(get_element_by_xpath, '//*[@id="gen_alert_field"]/div/span')
+            assert_text_contains(xpath('//*[@id="gen_alert_field"]/div/span'), 'Activation key "fake" does not found!')
+            click_element(xpath('//*[@id="gen_alert_field"]/div/button'))
+
+            write_textfield('act_key', 'DGDSFGASGFGFDSAA')
+            click_element('generate_btn')
+            wait_for(get_element_by_xpath, '//*[@id="gen_alert_field"]/div/span')
+            assert_text_contains(xpath('//*[@id="gen_alert_field"]/div/span'), 'Details: Can not update key chain! No certificate matches private key')
+            click_element(xpath('//*[@id="gen_alert_field"]/div/button'))
+
+            os.system('cp ./tests/cert/test_pri_only.ks /tmp/test.keystorage')
+            execute_script("$.gen_ks_info.ks_path = 'blockdev:/tmp/rrrr';")
+            click_element('generate_btn')
+            wait_for(assert_displayed, 'blockDevAskModal')
+            click_element(xpath('//*[@id="blockDevAskModal"]/div/a[2]'))
+            wait_for(assert_css_property, 'blockDevAskModal', 'display', 'none')
+
+            click_element('generate_btn')
+            wait_for(assert_displayed, 'blockDevAskModal')
+            execute_script("$.gen_ks_info.ks_path = 'file:/tmp/test.keystorage';")
+            click_element(xpath('//*[@id="blockDevAskModal"]/div/a[1]'))
+
+            wait_for(assert_displayed, 'succGenCertModal')
+            click_element(xpath('//*[@id="succGenCertModal"]/div/a'))
+            self.check_key_management_basic(act_ks=KEY_NAME)
+        finally:
+            ca_server.stop()
+
+        click_element('open_btn')
+        wait_for(assert_displayed, 'pwdModal')
+        write_textfield('pwdEdit', KS_PASSWORD)
+        click_element(xpath('//*[@id="pwdModal"]/div/a'))
+        wait_for(assert_text, xpath('//*[@id="info_form"]/div[1]/h4'), 'Certificate information')
+        assert_text_contains('cert_txt', 'O=iDepositBox software, OU=clients.idepositbox.com')
+        click_element('back_btn')
+        self.check_key_management_basic(act_ks=KEY_NAME)
+
+
     def test_main(self):
         self.init_console()
         try:
             self.base_console_test()
-            self.home_check([], 'Stopped', 'Unknown')
 
-            media = MediaStorage(KEY_NAME, KS_PATH)
-            self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': [media]})
-            wait_for(assert_text, 'ksPathLabel', KEY_NAME) 
-            self.home_check([KEY_NAME], 'Stopped', 'Unknown')
-
-            self.home_click_start('fake')
-            self.home_click_start(KS_PASSWORD)
-            self.home_click_stop()
-
-            self.home_click_start(KS_PASSWORD)
-
-            self.send_file('test_file.txt', 344)
-            self.send_file('second_file_name.hmtl', 2331)
-
-            self.mocked_id_client.simulate_fabnet_gw(WAIT)
-            dyn_cache = os.path.join(self.mocked_id_client.get_config()['cache_dir'], 'dynamic_cache')
-            for item in os.listdir(dyn_cache):
-                os.remove(os.path.join(dyn_cache, item))
-            self.get_file('test_file.txt')
-
-            self.home_check([KEY_NAME], 'Started', 'In progress ', [('test_file.txt', 344, False)]) 
-
-            self.send_file('third_file.avi', 233)
-            self.home_check([KEY_NAME], 'Started', 'In progress ', [('test_file.txt', 344, False), 
-                                                            ('third_file.avi', 233, True)]) 
-            self.mocked_id_client.simulate_fabnet_gw(OK)
-            time.sleep(3.5)
-
-            self.mocked_id_client.simulate_fabnet_gw(WAIT)
-            self.send_file('last_file.kst', 666)
-
-            self.home_check([KEY_NAME], 'Started', 'In progress ', [('last_file.kst', 666, True)]) 
-            self.mocked_id_client.simulate_fabnet_gw(OK)
-
-            #read alert message
-            assert_text_contains(xpath('//*[@id="nimbus_alerts"]/div/p'), 'You have 1 an unread alerts!')
-            click_element(xpath('//*[@id="nimbus_alerts"]/div/p/button')) #read btn
-            wait_for(assert_displayed, 'events_list_modal')
-            assert_text(xpath('//*[@id="events_list_modal"]/div[1]/h3'), 'Alerts')
-        
-            assert_table_row_contains_text('event_tbl', 1, ('.*', 'File /test_file.txt IO error.*'), True)
-            
-            click_element(xpath('//*[@id="events_list_modal"]/div[3]/a[2]'))#Close btn
-                
-            self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': [],
-                                                            'key_storage_status': 0})
-            self.home_check([KEY_NAME], 'Stopped', 'Unknown') 
+            self.home_page_test()
+            self.settings_page_test()
+            self.key_management_page_test()
         finally:
             print 'FINALLY'
             self.destroy_console()
