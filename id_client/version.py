@@ -1,1 +1,3 @@
-VERSION='0.9-50-gb6e94d4'
+#I am an auto-generated file! Dont touch me!!!
+
+VERSION="1.0-b1"
