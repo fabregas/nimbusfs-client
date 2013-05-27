@@ -35,6 +35,7 @@ from id_client.constants import *
 from id_client.media_storage import get_media_storage_manager
 from id_client.security.block_device_based_ks import BlockDeviceBasedSecurityManager
 from id_client.webdav_mounter import WebdavMounter
+from id_client.version import VERSION
 
 SM_TYPES_MAP = {SPT_TOKEN_BASED: None,
                 SPT_BLOCKDEV_BASED: BlockDeviceBasedSecurityManager,
@@ -80,6 +81,9 @@ class IdepositboxClient(object):
     @IDEventLock
     def get_events_count(self):
         return len(self.__events)
+
+    def get_version(self):
+        return VERSION
 
     @IDLock
     def get_nibbler(self):

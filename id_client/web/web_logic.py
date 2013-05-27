@@ -37,7 +37,9 @@ class GetPageHandler(UrlHandler):
 
 class GetMenuHandler(UrlHandler):
     def on_process(self, env, *args):
-        return self.json_source(MENU_MAP)
+        idepositbox_client = env['idepositbox_app']
+        version = idepositbox_client.get_version() 
+        return self.json_source({'menu': MENU_MAP, 'version': version})
 
 class GetServiceStatusHandler(UrlHandler):
     def on_process(self, env, *args):
@@ -275,6 +277,8 @@ class GetEventsHandler(UrlHandler):
         return self.json_source(resp)
 
 
+
+
 HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/get_service_status', GetServiceStatusHandler()),
                 ('/get_inprogress_files', GetInprogressFilesHandler()),
@@ -299,7 +303,6 @@ MENU_MAP = (('home', 'Home'),
             ('settings', 'Settings'),
 #            ('syslog', 'System log'),
             ('key_mgmt', 'Key management'),
-            ('about', 'About'),
-            ('contact', 'Contact'))
+            ('about', 'About'))
 
 

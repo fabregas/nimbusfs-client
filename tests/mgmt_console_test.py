@@ -68,12 +68,17 @@ class MgmtConsoleTest(runtests.SSTTestCase):
         assert_title_contains('iDepositBox')
         wait_for(assert_element, id='home', css_class='active')
         assert_text(xpath('//*[@id="wind"]/div[1]/h3'), 'iDepositBox management console')
-        assert_text_contains(xpath('//*[@id="wind"]/div[3]/p'), 'iDepositBox 2013')
+        assert_text_contains(xpath('//*[@id="wind"]/div[3]/p'), '2013 iDepositBox software')
         assert_text(xpath('//*[@id="home"]/a'), 'Home')
         assert_text(xpath('//*[@id="settings"]/a'), 'Settings')
         assert_text(xpath('//*[@id="key_mgmt"]/a'), 'Key management')
         assert_text(xpath('//*[@id="about"]/a'), 'About')
-        assert_text(xpath('//*[@id="contact"]/a'), 'Contact')
+
+    def check_help(self):
+        click_element(get_element(css_class="help"))
+        wait_for(assert_element, css_class="popover")
+        click_element('wind')
+        fails(assert_element, css_class="popover")
 
     def home_check(self, ks_list, serv_status, sync_status, inpr_files=[]):
         #ks path
@@ -140,7 +145,6 @@ class MgmtConsoleTest(runtests.SSTTestCase):
             wait_for(assert_css_property, 'inpr_tbl', 'display', 'none')
 
 
-
         #btb
         assert_element(id='startstop', css_class='btn')
         if serv_status == 'Stopped':
@@ -191,6 +195,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
 
     def home_page_test(self):
         self.home_check([], 'Stopped', 'Unknown')
+        self.check_help()
 
         media = MediaStorage(KEY_NAME, KS_PATH)
         self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': [media]})
@@ -282,6 +287,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
 
         set_dropdown_value('mountType', value=new_config['mount_type'])
         click_element('apply_btn')
+        self.check_help()
 
     def check_key_management_basic(self, act_ks=None, gen_ks=None):
         assert_css_property('pwdModal', 'display', 'none')
@@ -309,6 +315,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
         self.mocked_id_client.simulate_id_client(OK, area={'get_available_media_storages': []}, flush=True)
         go_to('http://127.0.0.1:9999/key_mgmt')
         self.check_key_management_basic()
+        self.check_help()
 
         os.system('rm -rf /tmp/test.keystorage')
         media = MediaStorage(KEY_NAME, '/tmp/test.keystorage')
@@ -370,6 +377,13 @@ class MgmtConsoleTest(runtests.SSTTestCase):
 
         click_element('open_btn')
         wait_for(assert_displayed, 'pwdModal')
+        write_textfield('pwdEdit', 'blablalbla')
+        click_element(xpath('//*[@id="pwdModal"]/div/a'))
+        wait_for(get_element_by_xpath, '//*[@id="alert_field"]/div/span')
+        assert_text_contains(xpath('//*[@id="alert_field"]/div/span'), 'Can not open key chain! Maybe pin-code is invalid!')
+
+        click_element('open_btn')
+        wait_for(assert_displayed, 'pwdModal')
         write_textfield('pwdEdit', KS_PASSWORD)
         click_element(xpath('//*[@id="pwdModal"]/div/a'))
         wait_for(assert_text, xpath('//*[@id="info_form"]/div[1]/h4'), 'Certificate information')
@@ -377,6 +391,11 @@ class MgmtConsoleTest(runtests.SSTTestCase):
         click_element('back_btn')
         self.check_key_management_basic(act_ks=KEY_NAME)
 
+    def about_test(self):
+        go_to('http://127.0.0.1:9999/about')
+        assert_text_contains('about_info', 'Web site:')
+        assert_text_contains('about_info', 'Twitter:')
+        assert_text_contains('about_info', 'Version %s'%self.mocked_id_client.get_version())
 
     def test_main(self):
         self.init_console()
@@ -386,6 +405,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
             self.home_page_test()
             self.settings_page_test()
             self.key_management_page_test()
+            self.about_test()
         finally:
             print 'FINALLY'
             self.destroy_console()

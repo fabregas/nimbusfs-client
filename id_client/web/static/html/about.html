@@ -1,0 +1,39 @@
+
+<div class="hero-unit">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="media span4">
+                <img src="/static/img/logo.png"></img>
+            </div>
+            <div class="row-fluid span8" id="about_info">
+                <p>This is client portion of iDepositBox secure cloud service. To get more information please use following contacts:</p> 
+                <p>
+                    <address>
+                        Web site: <a href="http://idepositbox.com">idepositbox.com</a>
+                    </address>
+                    <address>
+                        Twitter: <a href="http://twitter.com/idepositbox">@idepositbox</a>
+                    </address>
+                    <address>
+                        Email: <a href="mailto:info@idepositbox.com">info@idepositbox.com</a>
+                    </address>
+                </p> 
+                <br>
+                <small>
+                    <p>&copy; 2013 iDepositBox software</p>
+                    <p>All rights reserved</p>
+                    <p>Portions of software based on GPL Licensed libraries</p>
+                    <p>To get details  refer to <a href="http://nimbusfs.org">nimbusfs.org</a></p>
+                    <p id="ver_span"></p>
+                </small>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<SCRIPT type="text/javascript">
+    $(function () {
+        $('#ver_span').text('Version '+$.globals.version);
+    });
+</SCRIPT>

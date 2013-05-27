@@ -5,6 +5,9 @@ TEST_RUNNER:=./tests/runTests
 
 export PYTHONPATH=./:./third-party
 
+update_version:
+	echo "VERSION='${VER}'" > id_client/version.py
+
 compile:
 	@echo 'This method is not implemented' 
 
@@ -13,7 +16,7 @@ clean:
 	@echo "rm -rf ./build"; rm -rf ./build
 
 
-test:
+test: update_version
 	@$(TEST_RUNNER)
 
 test_all:
