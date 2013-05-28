@@ -67,11 +67,12 @@ class SystemTrayIcon(QSystemTrayIcon):
     def __init__(self, parent=None):
         super(SystemTrayIcon, self).__init__(parent)
 
+        self.__first_event = True
         self.changed_service_status.connect(self.on_changed_service_status)
 
-        self.login_icon = QIcon(LOGIN_ICON)
-        self.logout_icon = QIcon(LOGOUT_ICON)
-        self.syncdata_icon = QIcon(SYNCDATA_ICON)
+        self.login_icon = QIcon(self.__get_icon_src(LOGIN_ICON))
+        self.logout_icon = QIcon(self.__get_icon_src(LOGOUT_ICON))
+        self.syncdata_icon = QIcon(self.__get_icon_src(SYNCDATA_ICON))
 
         self.manage_act = QAction(QIcon(MENU_MANAGE_ICON), LM_MANAGE, parent)
         self.exit_act = QAction(QIcon(MENU_EXIT_ICON), LM_EXIT, parent)
@@ -83,8 +84,20 @@ class SystemTrayIcon(QSystemTrayIcon):
 
         self.setIcon(self.logout_icon)
         self.setContextMenu(self.tray_menu)
+        self.setToolTip('iDepositBox service client')
+        
+    def __get_icon_src(self, icon_path):
+        if sys.platform.startswith('linux'):
+            ic = QImage(icon_path)
+            ic.invertPixels()
+            return QPixmap.fromImage(ic)
+        return icon_path
 
     def on_changed_service_status(self, status):
+        if self.__first_event:
+            self.show_information('Information', 'iDepostiBox client was started successfully')
+            self.__first_event = False
+
         if status == STATUS_STOPPED:
             self.setIcon(self.logout_icon)
         elif status == STATUS_STARTED:
@@ -110,6 +123,7 @@ class CheckSyncStatusThread(QThread):
         old_status = None
         mgmt_addr = '127.0.0.1:%s'%DAEMON_PORT
         time.sleep(2)
+
         while not self.stopped:
             try:
                 conn = httplib.HTTPConnection(mgmt_addr)
@@ -147,12 +161,13 @@ class CheckSyncStatusThread(QThread):
 class MainWind(WebViewDialog):
     def __init__(self, parent=None):
         super(MainWind, self).__init__(parent)
+
         self.systray = SystemTrayIcon(self)
         self.systray.manage_act.triggered.connect(self.onManage)
         self.systray.exit_act.triggered.connect(self.onClose)
-        self.setVisible(False)
-        self.setWindowState(Qt.WindowMaximized)
         self.setWindowIcon(QIcon(APP_ICON))
+        self.setWindowState(Qt.WindowMaximized)
+        self.setVisible(False)
 
         proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
         cout, cerr = proc.communicate()
@@ -164,8 +179,12 @@ class MainWind(WebViewDialog):
         self.check_sync_status_thr = CheckSyncStatusThread(self.systray)
         self.check_sync_status_thr.start()
 
+        self.systray.activated.connect(self.on_icon_activated)
         self.systray.show()
-        self.systray.show_information('', 'iDepostiBox client was started successfully')
+
+    def on_icon_activated(self, reason):
+        if reason in (self.systray.ActivationReason.Trigger, self.systray.ActivationReason.DoubleClick):
+            self.systray.contextMenu().popup(QCursor.pos())
 
     def onManage(self):
         self.load('http://127.0.0.1:%s/'%DAEMON_PORT)
@@ -201,8 +220,17 @@ class MainWind(WebViewDialog):
 
 def main():
     app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
+    try:
+        from PySide.QtNetwork import QLocalSocket, QLocalServer 
+        m_server = QLocalServer()
+        if not m_server.listen('idepositbox-singleapp'):
+            print 'already started...'
+            sys.exit(1)
+    except ImportError:
+        print 'Warning: QtNetwork does not installed, cant check already runned application'
 
+
+    app.setQuitOnLastWindowClosed(False)
     try:
         mw = MainWind()
     except Exception, err:

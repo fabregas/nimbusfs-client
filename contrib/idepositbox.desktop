@@ -4,6 +4,6 @@ Type=Application
 Name=iDepositBox
 Comment=iDepositBox service client
 TryExec=idepositbox
-Exec=idepositbox
+Exec=/usr/bin/idepositbox
 Icon=/opt/idepositbox/id_client/gui/resources/app-icon.png
 Categories=Network
