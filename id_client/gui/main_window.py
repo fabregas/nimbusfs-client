@@ -42,6 +42,7 @@ if not os.path.exists(MGMT_CLI_PATH):
 LOGOUT_ICON = os.path.join(RESOURCES_DIR, "logout-icon.png")
 LOGIN_ICON = os.path.join(RESOURCES_DIR, "login-icon.png")
 SYNCDATA_ICON = os.path.join(RESOURCES_DIR, "sync-icon.png")
+APP_ICON = os.path.join(RESOURCES_DIR, "app-icon.png")
 
 MENU_MANAGE_ICON = os.path.join(RESOURCES_DIR, "menu-manage-icon.png")
 MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
@@ -151,6 +152,7 @@ class MainWind(WebViewDialog):
         self.systray.exit_act.triggered.connect(self.onClose)
         self.setVisible(False)
         self.setWindowState(Qt.WindowMaximized)
+        self.setWindowIcon(QIcon(APP_ICON))
 
         proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
         cout, cerr = proc.communicate()

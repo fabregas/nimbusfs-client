@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0-b2
+Type=Application
+Name=iDepositBox
+Comment=iDepositBox service client
+TryExec=idepositbox
+Exec=idepositbox
+Icon=/opt/idepositbox/id_client/gui/resources/app-icon.png
+Categories=Network

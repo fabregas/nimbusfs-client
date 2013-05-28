@@ -20,12 +20,12 @@ DAEMON_PORT = 8880
 client_dir = os.environ.get('IDB_LIB_PATH', None)
 if not client_dir:
     client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
-    third_party = os.path.join(client_dir, 'third-party')
-    sys.path.insert(0, third_party)
 else:
     sys.path.append(os.path.join(client_dir, 'lib-dynload'))
 
 sys.path.insert(0, client_dir)
+third_party = os.path.join(client_dir, 'third-party')
+sys.path.insert(0, third_party)
 
 
 from nimbus_client.core.logger import logger

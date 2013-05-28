@@ -44,3 +44,7 @@ generate_forms:
 build_mac:
 	python setup_mac.py py2app
 	hdiutil create -srcfolder dist/Idepositbox.app dist/iDepositBox-${VER}.dmg
+
+install_linux_gui_icon:
+	xdg-desktop-icon install --novendor contrib/idepositbox.desktop
+	xdg-desktop-menu install --novendor contrib/idepositbox.desktop
