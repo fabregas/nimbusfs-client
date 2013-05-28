@@ -1,6 +1,11 @@
 
 import os
 import sys
+from subprocess import Popen, PIPE
+
+from nimbus_client.core.logger import logger
+
+LINUX_MOUNTER_BIN = os.path.abspath(os.path.join(os.path.dirname(__file__), '../bin/webdav_mount'))
 
 OS_MAC = 'mac'
 OS_LINUX = 'linux'
@@ -16,13 +21,28 @@ class WebdavMounter:
         else:
             self.cur_os = OS_UNKNOWN
 
+    def __run_linux_mounter(self, cmd):
+        proc = Popen([LINUX_MOUNTER_BIN, cmd], stdout=PIPE, stderr=PIPE)
+        cout, cerr = proc.communicate()
+        if proc.returncode:
+            logger.error('webdav mounter error: %s %s'%(cout, cerr))
+        return proc.returncode 
+
     def mount(self, host, port):
         if self.cur_os == OS_MAC:
             return self.mount_mac(host, port)
         elif self.cur_os == OS_LINUX:
+            import pwd
+            if (pwd.getpwuid(os.geteuid())[0] != 0):
+                return self.__run_linux_mounter('mount')
             return self.mount_linux(host, port)
 
     def unmount(self):
+        if self.cur_os == OS_LINUX:
+            import pwd
+            if (pwd.getpwuid(os.geteuid())[0] != 0):
+                return self.__run_linux_mounter('umount')
+
         if self.cur_os in (OS_MAC, OS_LINUX):
             self.unmount_unix(self.get_mount_point())
 
@@ -60,4 +80,31 @@ class WebdavMounter:
     def unmount_unix(self, mount_point):
         if os.path.exists(mount_point):
             os.system('umount %s'%mount_point)
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        sys.stderr.write('usage: %s mount|umount\n'%sys.argv[0])
+        sys.exit(1)
+
+    from id_client.config import Config
+    wdm = WebdavMounter()
+    config = Config()
+    cmd = sys.argv[1]
+    if cmd == 'mount':
+        err = ''
+        try:
+            ret_code = wdm.mount('127.0.0.1', config.webdav_bind_port)
+        except Exception, err:
+            ret_code = 1
+        if ret_code:
+            sys.stderr.write('Webdav does not mounted locally! %s\n'%err)
+            sys.exit(1)
+    elif cmd == 'umount':
+        wdm.unmount()
+    else:
+        sys.stderr.write('unknown command "%s"!\n'%cmd)
+        sys.exit(1)
+
+    sys.stdout.write('ok\n')
+    sys.exit(0)
 

@@ -2,7 +2,7 @@
 #include <asm/errno.h>
 #include <errno.h>
 
-#define PATH "/opt/idepositbox/id_client/security/mng_block_device.py"
+#define PATH "/opt/idepositbox/{RELPATH}"
 
 int main(int argc, char **argv, char **envp)
 {
@@ -21,8 +21,8 @@ int main(int argc, char **argv, char **envp)
     execve(PATH, argv, envp);
 
     if (errno == 2) {
-        printf("Path %s does not found!\n", PATH);
+        fprintf(stderr, "Path %s does not found!\n", PATH);
     } else {
-        printf("ERROR = %d!\n", errno);
+        fprintf(stderr, "ERROR = %d!\n", errno);
     }
 }

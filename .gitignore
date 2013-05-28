@@ -32,3 +32,4 @@ bootstrap
 bin/rbd_*
 bin/i686/*
 bin/x86_64
+webdav_mount
