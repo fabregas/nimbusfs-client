@@ -55,7 +55,13 @@ class Config(dict):
             raise Exception('ConfigParser: %s' % msg)
 
     def get_config_file_path(self):
-        return os.path.join(os.getenv('HOME'), '.idepositbox_client.conf')
+        return os.path.join(os.path.expanduser('~'), '.idepositbox_client.conf')
+
+    def __get_default_cache_dir(self):
+        cache_dir = os.path.join(os.path.expanduser('~'), '.idepositbox_cache') 
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir)
+        return cache_dir
 
     def get_defaults(self):
         return {'log_level': 'INFO',
@@ -65,7 +71,7 @@ class Config(dict):
                 'webdav_bind_host': '127.0.0.1',
                 'webdav_bind_port': '8080',
                 'mount_type': MOUNT_LOCAL,
-                'cache_dir': tempfile.gettempdir(),
+                'cache_dir': self.__get_default_cache_dir(),
                 'cache_size': 0,
                 'ca_address': 'ca.idepositbox.com'}
 

@@ -10,6 +10,7 @@ import subprocess
 import signal
 import string
 import hashlib
+import logging
 from Queue import Queue, Empty
 
 from nimbus_client.core import transactions_manager
@@ -21,6 +22,9 @@ from nimbus_client.core.data_block_cache import DataBlockCache
 from nimbus_client.core.metadata_file import MetadataFile
 from nimbus_client.core.data_block import DataBlock, DBLocksManager
 from nimbus_client.core.security_manager import FileBasedSecurityManager
+from nimbus_client.core.logger import logger
+
+logger.setLevel(logging.DEBUG)
 
 CLIENT_KS_PATH = './tests/cert/test_cl_1024.ks'
 PASSWD = 'qwerty123'

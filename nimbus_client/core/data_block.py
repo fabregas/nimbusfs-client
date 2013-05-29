@@ -141,7 +141,8 @@ class DataBlock:
         NOTICE: file object will be not closed after this method call.
         """
         if self.__is_closed():
-            self.__backup_db()
+            if self.get_actual_size() > 0:
+                self.__backup_db()
             self.__f_obj = self.__open_file('wb')
             self.__restore_db()
 

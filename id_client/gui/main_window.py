@@ -62,13 +62,8 @@ ENV['IDB_LIB_PATH'] = LIB_DIR
 
 
 class SystemTrayIcon(QSystemTrayIcon):
-    changed_service_status = Signal(str)
-
     def __init__(self, parent=None):
         super(SystemTrayIcon, self).__init__(parent)
-
-        self.__first_event = True
-        self.changed_service_status.connect(self.on_changed_service_status)
 
         self.login_icon = QIcon(self.__get_icon_src(LOGIN_ICON))
         self.logout_icon = QIcon(self.__get_icon_src(LOGOUT_ICON))
@@ -89,15 +84,12 @@ class SystemTrayIcon(QSystemTrayIcon):
     def __get_icon_src(self, icon_path):
         if sys.platform.startswith('linux'):
             ic = QImage(icon_path)
+            #ic = ic.scaled(16, 16)
             ic.invertPixels()
             return QPixmap.fromImage(ic)
         return icon_path
 
     def on_changed_service_status(self, status):
-        if self.__first_event:
-            self.show_information('Information', 'iDepostiBox client was started successfully')
-            self.__first_event = False
-
         if status == STATUS_STOPPED:
             self.setIcon(self.logout_icon)
         elif status == STATUS_STARTED:
@@ -113,9 +105,9 @@ class SystemTrayIcon(QSystemTrayIcon):
 
 
 class CheckSyncStatusThread(QThread):
-    def __init__(self, tray):
-        QThread.__init__(self, tray)
-        self.tray = tray
+    def __init__(self, wind):
+        QThread.__init__(self, wind)
+        self.wind = wind
         self.stopped = True
 
     def run(self):
@@ -148,7 +140,7 @@ class CheckSyncStatusThread(QThread):
                         status = STATUS_STARTED
 
                 if status != old_status:
-                    self.tray.changed_service_status.emit(status)
+                    self.wind.changed_service_status.emit(status)
                 old_status = status
             except Exception, err:
                 logger.error('CheckSyncStatusThread: %s'%err)
@@ -159,10 +151,14 @@ class CheckSyncStatusThread(QThread):
         self.stopped = True
 
 class MainWind(WebViewDialog):
+    changed_service_status = Signal(str)
+
     def __init__(self, parent=None):
         super(MainWind, self).__init__(parent)
 
+        self.__first_event = True
         self.systray = SystemTrayIcon(self)
+        self.changed_service_status.connect(self.on_changed_service_status)
         self.systray.manage_act.triggered.connect(self.onManage)
         self.systray.exit_act.triggered.connect(self.onClose)
         self.setWindowIcon(QIcon(APP_ICON))
@@ -176,11 +172,23 @@ class MainWind(WebViewDialog):
             self.show_error('Management console does not started!\nDetails: %s'%cerr)
             raise Exception('mgmt server does not started by %s'%MGMT_CLI_RUNCMD)
 
-        self.check_sync_status_thr = CheckSyncStatusThread(self.systray)
+        self.check_sync_status_thr = CheckSyncStatusThread(self)
         self.check_sync_status_thr.start()
 
         self.systray.activated.connect(self.on_icon_activated)
-        self.systray.show()
+        if self.systray.isSystemTrayAvailable():
+            self.systray.show()
+
+    def on_changed_service_status(self, status):
+        if self.__first_event:
+            if self.systray.isVisible():
+                self.systray.show_information('Information', 'iDepostiBox client was started successfully')
+            else:
+                self.onManage()
+            self.__first_event = False
+
+        if self.systray.isVisible():
+            self.systray.on_changed_service_status(status)
 
     def on_icon_activated(self, reason):
         if reason in (self.systray.ActivationReason.Trigger, self.systray.ActivationReason.DoubleClick):
@@ -193,16 +201,15 @@ class MainWind(WebViewDialog):
     def show_error(self, message):
         QMessageBox.critical(self, 'Error', message)
 
-    def show_question(self, title, message):
-        reply = QMessageBox.question(self, title, message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
-            return True
+    def closeEvent(self, event):
+        if not self.systray.isVisible():
+            self.onClose()
+            event.ignore()
         else:
-            return False
+            event.accept()
 
     def onClose(self):
-        if not self.show_question('Exit?', 'Are you sure that you want to exit?!'):
+        if not self.show_question('Exit?', 'Are you sure that you want to exit?!', self):
             return
 
         try:
@@ -217,19 +224,29 @@ class MainWind(WebViewDialog):
         finally:
             qApp.exit()
 
+    @classmethod
+    def show_question(cls, title, message, parent=None):
+        reply = QMessageBox.question(parent, title, message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            return True
+        else:
+            return False
+
+    @classmethod
+    def isMgmtServerStarted(cls):
+        proc = Popen(MGMT_CLI_RUNCMD+['status'], stdout=PIPE, stderr=PIPE, env=ENV)
+        cout, cerr = proc.communicate()
+        print (cout)
+        if proc.returncode:
+            return False
+        return True
 
 def main():
     app = QApplication(sys.argv)
-    try:
-        from PySide.QtNetwork import QLocalSocket, QLocalServer 
-        m_server = QLocalServer()
-        if not m_server.listen('idepositbox-singleapp'):
-            print 'already started...'
+    if MainWind.isMgmtServerStarted():
+        if not MainWind.show_question('WARNING', 'Management console is already started! Do you really want start application?'):
             sys.exit(1)
-    except ImportError:
-        print 'Warning: QtNetwork does not installed, cant check already runned application'
-
-
     app.setQuitOnLastWindowClosed(False)
     try:
         mw = MainWind()
