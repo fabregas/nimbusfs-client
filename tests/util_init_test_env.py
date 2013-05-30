@@ -6,7 +6,7 @@ import logging
 
 from nimbus_client.core.logger import logger
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 def tmp(fname):
     return os.path.join(tempfile.gettempdir(), fname)

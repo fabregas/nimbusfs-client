@@ -13,7 +13,10 @@ This module contains the fabnet client logger initialization
 import os
 import tempfile
 import sys
+import traceback
+import StringIO
 import logging, logging.handlers
+
 
 def init_logger():
     logger = logging.getLogger('fabnet-client')
@@ -39,7 +42,22 @@ def init_logger():
     console.setFormatter(formatter)
     logger.addHandler(console)
     logger.propagate = False
+    logger.traceback_debug = lambda: lazy_traceback_log(logger.debug)
+    logger.traceback_info = lambda: lazy_traceback_log(logger.info)
 
     return logger
+
+
+class lazy_traceback_log(object):
+    def __init__(self, logfunc):
+        logfunc("%s", self)
+
+    def __str__(self):
+        buf = StringIO.StringIO()
+        try:
+            traceback.print_exc(file=buf)
+            return buf.getvalue()
+        finally:
+            buf.close()
 
 logger = init_logger()

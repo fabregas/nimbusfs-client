@@ -60,10 +60,8 @@ class PutWorker(threading.Thread):
                 data_block.close()
                 self.transactions_manager.update_transaction(transaction.get_id(), seek, is_failed=False, foreign_name=key)
             except Exception, err:
-                #import traceback
-                #logger.write = logger.error
-                #traceback.print_exc(file=logger)
                 events_provider.critical('PutWorker', '%s failed: %s'%(transaction, err))
+                logger.traceback_debug()            
                 try:
                     if transaction:
                         self.transactions_manager.update_transaction(transaction.get_id(), seek, \
@@ -71,6 +69,7 @@ class PutWorker(threading.Thread):
 
                 except Exception, err:
                     logger.error('[PutWorker.__on_error] %s'%err)
+                    logger.traceback_debug()            
             finally:
                 if data_block:
                     data_block.close()
@@ -115,6 +114,7 @@ class GetWorker(threading.Thread):
                             is_failed=False, foreign_name=data_block.get_name())
             except Exception, err:
                 events_provider.error('GetWorker','%s failed: %s'%(transaction, err))
+                logger.traceback_debug()            
                 try:
                     if transaction and data_block:
                         self.transactions_manager.update_transaction(transaction.get_id(), seek, \
@@ -123,6 +123,7 @@ class GetWorker(threading.Thread):
                         data_block.remove()
                 except Exception, err:
                     logger.error('[GetWorker.__on_error] %s'%err)
+                    logger.traceback_debug()            
             finally:
                 self.queue.task_done()
 

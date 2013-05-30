@@ -17,7 +17,6 @@ import signal
 import sys
 import threading
 import logging
-import traceback
 
 from wsgidav.version import __version__
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
@@ -57,9 +56,7 @@ class MgmtServer(threading.Thread):
             self.server.start()
         except Exception, err:
             logger.error('Management server error: %s'%err)
-            logger.write = logger.info
-            traceback.print_exc(file=logger)
-
+            logger.traceback_info()            
 
     def stop(self):
         try:
@@ -69,4 +66,5 @@ class MgmtServer(threading.Thread):
                 self.server.stop()
         except Exception, err:
             logger.error('Stopping management server error: %s'%err)
+            logger.traceback_info()            
 

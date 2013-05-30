@@ -90,6 +90,7 @@ class SmartFileObject:
             #logger.debug('write %s bytes to %s ...'%(len(data), self.__file_path))
         except Exception, err:
             self.__failed_transaction(err)
+            logger.traceback_debug()            
             raise err
 
     def get_seek(self):
@@ -141,6 +142,7 @@ class SmartFileObject:
                 self.__cur_data_block = None
         except Exception, err:
             self.__failed_transaction(err)
+            logger.traceback_debug()            
             raise err
 
         #logger.debug('read %s bytes from %s ...'%(len(ret_data), self.__file_path))
@@ -162,9 +164,7 @@ class SmartFileObject:
                         self.TRANSACTIONS_MANAGER.save_empty_file(self.__file_path)
                 except Exception, err: 
                     self.__failed_transaction(err)
-                    #import traceback
-                    #logger.write = logger.error
-                    #traceback.print_exc(file=logger)
+                    logger.traceback_debug()            
                     raise err
             else:
                 if self.__cur_data_block:

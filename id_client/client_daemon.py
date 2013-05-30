@@ -45,6 +45,7 @@ class IDClientDaemon:
             self.server.run()
         except Exception, err:
             logger.error('IDClientDaemon error: %s'%err)
+            logger.traceback_info()            
 
     def stop(self, s, p):
         logger.info('Stopping IDClientDaemon...')
@@ -53,6 +54,7 @@ class IDClientDaemon:
             logger.info('IDClientDaemon is stopped')
         except Exception, err:
             logger.error('IDClientDaemon stopping error: %s'%err)
+            logger.traceback_info()            
 
 
 if __name__ == '__main__':
@@ -60,7 +62,5 @@ if __name__ == '__main__':
         IDClientDaemon().start()
     except Exception, err:
         logger.error('IDClientDaemon failed: %s'%err)
-        #import traceback
-        #logger.write = logger.error
-        #traceback.print_exc(file=logger)
+        logger.traceback_info()            
         sys.exit(1)

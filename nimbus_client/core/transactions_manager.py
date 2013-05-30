@@ -327,6 +327,7 @@ class TransactionsManager:
                 data_block = self.new_data_block(item_id, chunk.seek, chunk.size)
                 self.transfer_data_block(transaction_id, chunk.seek, chunk.size, data_block, chunk.key)
         except Exception, err:
+            logger.traceback_debug()            
             if stored_transaction:
                 self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
             raise err
@@ -386,6 +387,7 @@ class TransactionsManager:
                     self.__save_metadata(transaction)
                 except Exception, err:
                     events_provider.critical("Metadata", "Can't update metadata! Details: %s"%err)
+                    logger.traceback_debug()            
                     return self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
             elif status == Transaction.TS_FAILED:
                 if transaction.get_status() != Transaction.TS_FAILED:
@@ -398,6 +400,7 @@ class TransactionsManager:
                     self.__metadata.cancel_item_id_reserve(transaction_id)
                 except Exception, err:
                     logger.warning("Can't cancel item_id=%s reserve"%transaction_id)
+                    logger.traceback_debug()            
 
         if transaction.get_status() != status: 
             transaction.change_status(status)

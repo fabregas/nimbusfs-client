@@ -175,10 +175,9 @@ class IdepositboxClient(object):
             logger.info('IdepositboxClient is started')
         except Exception, err:
             logger.error('init fabnet provider error: %s'%err)
+            logger.traceback_info()
             self.__status = CS_FAILED
             self.stop()
-            logger.write = logger.debug
-            traceback.print_exc(file=logger)
             raise err
         self.__status = CS_STARTED
 
@@ -344,6 +343,7 @@ class CheckKSStatusThread(threading.Thread):
                     self.id_client.stop()
             except Exception, err:
                 logger.error('CheckKSStatusThread: %s'%err)
+                logger.traceback_debug()
             finally:
                 time.sleep(2)
         logger.debug('thread is stopped')

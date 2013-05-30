@@ -11,8 +11,6 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of gateway API for talking with fabnet
 """
 import hashlib
-import traceback
-
 from nimbus_client.core.fri.fri_base import FabnetPacketRequest, RamBasedBinaryData, FriBinaryData
 from nimbus_client.core.fri.fri_client import FriClient
 from nimbus_client.core.fri.constants import FRI_CLIENT_TIMEOUT
@@ -94,9 +92,8 @@ class FabnetGateway:
             if checksum != db_checksum:
                 raise Exception('Invalid data block checksum!')
         except Exception, err:
-            logger.write = logger.debug
-            traceback.print_exc(file=logger)
             logger.error('[put] %s'%err)
+            logger.traceback_debug()            
             if not allow_rewrite:
                 self.remove(key, replica_count)
             raise err

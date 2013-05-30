@@ -10,8 +10,6 @@ Copyright (C) 2013 Konstantin Andrusenko
 """
 
 import os
-import traceback
-
 from wsgi_app import UrlHandler
 from wsgi_app import WSGIApplication
 from id_client.constants import *
@@ -256,8 +254,7 @@ class GenerateKeyStorageHandler(UrlHandler):
             resp = {'ret_code': 123, 'ret_message':str(err)}
         except Exception, err:
             logger.error('GenerateKeyStorageHandler: %s'%err)
-            logger.write = logger.debug
-            traceback.print_exc(file=logger)
+            logger.traceback_info()            
             resp = {'ret_code': 1, 'ret_message': str(err)}
         return self.json_source(resp)
 
