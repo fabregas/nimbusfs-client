@@ -11,9 +11,13 @@ Copyright (C) 2013 Konstantin Andrusenko
 This module contains the implementation of DataBlockCache class
 """
 import os
+import sys
 import time
 import threading
 from logger import logger
+
+from nimbus_client.core.utils import get_free_space
+from nimbus_client.core.data_block import DataBlock
 
 CHECK_CAPACITY_TIME = 5
 MIN_FREE_CAPACITY = 10
@@ -45,8 +49,6 @@ class DataBlockCache:
         try:
             for item in os.listdir(dir_path):
                 path = os.path.join(dir_path, item)
-                if os.path.islink(path):
-                    continue
                 busy_size += os.path.getsize(path)
         finally:
             self.__lock.release()
@@ -56,26 +58,19 @@ class DataBlockCache:
         return self.__calculate_busy_size(self.__dyn_cache) + \
                 self.__calculate_busy_size(self.__stat_cache)
 
-    def mklink(self, cur_db_hash, new_db_hash):
-        cur_path = self.get_cache_path(cur_db_hash)
-        new_path = self.get_cache_path(new_db_hash)
-        os.symlink(cur_path, new_path)
-        return new_path
-
     def get_cache_path(self, db_hash):
         self.__lock.acquire()
         try:
-            path = os.path.join(self.__dyn_cache, db_hash)
-            if os.path.exists(path) and os.path.islink(path):
-                path = os.readlink(path)
-                if not os.path.exists(path):
-                    path = os.path.join(self.__dyn_cache, path)
-            return path
+            return os.path.join(self.__dyn_cache, db_hash)
         finally:
             self.__lock.release()
 
     def get_static_cache_path(self, db_hash):
-        return os.path.join(self.__stat_cache, db_hash)
+        self.__lock.acquire()
+        try:
+            return os.path.join(self.__stat_cache, db_hash)
+        finally:
+            self.__lock.release()
 
     def can_store(self, need_size):
         self.__lock.acquire()
@@ -90,8 +85,7 @@ class DataBlockCache:
     def clear_old(self):
         self.__lock.acquire()
         try:
-            stat = os.statvfs(self.__cache_dir)
-            self.__ph_free_size = stat.f_bsize * stat.f_bavail
+            self.__ph_free_size = get_free_space(self.__cache_dir)
         finally:
             self.__lock.release()
 
@@ -121,25 +115,18 @@ class DataBlockCache:
             del_lst = []
             for item in os.listdir(self.__dyn_cache):
                 path = os.path.join(self.__dyn_cache, item) 
-                if os.path.islink(path):
-                    continue
                 if DataBlock.is_locked(path):
+                    logger.debug('can not remove data block at %s bcs it is locked!'%path)
                     continue
-
                 del_lst.append(path, os.stat(path))
                             
             del_lst = sorted(del_lst, lambda a,b: cmp(a[1].st_atime, b[1].st_atime))
             for path, stat in del_lst:
                 logger.debug('clearing data block at %s'%path)
-                os.remove(path)
+                DataBloc.remove_on_unlock(path)
                 removed_size += stat.st_size
                 if removed_size >= del_size:
                     break
-
-            for item in os.listdir(self.__dyn_cache):
-                path = os.path.join(self.__dyn_cache, item)
-                if os.path.islink(path) and not os.path.exists(path):
-                    os.remove(path)
 
             self.__ph_free_size += removed_size
         finally:
@@ -153,20 +140,8 @@ class DataBlockCache:
         path = os.path.join(self.__dyn_cache, db_hash)
         if not os.path.exists(path):
             return
-        if os.path.islink(path):
-            r_path = os.readlink(path)
-            if not os.path.exists(r_path):
-                r_path = os.path.join(self.__dyn_cache, r_path)
-            os.remove(r_path)
-
         logger.debug('removing data block at %s'%path)
-        os.remove(path)
-
-        #clear dead links...
-        for item in os.listdir(self.__dyn_cache):
-            path = os.path.join(self.__dyn_cache, item)
-            if os.path.islink(path) and not os.path.exists(path):
-                os.remove(path)
+        DataBlock.remove_on_unlock(path)
 
 
 class CheckCapacityThrd(threading.Thread):
@@ -184,11 +159,12 @@ class CheckCapacityThrd(threading.Thread):
         while True:
             try:
                 self.__db_cache.clear_old()
+            except Exception, err:
+                logger.error('CheckCapacityThrd: %s'%err)
+            finally:
                 for i in xrange(CHECK_CAPACITY_TIME):
                     time.sleep(1)
                     if self.__stop_event.is_set():
                         logger.info('CheckCapacityThrd is stopped')
                         return
-            except Exception, err:
-                logger.error('CheckCapacityThrd: %s'%err)
 

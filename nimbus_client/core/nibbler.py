@@ -27,7 +27,7 @@ from nimbus_client.core.transactions_manager import TransactionsManager, Transac
 from nimbus_client.core.workers_manager import WorkersManager, PutWorker, GetWorker 
 from nimbus_client.core.smart_file_object import SmartFileObject
 from nimbus_client.core.data_block import DataBlock, DBLocksManager
-from nimbus_client.core.utils import to_str
+from nimbus_client.core.utils import to_nimbus_path
 from nimbus_client.core.security_manager import AbstractSecurityManager
 
 
@@ -40,8 +40,8 @@ class InprogressOperation:
         self.progress_size = progress_size
 
     def __repr__(self):
-        return '[%s][%s][%s perc] %s'%('UPLOAD' if self.is_upload else 'DOWNLOAD', \
-                Transaction.TS_MAP.get(self.status, 'unknown'), self.progress_perc, self.file_path)
+        return '[%s][%s][%s progress] %s'%('UPLOAD' if self.is_upload else 'DOWNLOAD', \
+                Transaction.TS_MAP.get(self.status, 'unknown'), self.progress_size, self.file_path)
 
 class FSItem:
     def __init__(self, item_name, is_dir, create_dt=None, modify_dt=None, size=0):
@@ -146,7 +146,7 @@ class Nibbler:
         return FSItem(item_md.name, item_md.is_dir(), item_md.create_date, item_md.last_modify_date, item_md.size)
 
     def find(self, path):
-        path = to_str(path)
+        path = to_nimbus_path(path)
         path_obj = self.transactions_manager.find_inprogress_file(path)
         if not path_obj:
             try:
@@ -159,7 +159,7 @@ class Nibbler:
             return self.__make_item_fs(path_obj)
 
     def listdir(self, path='/'):
-        path = to_str(path)
+        path = to_nimbus_path(path)
         ret_lst = []
         inc_tr_l = []
 
@@ -183,7 +183,7 @@ class Nibbler:
 
 
     def mkdir(self, path, recursive=False):
-        path = to_str(path)
+        path = to_nimbus_path(path)
         logger.debug('mkdir %s ...'%path)
         mdf = self.metadata
         if mdf.exists(path):
@@ -202,7 +202,7 @@ class Nibbler:
 
 
     def rmdir(self, path, recursive=False):
-        path = to_str(path)
+        path = to_nimbus_path(path)
         logger.debug('rmdir %s ...'%path)
         mdf = self.metadata
 
@@ -215,7 +215,7 @@ class Nibbler:
             raise NotEmptyException('Directory "%s" is not empty!'%path)
 
         for item in items:
-            full_path = os.path.join(path, item.name)
+            full_path = '%s/%s'%(path, item.name)
             if item.is_file():
                 self.remove_file(full_path)
             else:
@@ -224,8 +224,8 @@ class Nibbler:
         mdf.remove(dir_obj)
 
     def move(self, s_path, d_path):
-        s_path = to_str(s_path)
-        d_path = to_str(d_path)
+        s_path = to_nimbus_path(s_path)
+        d_path = to_nimbus_path(d_path)
         logger.debug('moving %s to %s ...'%(s_path, d_path))
 
         mdf = self.metadata
@@ -244,13 +244,13 @@ class Nibbler:
         logger.debug('%s is moved to %s!'%(s_path, d_path))
 
     def remove_file(self, file_path):
-        file_path = to_str(file_path)
+        file_path = to_nimbus_path(file_path)
         logger.debug('removing file %s ...'%file_path)
         self.transactions_manager.remove_file(file_path)
         logger.debug('file %s is removed!'%file_path)
 
     def open_file(self, file_path, for_write=False):
-        file_path = to_str(file_path)
+        file_path = to_nimbus_path(file_path)
         return SmartFileObject(file_path, for_write)
 
     def inprocess_operations(self, only_inprogress=True):

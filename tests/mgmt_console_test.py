@@ -210,8 +210,9 @@ class MgmtConsoleTest(runtests.SSTTestCase):
 
         self.send_file('test_file.txt', 344)
         self.send_file('second_file_name.hmtl', 2331)
-
+        time.sleep(1)
         self.mocked_id_client.simulate_fabnet_gw(WAIT)
+
         dyn_cache = os.path.join(self.mocked_id_client.get_config()['cache_dir'], 'dynamic_cache')
         for item in os.listdir(dyn_cache):
             os.remove(os.path.join(dyn_cache, item))

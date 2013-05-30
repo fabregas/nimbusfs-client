@@ -21,9 +21,11 @@ from nimbus_client.core.exceptions import TimeoutException, IOException
 from nimbus_client.core.constants import BUF_LEN, READ_TRY_COUNT, READ_SLEEP_TIME
 from nimbus_client.core.logger import logger
 
+
 class DBLocksManager:
     def __init__(self):
         self.__locks = {}
+        self.__for_call = {}
         self.__thrd_lock = threading.RLock()
 
     def set(self, lock_obj):
@@ -40,8 +42,23 @@ class DBLocksManager:
             cur_locks = self.__locks.get(lock_obj, 0)
             if cur_locks <= 1:
                 del self.__locks[lock_obj]
+                if lock_obj in self.__for_call:
+                    try:
+                        self.__for_call[lock_obj](lock_obj)
+                    finally:
+                        del self.__for_call[lock_obj]
             else:
                 self.__locks[lock_obj] = cur_locks-1
+        finally:
+            self.__thrd_lock.release()
+
+    def call_on_unlock(self, lock_obj, call_obj):
+        self.__thrd_lock.acquire()
+        try:
+            if not self.locked(lock_obj):
+                return False
+            self.__for_call[lock_obj] = call_obj
+            return True
         finally:
             self.__thrd_lock.release()
 
@@ -67,14 +84,22 @@ class DBLocksManager:
 class DataBlock:
     SECURITY_MANAGER = None
     LOCK_MANAGER = None
+    __lock = threading.RLock()
 
     @classmethod
     def is_locked(cls, path):
         if cls.LOCK_MANAGER:
             return cls.LOCK_MANAGER.locked(path)
         return False
+    
+    @classmethod
+    def remove_on_unlock(cls, path):
+        if cls.LOCK_MANAGER:
+            exists = cls.LOCK_MANAGER.call_on_unlock(path, os.remove)
+            if not exists:
+                os.remove(path)
 
-    def __init__(self, path, raw_len=None, actsize=False, create_if_none=False):
+    def __init__(self, path, raw_len=None, actsize=False, force_create=False):
         self.__path = path
         self.__checksum = hashlib.sha1()
         self.__f_obj = None
@@ -83,9 +108,8 @@ class DataBlock:
         self.__rest_str = ''
         self.__locked = False
         self.__raw_len = raw_len
-        self.__lock = threading.RLock()
 
-        if create_if_none and (not os.path.exists(self.__path)):
+        if force_create and (not os.path.exists(self.__path)):
             open(self.__path, 'wb').close()
 
         if self.SECURITY_MANAGER:
@@ -99,6 +123,14 @@ class DataBlock:
             self.__expected_len = self.get_actual_size()
             self.__encdec.set_expected_data_len(self.__expected_len)
 
+        if self.LOCK_MANAGER and not self.__locked:
+            self.LOCK_MANAGER.set(self.__path)
+            self.__locked = True
+
+    def locked_db(self):
+        if self.LOCK_MANAGER:
+            return self.LOCK_MANAGER.locked(self.__path)
+        return False
 
     def exists(self):
         return os.path.exists(self.__path)
@@ -130,6 +162,9 @@ class DataBlock:
     def get_name(self):
         return os.path.basename(self.__path)
 
+    def get_path(self):
+        return self.__path
+
     def remove(self):
         self.close()
         if os.path.exists(self.__path):
@@ -141,10 +176,7 @@ class DataBlock:
         NOTICE: file object will be not closed after this method call.
         """
         if self.__is_closed():
-            if self.get_actual_size() > 0:
-                self.__backup_db()
-            self.__f_obj = self.__open_file('wb')
-            self.__restore_db()
+            self.__open_file('r+b')
 
         if encrypt and self.__encdec:
             data = self.__encdec.encrypt(data, finalize)
@@ -162,7 +194,7 @@ class DataBlock:
 
     def finalize(self):
         self.write('', finalize=True)
-        self.__f_obj.close()
+        self.__close()
         self.__expected_len = self.__seek
         self.__seek = 0
         self.__checksum = hashlib.sha1()
@@ -172,8 +204,7 @@ class DataBlock:
             self.__f_obj.flush()
 
     def close(self):
-        if self.__f_obj and not self.__f_obj.closed:
-            self.__f_obj.close()
+        self.__close()
 
         if self.__locked:
             self.LOCK_MANAGER.release(self.__path)
@@ -217,19 +248,24 @@ class DataBlock:
 
         return ret_str
 
-    def __open_file(self, open_flags):
-        if self.LOCK_MANAGER and not self.__locked:
-            self.LOCK_MANAGER.set(self.__path)
-            self.__locked = True
+    def __close(self):
+        if self.__f_obj and (not self.__f_obj.closed):
+            self.__f_obj.close()
+            self.__f_obj = None
 
-        return open(self.__path, open_flags)
+    def __open_file(self, open_flags):
+        self.__f_obj = open(self.__path, open_flags)
+        if 'r+' in open_flags:
+            if self.get_actual_size():
+                logger.debug('rewrite data block %s for appending...'%self.get_name())
+                self.__restore_db() 
 
     def __is_closed(self):
         return ((not self.__f_obj) or self.__f_obj.closed)
 
     def __read_buf(self, read_buf_len):
         if self.__expected_len is None:
-            raise RuntimeError('Unknown data block size!')
+            raise RuntimeError('Unknown data block size for %s!'%self.get_name())
         if self.__expected_len <= self.__get_seek():
             return None
 
@@ -237,7 +273,7 @@ class DataBlock:
         remained_read_len = read_buf_len
         for i in xrange(READ_TRY_COUNT):
             if self.__is_closed():
-                self.__f_obj = self.__open_file('rb')
+                self.__open_file('rb')
                 self.__f_obj.seek(self.__get_seek())
 
             data = self.__f_obj.read(remained_read_len)
@@ -272,18 +308,19 @@ class DataBlock:
         finally:
             self.__lock.release()
 
-    def __backup_db(self):
-        if os.path.exists(self.__path):
-            shutil.move(self.__path, self.__path+'.back')
-
     def __restore_db(self):
-        if not os.path.exists(self.__path+'.back'):
-            return
+        cdb = DataBlock(self.__path, actsize=True)
+        try:
+            while True:
+                data = cdb.read(BUF_LEN)
+                if not data:
+                    break
+                self.write(data)
+        except Exception, err:
+            logger.warning('Data block %s does not restored with error: %s. Removing this data block...'%(self.get_name(), err))
+            self.remove()
+            raise err
+        finally:
+            cdb.close()
 
-        bdb = DataBlock(self.__path+'.back', actsize=True)
-        while True:
-            data = bdb.read(BUF_LEN)
-            if not data:
-                break
-            self.write(data)
-        bdb.remove()
+

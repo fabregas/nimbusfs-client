@@ -12,10 +12,10 @@ import os
 import sys
 import struct
 import logging
-import tempfile
 from subprocess import Popen, PIPE
 from zipfile import ZipFile
 
+from nimbus_client.core.utils import TempFile
 from id_client.media_storage import get_media_storage_manager
 from id_client.security.mbr import *
 
@@ -146,7 +146,7 @@ class BlockDevice:
         elif self.cur_os == self.LINUX:
             tmp_file = None
             if file_path is None: 
-                tmp_file = tempfile.NamedTemporaryFile()
+                tmp_file = TempFile()
                 tmp_file.write(data)
                 tmp_file.flush()
                 file_path = tmp_file.name
@@ -174,7 +174,7 @@ class BlockDevice:
         if self.cur_os == self.MAC_OS:
             return self.int_read()
         elif self.cur_os == self.LINUX:
-            tmp_file = tempfile.NamedTemporaryFile()
+            tmp_file = TempFile()
             file_path = tmp_file.name
             try:
                 self.__bdm_call(self.__dev_path, 'read', file_path)

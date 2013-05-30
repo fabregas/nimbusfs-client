@@ -12,7 +12,6 @@ This module contains the implementation of Config class
 """
 import os
 import copy
-import tempfile
 import ConfigParser
 from ConfigParser import RawConfigParser
 

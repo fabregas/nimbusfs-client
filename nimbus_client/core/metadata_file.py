@@ -15,6 +15,7 @@ import glob
 import anydbm
 
 from nimbus_client.core.metadata import *
+from nimbus_client.core.exceptions import NoFreeIdentificator
 from nimbus_client.core.journal import Journal
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.logger import logger
@@ -22,6 +23,9 @@ from nimbus_client.core.utils import to_str
 
 MDLock = LockObject()
 
+RESERVE_ITEM = 'RI'
+MAX_ITEM_ID = MAX_L 
+ROOT_NAME = '/'
 
 class Key:
     KEY_STRUCT = '<QiB'
@@ -205,6 +209,7 @@ class MetadataFile:
             j_key = self.__get_db_val('journal_key', None)
             if j_key != self.__journal.get_journal_key():
                 logger.info('Invalid journal key in metadata database! Recreating it...')
+                self.db.close()
                 self.__remove_md_file(md_file_path)
                 self.db = anydbm.open(md_file_path, 'c')
                 self.db['journal_key'] = self.__journal.get_journal_key()
@@ -217,6 +222,7 @@ class MetadataFile:
             logger.error('Metadata was not restored from journal! Details: %s'%err)
 
             logger.info('Trying restoring full journal records...')
+            self.db.close()
             self.__remove_md_file(md_file_path)
             self.db = anydbm.open(md_file_path, 'c')
             self.__init_from_journal(0)
@@ -232,7 +238,8 @@ class MetadataFile:
             for record_id, operation_type, item_md in self.__journal.iter(start_rec_id):
                 try:
                     if operation_type == Journal.OT_APPEND:
-                         self.append(None, item_md)
+                        self.append(None, item_md)
+                        self.__last_item_id = item_md.item_id
                     elif operation_type == Journal.OT_UPDATE:
                         self.update(item_md)
                     elif operation_type == Journal.OT_REMOVE:
@@ -245,10 +252,9 @@ class MetadataFile:
                     logger.warning('Can not append/update item %s, bcs it is already exists!'%item_md)
 
             self.__last_journal_rec_id = self.__journal.get_last_id()
-            self.__last_item_id = self.__last_journal_rec_id
             logger.info('Metadata is restored from journal. Last journal record ID=%s'%self.__last_journal_rec_id)
         else:
-            self.append(None, DirectoryMD(name='/', item_id=0, parent_dir_id=0))
+            self.append(None, DirectoryMD(name=ROOT_NAME, item_id=0, parent_dir_id=0))
         self.__valid = True
 
     def __hash(self, str_data):
@@ -434,12 +440,45 @@ class MetadataFile:
                         ret_lst.append(self.__get_item_md(i_id))
         return ret_lst
 
-    @MDLock
-    def append(self, path, item_md):
-        if path:
+    def __get_next_item_id(self, with_reserve=False):
+        self.__last_item_id
+        cur_item_id = self.__last_item_id
+        while True:
             self.__last_item_id += 1
+            if self.__last_item_id >= MAX_ITEM_ID:
+                self.__last_item_id = 1
+            if cur_item_id == self.__last_item_id:
+                raise NoFreeIdentificator('No free ItemMD identificator found!')
+            if self.__register_item_by_id(self.__last_item_id, not with_reserve):
+                return self.__last_item_id
+
+    def __register_item_by_id(self, item_id, check_only=False):
+        ikey = Key(Key.KT_ITEM, item_id)
+        raw_item = self.__get_raw_value(ikey)
+        if raw_item is None:
+            if not check_only:
+                self.__set_raw_value(ikey, RESERVE_ITEM)
+            return True
+        return False 
+
+    @MDLock
+    def generate_item_id(self):
+        return self.__get_next_item_id(with_reserve=True)
+
+    @MDLock
+    def cancel_item_id_reserve(self, item_id):
+        ikey = Key(Key.KT_ITEM, item_id)
+        raw_item = self.__get_raw_value(ikey)
+        if raw_item == RESERVE_ITEM:
+            self.__remove_key(ikey) 
+
+    @MDLock
+    def append(self, path, item_md, item_id=None):
+        if path:
+            if not item_id:
+                item_id = self.__get_next_item_id()
             dir_md = self.find(path)
-            item_md.item_id = self.__last_item_id
+            item_md.item_id = item_id
             item_md.parent_dir_id = dir_md.item_id
         else:
             if item_md.parent_dir_id is None:
@@ -459,7 +498,8 @@ class MetadataFile:
 
         if self.__exists(item_md):
             raise AlreadyExistsException('Item "%s" alredy exists in %s'%(item_md.name, path))
-        if self.__key_exists(i_key):
+        iv = self.__get_raw_value(i_key)
+        if iv and iv != RESERVE_ITEM:
             raise AlreadyExistsException('Item with ID=%s is already exists!'%item_md.item_id)
 
         self.__append_addr_child(dir_md, item_md.item_id)
@@ -523,10 +563,9 @@ class MetadataFile:
     def find(self, path):
         items = path.split('/')
         cur_id = self.__root_id
-
         try:
             for item_name in items:
-                if not item_name:
+                if (not item_name) or (item_name == ROOT_NAME):
                     continue
 
                 cur_id = self.__get_child_id(cur_id, item_name)

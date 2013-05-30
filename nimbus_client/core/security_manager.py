@@ -12,13 +12,13 @@ This module contains the implementation of security manager
 """
 import os
 import re
-import tempfile
 from subprocess import Popen, PIPE, STDOUT
 
 from nimbus_client.core.encdec_provider import EncDecProvider
 from nimbus_client.core import pycrypto_enc_engine
 from nimbus_client.core.exceptions import InvalidPasswordException, NoCertFound
 from nimbus_client.core.logger import logger
+from nimbus_client.core.utils import TempFile
 
 Cipher = pycrypto_enc_engine.PythonCryptoEngine
 
@@ -123,22 +123,26 @@ class FileBasedSecurityManager(AbstractSecurityManager):
     @classmethod
     def exec_openssl(cls, command, stdin=None, cwd=None):
         '''Run openssl command. PKI_OPENSSL_BIN doesn't need to be specified'''
-        c = ['openssl']
+        c = [os.environ.get('OPENSSL_EXEC', 'openssl')]
         c.extend(command)
 
-        proc = Popen(c, shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT, cwd=cwd)
-        stdout_value, stderr_value = proc.communicate(stdin)
+        try:
+            proc = Popen(c, shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT, cwd=cwd)
+            stdout_value, stderr_value = proc.communicate(stdin)
 
-        out = stdout_value
-        if stderr_value:
-            out += '\n%s'%stderr_value
-        if proc.returncode != 0:
-            logger.debug('OpenSSL error: %s'%out)
+            out = stdout_value
+            if stderr_value:
+                out += '\n%s'%stderr_value
+            if proc.returncode != 0:
+                logger.error('OpenSSL error: %s'%out)
+        except Exception, err:
+            logger.error('openssl call error! "%s" failed: %s'%(' '.join(c), err))
+            raise err
         return proc.returncode, out
 
 
     def get_client_cert_key(self):
-        cert_file = tempfile.NamedTemporaryFile()
+        cert_file = TempFile()
         cert_file.write(self._client_cert)
         cert_file.flush()
         try:
@@ -170,8 +174,9 @@ class FileBasedSecurityManager(AbstractSecurityManager):
 
         ks_file.create_empty()
 
-        pkey_file = tempfile.NamedTemporaryFile()
-        ks_tmp_file = tempfile.NamedTemporaryFile()
+        pkey_file = TempFile()
+        ks_tmp_file = TempFile()
+
         retcode, out = cls.exec_openssl(['genrsa', '-out', pkey_file.name, '1024'])
         if retcode:
             raise Exception('Can not generate private key using openssl command')
@@ -191,8 +196,8 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         if not ks_file.exists():
             raise Exception('Key chain does not found at %s!'%ks_path)
 
-        tmp_file = tempfile.NamedTemporaryFile()
-        ks_tmp_file = tempfile.NamedTemporaryFile()
+        tmp_file = TempFile()
+        ks_tmp_file = TempFile()
         try:
             ks_tmp_file.write(ks_file.read())
             ks_tmp_file.flush()
@@ -215,8 +220,8 @@ class FileBasedSecurityManager(AbstractSecurityManager):
             self._client_cert = cert_s.groups()[0]
 
     def generate_cert_request(self, cert_cn):
-        pkey_file = tempfile.NamedTemporaryFile()
-        cert_req_file = tempfile.NamedTemporaryFile()
+        pkey_file = TempFile()
+        cert_req_file = TempFile()
         pkey_file.write(self._client_prikey)
         pkey_file.flush()
         try:
@@ -231,9 +236,9 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         return cert_req
 
     def append_certificate(self, ks_path, ks_pwd, cert):
-        pkey_file = tempfile.NamedTemporaryFile()
-        cert_file = tempfile.NamedTemporaryFile()
-        new_ks_file = tempfile.NamedTemporaryFile()
+        pkey_file = TempFile()
+        cert_file = TempFile()
+        new_ks_file = TempFile()
         pkey_file.write(self._client_prikey)
         pkey_file.flush()
         cert_file.write(cert)
@@ -255,7 +260,7 @@ class FileBasedSecurityManager(AbstractSecurityManager):
 
     def validate(self, password):
         ks_file = self.ks_file_class(self._ks_path)
-        ks_tmp_file = tempfile.NamedTemporaryFile()
+        ks_tmp_file = TempFile()
         try:
             ks_tmp_file.write(ks_file.read())
             ks_tmp_file.flush()

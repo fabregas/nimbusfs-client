@@ -29,16 +29,16 @@ from nimbus_client.core.data_block import DataBlock
 from nimbus_client.core.transactions_manager import Transaction
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core.exceptions import *
+from util_init_test_env import *
 
 DEBUG=False
 
 CLIENT_KS_PATH = './tests/cert/test_cl_1024.ks'
 PASSWD = 'qwerty123'
 
-TMP_FILE = '/tmp/test_file.out'
 
 def wait_oper_status(inprocess_operations_func, file_path, status):
-    for i in xrange(20):
+    for i in xrange(300):
         time.sleep(.1)
         op_list = inprocess_operations_func(only_inprogress=False)
         for oper_info in op_list:
@@ -136,10 +136,12 @@ class BaseNibblerTest(unittest.TestCase):
     NIBBLER_INST = None
 
     def test01_nibbler_init(self):
-        os.system('rm -rf /tmp/dynamic_cache/*')
-        os.system('rm -rf /tmp/static_cache/*')
+        remove_dir(tmp('client_base_test'))
+        os.makedirs(tmp('client_base_test/dynamic_cache'))
+        os.makedirs(tmp('client_base_test/static_cache'))
+
         security_manager = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
-        nibbler = Nibbler('127.0.0.1', security_manager)
+        nibbler = Nibbler('127.0.0.1', security_manager, cache_dir=tmp('client_base_test'))
         nibbler.fabnet_gateway.fri_client = MockedFriClient()
         BaseNibblerTest.NIBBLER_INST = nibbler
         with self.assertRaises(NoJournalFoundException):
@@ -155,8 +157,8 @@ class BaseNibblerTest(unittest.TestCase):
             lock_list = DataBlock.LOCK_MANAGER.locks()
             self.assertEqual(len(lock_list), 0, lock_list)
         finally:
-
             time.sleep(1)
+        remove_dir(tmp('client_base_test'))
 
     def test02_create_dir(self):
         nibbler = BaseNibblerTest.NIBBLER_INST
@@ -179,11 +181,10 @@ class BaseNibblerTest(unittest.TestCase):
         data *= 5*1024
         checksum = hashlib.sha1(data).hexdigest()
     
+        f_obj = nibbler.open_file('/some/dir/file.fake', for_write=True)
         with self.assertRaises(PathException):
-            f_obj = nibbler.open_file('/some/dir/file.fake', for_write=True)
             f_obj.write('test')
-            f_obj.close()
-
+        f_obj.close()
         with self.assertRaises(ClosedFileException):
             f_obj.write('test')
 
@@ -192,10 +193,10 @@ class BaseNibblerTest(unittest.TestCase):
             f_obj.write('test data')
 
         print 'writing data to NimbusFS...'
-        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out', for_write=True)
+        f_obj = nibbler.open_file(os.path.join('/my_first_dir/my_first_subdir','test_file.out'), for_write=True)
         f_obj.write('')
         f_obj.close()
-        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
+        f_obj = nibbler.open_file(os.path.join('/my_first_dir/my_first_subdir','test_file.out'))
         e_data = f_obj.read()
         f_obj.close()
         self.assertEqual(e_data, '')
@@ -206,14 +207,14 @@ class BaseNibblerTest(unittest.TestCase):
         f_obj.write(' for local save')
         f_obj.close()
 
-        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out', for_write=True)
+        f_obj = nibbler.open_file(os.path.join('/my_first_dir/my_first_subdir', 'test_file.out'), for_write=True)
         f_obj.write(data[:100])
         f_obj.write(data[100:])
         f_obj.close()
 
         op_list = nibbler.inprocess_operations(only_inprogress=False)
-        self.assertEqual(len(op_list), 1)
-        oper_info = op_list[0]
+        self.assertEqual(len(op_list), 2, op_list)
+        oper_info = op_list[1]
         self.assertEqual(oper_info.is_upload, True)
         self.assertEqual(oper_info.file_path, '/my_first_dir/my_first_subdir/test_file.out')
         self.assertEqual(oper_info.status, Transaction.TS_LOCAL_SAVED, oper_info)
@@ -229,10 +230,14 @@ class BaseNibblerTest(unittest.TestCase):
         self.assertNotEqual(fs_item.create_dt, None)
         self.assertEqual(fs_item.create_dt, fs_item.modify_dt)
 
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/small_file', for_write=True)
+        f_obj.write('test message')
+        f_obj.close()
+
         for i in xrange(20):
             time.sleep(.1)
             op_list = nibbler.inprocess_operations(only_inprogress=False)
-            oper_info = op_list[0]
+            oper_info = op_list[1]
             if oper_info.status == Transaction.TS_FINISHED:
                 break
         else:
@@ -242,10 +247,6 @@ class BaseNibblerTest(unittest.TestCase):
             f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out/subfile.lol', for_write=True)
             f_obj.write('test')
             f_obj.close()
-
-        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/small_file', for_write=True)
-        f_obj.write('test message')
-        f_obj.close()
 
         s_data_len = len(data)
         checksum = hashlib.sha1(data).hexdigest()
@@ -259,7 +260,8 @@ class BaseNibblerTest(unittest.TestCase):
         self.assertEqual(data, 'test data for local save')
 
         #clear cached data blocks...
-        os.system('rm -rf /tmp/dynamic_cache/*')
+        remove_dir(tmp('client_base_test/dynamic_cache'))
+        os.makedirs(tmp('client_base_test/dynamic_cache'))
 
         f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
         data = ''
@@ -325,7 +327,8 @@ class BaseNibblerTest(unittest.TestCase):
             nibbler.listdir('/some/imagine/path')
 
     def test07_failed_read_transactions(self):
-        os.system('rm -rf /tmp/dynamic_cache/*')
+        remove_dir(tmp('client_base_test/dynamic_cache'))
+        os.makedirs(tmp('client_base_test/dynamic_cache'))
         nibbler = BaseNibblerTest.NIBBLER_INST
         cur_fri_client = nibbler.fabnet_gateway.fri_client
         try:
@@ -335,13 +338,14 @@ class BaseNibblerTest(unittest.TestCase):
                 data = f_obj.read()
             f_obj.close()
             time.sleep(0.5)
-            data_blocks = os.listdir('/tmp/dynamic_cache/')
+            data_blocks = os.listdir(tmp('client_base_test/dynamic_cache/'))
             self.assertEqual(len(data_blocks), 0)
         finally:
             nibbler.fabnet_gateway.fri_client = cur_fri_client
 
     def test07_failed_write_transactions(self):
-        os.system('rm -rf /tmp/dynamic_cache/*')
+        remove_dir(tmp('client_base_test/dynamic_cache'))
+        os.makedirs(tmp('client_base_test/dynamic_cache'))
         nibbler = BaseNibblerTest.NIBBLER_INST
         cur_fri_client = nibbler.fabnet_gateway.fri_client
         try:
@@ -356,9 +360,9 @@ class BaseNibblerTest(unittest.TestCase):
 
         self.__wait_oper_status('/my_first_dir/new_file_with_up_fails', Transaction.TS_FINISHED)
 
-
         #fail on DB saving into local cache
-        os.system('rm -rf /tmp/dynamic_cache/*')
+        remove_dir(tmp('client_base_test/dynamic_cache'))
+        os.makedirs(tmp('client_base_test/dynamic_cache'))
         f_obj = nibbler.open_file('/my_first_dir/new_file.failed', for_write=True)
         f_obj.write('*'*100100)
         def mocked_write(data, finalize):
@@ -371,8 +375,8 @@ class BaseNibblerTest(unittest.TestCase):
 
         self.__wait_oper_status('/my_first_dir/new_file.failed', Transaction.TS_FAILED)
 
-        data_blocks = os.listdir('/tmp/dynamic_cache/')
-        self.assertEqual(len(data_blocks), 0)
+        data_blocks = os.listdir(tmp('client_base_test/dynamic_cache'))
+        self.assertEqual(len(data_blocks), 0, data_blocks)
         f_obj._SmartFileObject__cur_data_block.write = db_write_routine
 
         #fail on Metadata update
@@ -384,8 +388,8 @@ class BaseNibblerTest(unittest.TestCase):
         nibbler.metadata.append = md_append_mocked
         f_obj.close()
         self.__wait_oper_status('/my_first_dir/new_file_2.failed', Transaction.TS_FAILED)
-        data_blocks = os.listdir('/tmp/dynamic_cache/')
-        self.assertEqual(len(data_blocks), 0)
+        data_blocks = os.listdir(tmp('client_base_test/dynamic_cache/'))
+        self.assertEqual(len(data_blocks), 0, data_blocks)
         nibbler.metadata.append = md_append_func
 
         #fail on Journal sync

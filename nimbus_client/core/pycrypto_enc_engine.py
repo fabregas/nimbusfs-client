@@ -63,6 +63,7 @@ class PythonCryptoEngine:
 
         self.__cipher = AES.new(secret, AES.MODE_CBC, iv)
         self.__rest_str = ''
+        self.__prev_dec_str = ''
 
     def __add_padding(self, data, finalize=False):
         data = self.__rest_str + data
@@ -125,8 +126,12 @@ class PythonCryptoEngine:
 
         d_data = self.__cipher.decrypt(data)
         if finalize:
-            return self.__strip_padding(d_data)
-        return d_data
+            ret_data = self.__strip_padding(self.__prev_dec_str + d_data)
+        else:
+            ret_data = self.__prev_dec_str + d_data[:-BLOCK_SIZE]
+            self.__prev_dec_str = d_data[-BLOCK_SIZE:]
+
+        return ret_data
 
     def get_encrypted_header(self):
         return self.__enc_data 

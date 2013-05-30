@@ -10,16 +10,19 @@ import subprocess
 import signal
 import string
 import hashlib
-
+import tempfile
 
 from nimbus_client.core.metadata import *
 from nimbus_client.core.metadata_file import *
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core.data_block import DataBlock
+from util_init_test_env import *
 
 CLIENT_KS_PATH = './tests/cert/test_cl_1024.ks'
 PASSWD = 'qwerty123'
 
+def tmp(fname):
+    return os.path.join(tempfile.gettempdir(), fname)
 
 class TestMetadata(unittest.TestCase):
     def test_chunk_md(self):
@@ -195,7 +198,7 @@ class TestMetadata(unittest.TestCase):
 
 
     def test_dir_md(self):
-        md_file_path = '/tmp/md.cache'
+        md_file_path = tmp('md.cache')
         if os.path.exists(md_file_path):
             os.remove(md_file_path)
         FS_STR = [('/test_dir', 1), ('/test_dir/subdir', 1), ('/test_dir/my_file.txt', 0), ('/test_dir/subdir/test_file.txt', 0)]
@@ -257,8 +260,9 @@ class TestMetadata(unittest.TestCase):
     def test_journal(self):
         ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
         DataBlock.SECURITY_MANAGER = ks
-        os.system('rm /tmp/test_nimbusfs_journal')
-        journal = Journal('%040x'%23453, '/tmp/test_nimbusfs_journal', MockedFabnetGateway())
+        tmp_journal = tmp('test_nimbusfs_journal')
+        os.remove(tmp_journal)
+        journal = Journal('%040x'%23453, tmp_journal, MockedFabnetGateway())
         try:
             dir_name = 'Test directory'
             dir_id = 235532
@@ -287,7 +291,7 @@ class TestMetadata(unittest.TestCase):
         finally:
             journal.close()
         
-        journal = Journal('%040x'%23453, '/tmp/test_nimbusfs_journal', MockedFabnetGateway())
+        journal = Journal('%040x'%23453, tmp_journal, MockedFabnetGateway())
         cnt = 0
         for record_id, operation_type, item_md in journal.iter():
             cnt += 1

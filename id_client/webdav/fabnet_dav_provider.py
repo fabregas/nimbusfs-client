@@ -14,7 +14,6 @@ from datetime import datetime
 import time
 import wsgidav.util as util
 import os
-import tempfile
 import threading
 
 from wsgidav.dav_error import DAVError, HTTP_FORBIDDEN
@@ -180,7 +179,7 @@ class FolderResource(DAVCollection):
         self.dir_obj = dir_obj
 
         # Setting the name from the file path should fix the case on Windows
-        self.path = os.path.normpath(path)
+        self.path = path
         self.name = os.path.basename(self.path)
         #self.name = self.name.encode("utf8")
 

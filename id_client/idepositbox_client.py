@@ -14,7 +14,7 @@ import os
 import time
 import logging
 import traceback
-import tempfile
+
 import httplib
 import urllib
 import socket
@@ -28,6 +28,7 @@ from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.nibbler import Nibbler
 from nimbus_client.core.logger import logger
 from nimbus_client.core.events import Event, events_provider
+from nimbus_client.core.utils import TempFile
 
 from id_client.webdav.application import WebDavAPI
 from id_client.config import Config
@@ -214,7 +215,7 @@ class IdepositboxClient(object):
             raise Exception('Unsupported key chain type: "%s"'%ks_type)
 
         cert = sm_class(ks_path, ks_pwd).get_client_cert()
-        tmp_file = tempfile.NamedTemporaryFile()
+        tmp_file = TempFile()
         tmp_file.write(cert)
         tmp_file.flush()
         cmd = 'openssl x509 -in %s -noout -text'%tmp_file.name

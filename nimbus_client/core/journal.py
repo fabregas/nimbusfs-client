@@ -45,7 +45,7 @@ class Journal:
     def __init__(self, journal_key, journal_path, fabnet_gateway):
         self.__journal_key = journal_key
         self.__journal_path = journal_path
-        self.__journal = DataBlock(self.__journal_path, create_if_none=True)
+        self.__journal = DataBlock(self.__journal_path, force_create=True)
         self.__fabnet_gateway = fabnet_gateway
         self.__last_record_id = 0
 
@@ -61,7 +61,7 @@ class Journal:
 
     def __recv_journal(self):
         self.__journal.remove()
-        self.__journal = DataBlock(self.__journal_path, create_if_none=True)
+        self.__journal = DataBlock(self.__journal_path, force_create=True)
 
         is_recv = self.__fabnet_gateway.get(self.__journal_key, 2, self.__journal)
         if is_recv:

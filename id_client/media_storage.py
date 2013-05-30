@@ -42,7 +42,7 @@ class AbstractMediaStoragesManager:
 
     @classmethod
     def get_removable_storages(cls):
-        pass
+        return []
 
     @classmethod
     def is_removable(self, device):
@@ -120,11 +120,17 @@ class MacOsMediaStoragesManager(AbstractMediaStoragesManager):
             st_list.append(MediaStorage(cls.get_device_label(device), device, SPT_BLOCKDEV_BASED))
         return st_list
 
+class WindowsMediaStoragesManager(AbstractMediaStoragesManager):
+    #FIXME: implement me...
+    pass
+
 def get_media_storage_manager():
     if sys.platform.startswith('linux'):
         return LinuxMediaStoragesManager
     elif sys.platform == 'darwin':
         return MacOsMediaStoragesManager
+    elif sys.platform == 'win32':
+        return WindowsMediaStoragesManager
     else:
         raise Exception('Unsupported platform "%s"!'%sys.platform)
 

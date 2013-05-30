@@ -9,7 +9,6 @@ Copyright (C) 2012 Konstantin Andrusenko
 @date December 3, 2012
 """
 import os
-import tempfile
 import threading
 
 

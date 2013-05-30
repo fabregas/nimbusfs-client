@@ -39,6 +39,8 @@ class SmartFileObject:
         self.__unsync = False
         self.__closed = False
         self.__for_write = for_write
+        self.__failed_flag = False
+        self.__is_tmp_file = self.__tmp_file()
         logger.debug('opening file %s for %s...'%(file_path, 'write' if for_write else 'read'))
 
     def __tmp_file(self):
@@ -52,17 +54,21 @@ class SmartFileObject:
         if not self.__for_write:
             raise PermissionsException('File %s is openned for read!'%self.__file_path)
 
+        if self.__closed:
+            raise ClosedFileException('closed file!')
+
         if not data:
             return
 
         try:
-            if self.__closed:
-                raise ClosedFileException('closed file!')
+            if not self.__transaction_id:
+                self.__transaction_id = self.TRANSACTIONS_MANAGER.start_upload_transaction(self.__file_path)
+
             if self.__cur_data_block is None:
-                self.__cur_data_block = self.TRANSACTIONS_MANAGER.new_data_block()
+                self.__cur_data_block = self.TRANSACTIONS_MANAGER.new_data_block(self.__transaction_id, self.__seek)
 
             data_len = len(data)
-            if self.__tmp_file():
+            if self.__is_tmp_file:
                 rest = 0
             else:
                 rest = self.__cur_db_seek + data_len - MAX_DATA_BLOCK_SIZE
@@ -98,7 +104,7 @@ class SmartFileObject:
 
         while True:
             cur_seek = self.__seek
-            self.__cur_data_block, self.__seek = self.__transaction.get_data_block(self.__seek)
+            self.__cur_data_block, self.__seek, _ = self.__transaction.get_data_block(self.__seek)
             if self.__cur_data_block is None:
                 return
 
@@ -115,14 +121,13 @@ class SmartFileObject:
             raise ClosedFileException('closed file!')
 
         self.seek(0)
-
         try:
             ret_data = ''
             while True:
                 if not self.__cur_data_block:
                     if self.__seek is None:
                         break
-                    self.__cur_data_block, self.__seek = self.__transaction.get_data_block(self.__seek)
+                    self.__cur_data_block, self.__seek, _ = self.__transaction.get_data_block(self.__seek)
                     if not self.__cur_data_block:
                         break
 
@@ -146,21 +151,20 @@ class SmartFileObject:
         if self.__closed:
             return
         try:
+            if self.__failed_flag:
+                return
+
             if self.__for_write:
                 try:
-                    if self.__tmp_file():
-                        self.__cur_data_block.finalize()
-                        self.__cur_data_block.close()
-                        self.TRANSACTIONS_MANAGER.save_local_file(self.__file_path, self.__cur_db_seek, self.__cur_data_block)
-                    elif self.__unsync and self.__cur_data_block:
-                        self.__send_data_block()
+                    if self.__unsync and self.__cur_data_block:
+                        self.__send_data_block(last_block=True)
                     elif not self.__transaction_id:
                         self.TRANSACTIONS_MANAGER.save_empty_file(self.__file_path)
-
-                    if self.__transaction_id:
-                        self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, Transaction.TS_LOCAL_SAVED)
                 except Exception, err: 
                     self.__failed_transaction(err)
+                    #import traceback
+                    #logger.write = logger.error
+                    #traceback.print_exc(file=logger)
                     raise err
             else:
                 if self.__cur_data_block:
@@ -169,13 +173,20 @@ class SmartFileObject:
             self.__closed = True
             logger.debug('file %s is closed!'%self.__file_path)
             
-    def __send_data_block(self):
+    def __send_data_block(self, last_block=False):
         self.__cur_data_block.finalize()
-        if self.__cur_data_block.get_actual_size():
-            if not self.__transaction_id:
-                self.__transaction_id = self.TRANSACTIONS_MANAGER.start_upload_transaction(self.__file_path)
+        if self.__is_tmp_file:
+            self.__cur_data_block.close()
+            self.TRANSACTIONS_MANAGER.save_data_block_locally(self.__transaction_id, \
+                    self.__seek, self.__cur_db_seek, self.__cur_data_block, last_block)
+        else:
+            if self.__cur_data_block.get_actual_size():
+                self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, \
+                        self.__seek, self.__cur_db_seek, self.__cur_data_block)
 
-            self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, self.__seek, self.__cur_db_seek, self.__cur_data_block)
+            if last_block:
+                self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, \
+                        Transaction.TS_LOCAL_SAVED)
 
         self.__seek += self.__cur_db_seek
         self.__cur_db_seek = 0
@@ -183,8 +194,10 @@ class SmartFileObject:
         self.__unsync = False
 
     def __failed_transaction(self, err):
+        self.__failed_flag = True
         events_provider.critical("File", "File %s IO error: %s"%\
                             (self.__file_path, err))
+
 
         if self.__cur_data_block:
             self.__cur_data_block.remove()

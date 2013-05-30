@@ -16,6 +16,7 @@ import getpass
 import socket
 import tempfile
 import subprocess
+import signal
 from datetime import datetime
 
 client_dir = os.environ.get('IDB_LIB_PATH', None)
@@ -50,8 +51,10 @@ def start_daemon():
         sys.exit(1)
 
     t0 = datetime.now()
-    cmd = 'nohup %s %s &' % (sys.executable, daemon_script)
-    devnull = open('/dev/null', 'r+')
+    cmd = '%s %s &' % (sys.executable, daemon_script)
+    if sys.platform != 'win32':
+        cmd = 'nohup ' + cmd
+    devnull = open(os.devnull, 'r+')
     sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull, env=os.environ)
     open(get_pid_file(), 'w').write(str(sp.pid))
 
@@ -69,7 +72,7 @@ def stop_daemon():
         sys.exit(1)
 
     pid = open(pid_file, 'r').read()
-    os.system('kill -s INT %s'%pid)
+    os.kill(int(pid), signal.SIGINT)
     os.unlink(pid_file)
     print('iDepositBox management console is stopped!')
 

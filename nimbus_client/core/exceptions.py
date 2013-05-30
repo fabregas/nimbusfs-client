@@ -74,3 +74,6 @@ class InvalidPasswordException(NimbusException):
 
 class NoCertFound(NimbusException):
     pass
+
+class NoFreeIdentificator(NimbusException):
+    pass

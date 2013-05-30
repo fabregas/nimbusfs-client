@@ -41,7 +41,7 @@ class PutWorker(threading.Thread):
                     break
                 
                 transaction, seek = job
-                data_block,_ = transaction.get_data_block(seek, noclone=True)
+                data_block,_,_ = transaction.get_data_block(seek)
 
                 if not data_block.exists():
                     raise Exception('Data block %s does not found at local cache!'%data_block.get_name())
@@ -57,13 +57,17 @@ class PutWorker(threading.Thread):
                     self.queue.put(job)
                     continue
 
+                data_block.close()
                 self.transactions_manager.update_transaction(transaction.get_id(), seek, is_failed=False, foreign_name=key)
             except Exception, err:
+                #import traceback
+                #logger.write = logger.error
+                #traceback.print_exc(file=logger)
                 events_provider.critical('PutWorker', '%s failed: %s'%(transaction, err))
                 try:
                     if transaction:
                         self.transactions_manager.update_transaction(transaction.get_id(), seek, \
-                                    is_failed=True, foreign_name=key)
+                                    is_failed=True)
 
                 except Exception, err:
                     logger.error('[PutWorker.__on_error] %s'%err)
@@ -95,14 +99,16 @@ class GetWorker(threading.Thread):
 
                 transaction, seek = job
 
-                data_block,_ = transaction.get_data_block(seek, noclone=True)
+                data_block,_,foreign_name = transaction.get_data_block(seek, noclone=False)
+                if not foreign_name:
+                    raise Exception('foreign name does not found for seek=%s'%seek)
 
                 if transaction.is_failed():
                     logger.debug('Transaction {%s} is failed! Skipping data block downloading...'%transaction.get_id())
                     data_block.remove()
                     continue
 
-                self.fabnet_gateway.get(data_block.get_name(), transaction.get_replica_count(), data_block)
+                self.fabnet_gateway.get(foreign_name, transaction.get_replica_count(), data_block)
                 data_block.close()
 
                 self.transactions_manager.update_transaction(transaction.get_id(), seek, \

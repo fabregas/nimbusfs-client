@@ -27,6 +27,8 @@ sys.path.insert(0, client_dir)
 third_party = os.path.join(client_dir, 'third-party')
 sys.path.insert(0, third_party)
 
+if sys.platform == 'win32' and 'OPENSSL_EXEC' not in os.environ:
+    os.environ['OPENSSL_EXEC'] = os.path.join(third_party, 'OpenSSL/bin/openssl.exe')
 
 from nimbus_client.core.logger import logger
 
@@ -58,4 +60,7 @@ if __name__ == '__main__':
         IDClientDaemon().start()
     except Exception, err:
         logger.error('IDClientDaemon failed: %s'%err)
+        #import traceback
+        #logger.write = logger.error
+        #traceback.print_exc(file=logger)
         sys.exit(1)

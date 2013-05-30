@@ -10,6 +10,8 @@ Copyright (C) 2012 Konstantin Andrusenko
 
 This module contains the fabnet client logger initialization
 """
+import os
+import tempfile
 import sys
 import logging, logging.handlers
 
@@ -19,7 +21,7 @@ def init_logger():
     logger.setLevel(logging.INFO)
 
     if sys.platform.startswith('win'):
-        hdlr = logging.handlers.NTEventLogHandler('fabnet-client')
+        hdlr = logging.FileHandler(os.path.join(tempfile.gettempdir(), 'nimbusfs.log'))
     else:
         if sys.platform == 'darwin':
             log_path = '/var/run/syslog'
