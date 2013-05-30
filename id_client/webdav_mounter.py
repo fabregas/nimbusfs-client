@@ -1,3 +1,13 @@
+#!/usr/bin/env python
+"""
+Copyright (C) 2013 Konstantin Andrusenko
+    See the documentation for further information on copyrights,
+    or contact the author. All Rights Reserved.
+
+@package id_client.webdav_mounter
+@author Konstantin Andrusenko
+@date May 08, 2013
+"""
 
 import os
 import sys
@@ -12,7 +22,7 @@ OS_LINUX = 'linux'
 OS_UNKNOWN = 'unknown'
 
 class WebdavMounter:
-    def __init__(self):
+    def __init__(self, nofork=False):
         system = sys.platform
         if system.startswith('linux'):
             self.cur_os = OS_LINUX
@@ -20,6 +30,7 @@ class WebdavMounter:
             self.cur_os = OS_MAC
         else:
             self.cur_os = OS_UNKNOWN
+        self.nofork = nofork
 
     def __run_linux_mounter(self, cmd):
         proc = Popen([LINUX_MOUNTER_BIN, cmd], stdout=PIPE, stderr=PIPE)
@@ -32,15 +43,13 @@ class WebdavMounter:
         if self.cur_os == OS_MAC:
             return self.mount_mac(host, port)
         elif self.cur_os == OS_LINUX:
-            import pwd
-            if (pwd.getpwuid(os.geteuid())[0] != 0):
+            if not self.nofork:
                 return self.__run_linux_mounter('mount')
             return self.mount_linux(host, port)
 
     def unmount(self):
         if self.cur_os == OS_LINUX:
-            import pwd
-            if (pwd.getpwuid(os.geteuid())[0] != 0):
+            if not self.nofork:
                 return self.__run_linux_mounter('umount')
 
         if self.cur_os in (OS_MAC, OS_LINUX):
@@ -83,11 +92,11 @@ class WebdavMounter:
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        sys.stderr.write('usage: %s mount|umount\n'%sys.argv[0])
+        sys.stderr.write('usage: webdav_mount mount|umount\n')
         sys.exit(1)
 
     from id_client.config import Config
-    wdm = WebdavMounter()
+    wdm = WebdavMounter(nofork=True)
     config = Config()
     cmd = sys.argv[1]
     if cmd == 'mount':
