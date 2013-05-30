@@ -108,6 +108,7 @@ class GetSettingsHandler(UrlHandler):
                 'webdav_bind_host': config.webdav_bind_host,
                 'webdav_bind_port': config.webdav_bind_port,
                 'mount_type': config.mount_type,
+                'log_level': config.log_level.upper()
                 }
         return self.json_source(resp)
 

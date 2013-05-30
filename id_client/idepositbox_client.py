@@ -66,6 +66,8 @@ class IdepositboxClient(object):
             logger.setLevel(logging.INFO)
         elif log_level == 'debug':
             logger.setLevel(logging.DEBUG)
+        elif log_level == 'warning':
+            logger.setLevel(logging.WARNING)
         elif log_level == 'error':
             logger.setLevel(logging.ERROR)
 
@@ -188,8 +190,17 @@ class IdepositboxClient(object):
 
     @IDLock
     def update_config(self, new_config):
+        log_level = new_config.get('log_level', self.__config.log_level)
+        if log_level.lower() not in ['info', 'debug', 'warning', 'error']:
+            raise Exception('Unknown log level "%s"!'%log_level)
+        if log_level != self.__config.log_level:
+            ll_update = True
+        else:
+            ll_update = False
         self.__config.update(new_config)
         self.__config.save()
+        if ll_update:
+            self.__set_log_level()
 
     @IDLock
     def get_available_media_storages(self):

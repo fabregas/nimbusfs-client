@@ -252,6 +252,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
         go_to('http://127.0.0.1:9999/settings')
         wait_for(assert_attribute, 'parDownCnt','value', str(cur_config['parallel_get_count']))
         assert_attribute('parUpCnt', 'value', str(cur_config['parallel_get_count']))
+        assert_attribute(xpath("//*[@id='logLevel']/option[@selected='selected']"), 'value', cur_config['log_level'])
         assert_attribute(xpath("//*[@id='mountType']/option[@selected='selected']"), 'value', cur_config['mount_type'])
         assert_attribute('webdavHost', 'value', str(cur_config['webdav_bind_host']))
         assert_attribute('webdavPort', 'value', str(cur_config['webdav_bind_port']))
@@ -267,6 +268,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
         write_textfield('parDownCnt', '5')
         write_textfield('webdavHost', 'my_hostname')
         write_textfield('webdavPort', '9876')
+        set_dropdown_value('logLevel', value='ERROR')
         click_element('apply_btn')
         wait_for(assert_text_contains, 'err_msg', 'Settings are applied!')
         assert_attribute('apply_btn', 'disabled', 'true')
@@ -275,6 +277,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
         self.assertEqual(new_config['parallel_put_count'], 10)
         self.assertEqual(new_config['webdav_bind_host'], 'my_hostname')
         self.assertEqual(new_config['webdav_bind_port'], '9876')
+        self.assertEqual(new_config['log_level'], 'ERROR')
         self.assertEqual(new_config['mount_type'], cur_config['mount_type'])
 
         click_element(xpath('//*[@id="err_msg"]/button'))

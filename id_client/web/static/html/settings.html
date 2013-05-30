@@ -3,6 +3,19 @@
     <form class="form-horizontal">
 
       <div class="control-group">
+          <label class="control-label" for="logLevel">Logging level</label>
+            <div class="controls">
+                <select class="input-xlarge" id="logLevel">
+                    <option value="ERROR">Error</option>
+                    <option value="WARNING">Warning</option>
+                    <option value="INFO">Info</option>
+                    <option value="DEBUG">Debug</option>
+                </select>
+            </div>
+      </div>
+
+      <hr>
+      <div class="control-group">
           <label class="control-label" for="parDownCnt">Simultaneous downloads</label>
             <div class="controls">
               <input type="number" max="10" min="1" id="parDownCnt">
@@ -67,8 +80,10 @@
     $(function () {
         $('#wind').stopTime();
         $('input').change(allow_applying);
+        $('#logLevel').change(allow_applying);
         $('#mountType').change(on_mount_type_change);
         $.getJSON('/get_settings', function(data) {
+           $('#logLevel option[value="'+data['log_level']+'"]').attr('selected', 'selected');
            $('#webdavHost').val(data['webdav_bind_host']); 
            $('#webdavPort').val(data['webdav_bind_port']); 
            $('#parDownCnt').val(data['parallel_get_count']); 
@@ -81,6 +96,7 @@
     $('form').submit(function() {
         $.post('/apply_settings', 
             {
+                'log_level': $('#logLevel').val(),
                 'webdav_bind_host': $('#webdavHost').val(),
                 'webdav_bind_port': $('#webdavPort').val(),
                 'parallel_get_count': $('#parDownCnt').val(),

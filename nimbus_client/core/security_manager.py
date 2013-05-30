@@ -134,7 +134,7 @@ class FileBasedSecurityManager(AbstractSecurityManager):
             if stderr_value:
                 out += '\n%s'%stderr_value
             if proc.returncode != 0:
-                logger.error('OpenSSL error: %s'%out)
+                logger.warning('OpenSSL error: %s'%out)
         except Exception, err:
             logger.error('openssl call error! "%s" failed: %s'%(' '.join(c), err))
             raise err
