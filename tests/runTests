@@ -2,6 +2,7 @@
 
 import os
 import sys
+from datetime import datetime
 
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('.')
@@ -11,6 +12,7 @@ if len(sys.argv) > 1 and sys.argv[1] == 'with_web':
 else:
     skip_web_tests = 'true'
 
+t0 = datetime.now()
 for item in os.listdir(path):
     if (not item.endswith('.py')) or item.startswith('util_') :
         continue
@@ -21,4 +23,7 @@ for item in os.listdir(path):
         print('[ERROR] Tests failed!')
         sys.exit(1)
 
+print '='*80
+print 'Run all tests in %s'%(datetime.now()-t0)
+print '='*80
 sys.exit(0)

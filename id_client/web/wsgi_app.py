@@ -53,7 +53,7 @@ class UrlHandler:
         c_type, enc = mimetypes.guess_type(file_name)
         if not c_type:
             c_type = 'text/plain'
-        data = open(path).read()
+        data = open(path, 'rb').read()
         return c_type, data
 
     def json_source(self, data):

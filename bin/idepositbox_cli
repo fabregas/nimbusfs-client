@@ -31,6 +31,7 @@ sys.path.append(client_dir)
 from id_client.client_daemon import DAEMON_PORT
 
 PID_FILE_NAME = 'idepositbox_client_daemon.pid'
+DETACHED_PROCESS = 8 #flag for win32
 
 def check_daemon():
     try:
@@ -51,11 +52,16 @@ def start_daemon():
         sys.exit(1)
 
     t0 = datetime.now()
-    cmd = '%s %s &' % (sys.executable, daemon_script)
+    cmd = '%s %s' % (sys.executable, daemon_script)
     if sys.platform != 'win32':
-        cmd = 'nohup ' + cmd
+        cmd = 'nohup ' + cmd + ' &'
+        flags = 0
+    else:
+        flags = DETACHED_PROCESS
+
     devnull = open(os.devnull, 'r+')
-    sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull, env=os.environ)
+
+    sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull, env=os.environ, creationflags=flags)
     open(get_pid_file(), 'w').write(str(sp.pid))
 
     print('iDepositBox management console is started at 0.0.0.0:%s'%DAEMON_PORT)

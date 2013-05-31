@@ -47,6 +47,8 @@ APP_ICON = os.path.join(RESOURCES_DIR, "app-icon.png")
 MENU_MANAGE_ICON = os.path.join(RESOURCES_DIR, "menu-manage-icon.png")
 MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
 
+LOADING_IMG = os.path.join(RESOURCES_DIR, "loading.gif")
+
 LM_MANAGE = unicode('Manage...')
 LM_EXIT = unicode('Exit')
 
@@ -82,7 +84,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.setToolTip('iDepositBox service client')
         
     def __get_icon_src(self, icon_path):
-        if sys.platform.startswith('linux'):
+        if sys.platform != 'darwin':
             ic = QImage(icon_path)
             #ic = ic.scaled(16, 16)
             ic.invertPixels()
@@ -155,7 +157,6 @@ class MainWind(WebViewDialog):
 
     def __init__(self, parent=None):
         super(MainWind, self).__init__(parent)
-
         self.__first_event = True
         self.systray = SystemTrayIcon(self)
         self.changed_service_status.connect(self.on_changed_service_status)
@@ -166,26 +167,38 @@ class MainWind(WebViewDialog):
         self.setVisible(False)
 
         proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
-        cout, cerr = proc.communicate()
-        print(cout)
-        if proc.returncode:
-            self.show_error('Management console does not started!\nDetails: %s'%cerr)
-            raise Exception('mgmt server does not started by %s'%MGMT_CLI_RUNCMD)
 
         self.check_sync_status_thr = CheckSyncStatusThread(self)
         self.check_sync_status_thr.start()
 
         self.systray.activated.connect(self.on_icon_activated)
-        if self.systray.isSystemTrayAvailable():
-            self.systray.show()
+
+        movie = QMovie(LOADING_IMG)
+        ss = QSplashScreen()
+        ss.showMessage('Starting iDepositBox service...', Qt.AlignCenter)
+        ss.show()
+        while True:
+            if not self.__first_event:
+                ss.finish(self)
+                break
+            for i in xrange(movie.frameCount()):
+                pix = movie.currentPixmap()
+                ss.setPixmap(pix)
+                ss.repaint()
+                qApp.processEvents()
+                delay = movie.nextFrameDelay()
+                time.sleep(delay/1000.)
+                movie.jumpToNextFrame()
 
     def on_changed_service_status(self, status):
         if self.__first_event:
-            if self.systray.isVisible():
+            self.__first_event = False
+            if self.systray.isSystemTrayAvailable():
+                self.systray.show()
+                time.sleep(1)
                 self.systray.show_information('Information', 'iDepostiBox client was started successfully')
             else:
                 self.onManage()
-            self.__first_event = False
 
         if self.systray.isVisible():
             self.systray.on_changed_service_status(status)
@@ -248,6 +261,7 @@ def main():
         if not MainWind.show_question('WARNING', 'Management console is already started! Do you really want start application?'):
             sys.exit(1)
     app.setQuitOnLastWindowClosed(False)
+
     try:
         mw = MainWind()
     except Exception, err:
