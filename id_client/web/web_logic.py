@@ -21,6 +21,14 @@ KB = 1024
 MB = 1024.*KB
 GB = 1024.*MB
 
+MENU_MAP = (('home', 'Home'),
+            ('settings', 'Settings'),
+#            ('syslog', 'System log'),
+            ('key_mgmt', 'Key management'),
+            ('about', 'About'))
+
+
+
 class StaticPage(UrlHandler):
     def on_process(self, env, *args):
         return self.file_source(args[0])
@@ -293,14 +301,5 @@ HANDLERS_MAP = [('/get_menu', GetMenuHandler()),
                 ('/static/(.+)', StaticPage()),
                 ('/(\w*)', MainPage())]
 
-
-STATIC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static'))
-
-
-MENU_MAP = (('home', 'Home'),
-            ('settings', 'Settings'),
-#            ('syslog', 'System log'),
-            ('key_mgmt', 'Key management'),
-            ('about', 'About'))
 
 

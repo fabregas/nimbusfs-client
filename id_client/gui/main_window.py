@@ -18,6 +18,7 @@ import httplib
 import socket
 import copy
 from subprocess import Popen, PIPE
+from datetime import datetime, timedelta
 
 from PySide.QtCore import *
 from PySide.QtGui import *
@@ -27,17 +28,23 @@ import id_client
 from id_client.idepositbox_client import logger
 from id_client.constants import *
 from id_client.gui.webview_dialog import WebViewDialog
+from id_client.utils import Subprocess
 
-CUR_DIR = os.path.abspath(os.path.dirname(__file__))
-LIB_DIR = os.path.abspath(os.path.join(os.path.dirname(id_client.__file__), '../'))
-MGMT_CLI_PATH = os.path.abspath(os.path.join(CUR_DIR, '../../bin/idepositbox_cli'))
+
+if hasattr(sys,"frozen"):
+    CUR_DIR = os.path.dirname(os.path.abspath(sys.executable))
+    MGMT_CLI_RUNCMD = os.path.join(CUR_DIR, 'idepositbox_cli.exe')
+else:
+    CUR_DIR = os.path.abspath(os.path.dirname(__file__))
+
+    MGMT_CLI_PATH = os.path.abspath(os.path.join(CUR_DIR, '../../bin/idepositbox_cli'))
+    if not os.path.exists(MGMT_CLI_PATH):
+        MGMT_CLI_PATH = os.path.abspath(os.path.join(CUR_DIR, 'idepositbox_cli'))
+    MGMT_CLI_RUNCMD = '%s %s'%(sys.executable, MGMT_CLI_PATH)
+
 RESOURCES_DIR = os.path.join(CUR_DIR, 'resources')
-
 if not os.path.exists(RESOURCES_DIR):
     RESOURCES_DIR = CUR_DIR
-
-if not os.path.exists(MGMT_CLI_PATH):
-    MGMT_CLI_PATH = os.path.abspath(os.path.join(CUR_DIR, 'idepositbox_cli'))
 
 LOGOUT_ICON = os.path.join(RESOURCES_DIR, "logout-icon.png")
 LOGIN_ICON = os.path.join(RESOURCES_DIR, "login-icon.png")
@@ -58,9 +65,11 @@ STATUS_SYNCING = 'syncing'
 
 DAEMON_PORT = 8880
 
-MGMT_CLI_RUNCMD = [sys.executable, MGMT_CLI_PATH]
+MAX_CONSOLE_WAIT_TIME = 120 #in seconds
+
 ENV = copy.copy(os.environ)
-ENV['IDB_LIB_PATH'] = LIB_DIR
+ENV['IDB_LIB_PATH'] = os.path.abspath(os.path.join(os.path.dirname(id_client.__file__), '../'))
+
 
 
 class SystemTrayIcon(QSystemTrayIcon):
@@ -163,25 +172,36 @@ class MainWind(WebViewDialog):
         self.systray.manage_act.triggered.connect(self.onManage)
         self.systray.exit_act.triggered.connect(self.onClose)
         self.setWindowIcon(QIcon(APP_ICON))
-        self.setWindowState(Qt.WindowMaximized)
+        #self.setWindowState(Qt.WindowMaximized)
         self.setVisible(False)
 
-        proc = Popen(MGMT_CLI_RUNCMD+['restart'], stdout=PIPE, stderr=PIPE, env=ENV)
+        Subprocess(MGMT_CLI_RUNCMD+' restart', env=ENV)
 
         self.check_sync_status_thr = CheckSyncStatusThread(self)
         self.check_sync_status_thr.start()
 
         self.systray.activated.connect(self.on_icon_activated)
 
+        self.__show_splash_screen()
+
+    def __show_splash_screen(self):
         movie = QMovie(LOADING_IMG)
         ss = QSplashScreen()
         ss.showMessage('Starting iDepositBox service...', Qt.AlignCenter)
         ss.show()
+        frames_count = movie.frameCount()
+        if frames_count < 1:
+            #no loaded animation
+            ss.finish(self)
+            return
+
+        t0 = datetime.now()
+        max_dt = timedelta(0, MAX_CONSOLE_WAIT_TIME)
         while True:
             if not self.__first_event:
                 ss.finish(self)
                 break
-            for i in xrange(movie.frameCount()):
+            for i in xrange(frames_count):
                 pix = movie.currentPixmap()
                 ss.setPixmap(pix)
                 ss.repaint()
@@ -189,6 +209,11 @@ class MainWind(WebViewDialog):
                 delay = movie.nextFrameDelay()
                 time.sleep(delay/1000.)
                 movie.jumpToNextFrame()
+            dt = datetime.now() - t0
+            if dt > max_dt:
+                #mgmt console does not started!
+                self.show_error('Management console does not started! See log file for details...')
+                qApp.exit()
 
     def on_changed_service_status(self, status):
         if self.__first_event:
@@ -226,7 +251,7 @@ class MainWind(WebViewDialog):
             return
 
         try:
-            proc = Popen(MGMT_CLI_RUNCMD+['stop'], stdout=PIPE, stderr=PIPE, env=ENV)
+            proc = Subprocess(MGMT_CLI_RUNCMD+' stop', env=ENV)
             cout, cerr = proc.communicate()
             print (cout)
             if proc.returncode:
@@ -248,7 +273,7 @@ class MainWind(WebViewDialog):
 
     @classmethod
     def isMgmtServerStarted(cls):
-        proc = Popen(MGMT_CLI_RUNCMD+['status'], stdout=PIPE, stderr=PIPE, env=ENV)
+        proc = Subprocess(MGMT_CLI_RUNCMD+' status', env=ENV)
         cout, cerr = proc.communicate()
         print (cout)
         if proc.returncode:
@@ -256,16 +281,16 @@ class MainWind(WebViewDialog):
         return True
 
 def main():
-    app = QApplication(sys.argv)
-    if MainWind.isMgmtServerStarted():
-        if not MainWind.show_question('WARNING', 'Management console is already started! Do you really want start application?'):
-            sys.exit(1)
-    app.setQuitOnLastWindowClosed(False)
-
     try:
+        app = QApplication(sys.argv)
+        if MainWind.isMgmtServerStarted():
+            if not MainWind.show_question('WARNING', 'Management console is already started! Do you really want start application?'):
+                sys.exit(1)
+        app.setQuitOnLastWindowClosed(False)
+
         mw = MainWind()
     except Exception, err:
-        print err
+        logger.error('UI error: %s'%err)
         sys.exit(1)
     sys.exit(app.exec_())
 

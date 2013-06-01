@@ -24,16 +24,19 @@ from wsgidav.fs_dav_provider import FilesystemProvider
 from wsgidav.util import BASE_LOGGER_NAME
 from cherrypy import wsgiserver, __version__ as cp_version
 
-from id_client.web.web_logic import WSGIApplication, HANDLERS_MAP, STATIC_PATH
+from id_client.web.web_logic import WSGIApplication, HANDLERS_MAP
 from nimbus_client.core.logger import logger
 
 
 class MgmtServer(threading.Thread):
-    def __init__(self, host, port, idespositbox_client):
+    def __init__(self, host, port, idespositbox_client, static_path=None):
         threading.Thread.__init__(self)
         self.host = host
         self.port = int(port)
         self.idespositbox_client = idespositbox_client
+        if not static_path:
+            static_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static'))
+        self.static_path = static_path
 
         self.server = None
 
@@ -43,7 +46,7 @@ class MgmtServer(threading.Thread):
         return self.server.ready
 
     def run(self):
-        web_app = WSGIApplication(self.idespositbox_client, HANDLERS_MAP, STATIC_PATH)
+        web_app = WSGIApplication(self.idespositbox_client, HANDLERS_MAP, self.static_path)
 
         version = "iDepositBox %s" % wsgiserver.CherryPyWSGIServer.version
         wsgiserver.CherryPyWSGIServer.version = version

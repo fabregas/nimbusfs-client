@@ -19,19 +19,25 @@ import subprocess
 import signal
 from datetime import datetime
 
-client_dir = os.environ.get('IDB_LIB_PATH', None)
-if not client_dir:
-    client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
-else:
-    sys.path.append(os.path.join(client_dir, 'lib-dynload'))
+PID_FILE_NAME = 'idepositbox_client_daemon.pid'
 
-daemon_script = os.path.join(client_dir, 'id_client/client_daemon.py')
-sys.path.append(client_dir)
+if hasattr(sys,"frozen") and sys.frozen:
+    CUR_DIR = os.path.dirname(os.path.abspath(sys.executable))
+    CLIENT_EXEC = os.path.join(CUR_DIR, 'client_daemon.exe') 
+else:
+    CUR_DIR = os.path.abspath(os.path.dirname(__file__))
+    client_dir = os.environ.get('IDB_LIB_PATH', None)
+    if not client_dir:
+        client_dir = os.path.join(CUR_DIR, '../')
+    else:
+        sys.path.append(os.path.join(client_dir, 'lib-dynload'))
+
+    daemon_script = os.path.join(client_dir, 'id_client/client_daemon.py')
+    sys.path.append(client_dir)
+    CLIENT_EXEC = '%s %s' % (sys.executable, daemon_script)
 
 from id_client.client_daemon import DAEMON_PORT
-
-PID_FILE_NAME = 'idepositbox_client_daemon.pid'
-DETACHED_PROCESS = 8 #flag for win32
+from id_client.utils import Subprocess
 
 def check_daemon():
     try:
@@ -51,20 +57,11 @@ def start_daemon():
         sys.stderr.write('iDepositBox management console is already started\n')
         sys.exit(1)
 
-    t0 = datetime.now()
-    cmd = '%s %s' % (sys.executable, daemon_script)
-    if sys.platform != 'win32':
-        cmd = 'nohup ' + cmd + ' &'
-        flags = 0
-    else:
-        flags = DETACHED_PROCESS
-
     devnull = open(os.devnull, 'r+')
-
-    sp = subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull, env=os.environ, creationflags=flags)
+    sp = Subprocess(CLIENT_EXEC, stdout=devnull, stderr=devnull, env=os.environ, daemon=True)
     open(get_pid_file(), 'w').write(str(sp.pid))
 
-    print('iDepositBox management console is started at 0.0.0.0:%s'%DAEMON_PORT)
+    print('iDepositBox management console is starting at 0.0.0.0:%s ...'%DAEMON_PORT)
 
 
 def stop_daemon():

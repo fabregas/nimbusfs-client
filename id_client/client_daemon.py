@@ -17,15 +17,18 @@ import signal
 
 DAEMON_PORT = 8880
 
-client_dir = os.environ.get('IDB_LIB_PATH', None)
-if not client_dir:
-    client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
+if hasattr(sys,"frozen") and sys.frozen:
+    third_party = os.path.dirname(os.path.abspath(sys.executable))
 else:
-    sys.path.append(os.path.join(client_dir, 'lib-dynload'))
+    client_dir = os.environ.get('IDB_LIB_PATH', None)
+    if not client_dir:
+        client_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '../')
+    else:
+        sys.path.append(os.path.join(client_dir, 'lib-dynload'))
 
-sys.path.insert(0, client_dir)
-third_party = os.path.join(client_dir, 'third-party')
-sys.path.insert(0, third_party)
+    sys.path.insert(0, client_dir)
+    third_party = os.path.join(client_dir, 'third-party')
+    sys.path.insert(0, third_party)
 
 if sys.platform == 'win32' and 'OPENSSL_EXEC' not in os.environ:
     os.environ['OPENSSL_EXEC'] = os.path.join(third_party, 'OpenSSL/bin/openssl.exe')
@@ -38,7 +41,11 @@ from id_client.idepositbox_client import IdepositboxClient
 class IDClientDaemon:
     def __init__(self):
         signal.signal(signal.SIGINT, self.stop)
-        self.server = MgmtServer('0.0.0.0', DAEMON_PORT, IdepositboxClient())
+        if hasattr(sys,"frozen"):
+            static_path = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'static')
+        else:
+            static_path = None #default static path will be used
+        self.server = MgmtServer('0.0.0.0', DAEMON_PORT, IdepositboxClient(), static_path)
 
     def start(self):
         try:
