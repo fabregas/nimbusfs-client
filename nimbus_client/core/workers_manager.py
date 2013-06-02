@@ -54,6 +54,7 @@ class PutWorker(threading.Thread):
                     logger.error('Cant put data block from file %s. Wait %s seconds and try again...'%\
                             (transaction.get_file_path(), FG_ERROR_TIMEOUT))
                     time.sleep(FG_ERROR_TIMEOUT)
+                    data_block.reopen()
                     self.queue.put(job)
                     continue
 

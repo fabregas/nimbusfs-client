@@ -32,16 +32,16 @@ from nimbus_client.core.security_manager import AbstractSecurityManager
 
 
 class InprogressOperation:
-    def __init__(self, is_upload, file_path, status, size, progress_size):
+    def __init__(self, is_upload, file_path, status, size, progress_perc):
         self.is_upload = is_upload
         self.file_path = file_path
         self.status = status
         self.size = size
-        self.progress_size = progress_size
+        self.progress_perc = progress_perc
 
     def __repr__(self):
-        return '[%s][%s][%s progress] %s'%('UPLOAD' if self.is_upload else 'DOWNLOAD', \
-                Transaction.TS_MAP.get(self.status, 'unknown'), self.progress_size, self.file_path)
+        return '[%s][%s][%s perc] %s'%('UPLOAD' if self.is_upload else 'DOWNLOAD', \
+                Transaction.TS_MAP.get(self.status, 'unknown'), self.progress_perc, self.file_path)
 
 class FSItem:
     def __init__(self, item_name, is_dir, create_dt=None, modify_dt=None, size=0):
@@ -255,10 +255,10 @@ class Nibbler:
 
     def inprocess_operations(self, only_inprogress=True):
         ret_list = []
-        for is_upload, file_path, status, size, progress_size in self.transactions_manager.iterate_transactions():
+        for is_upload, file_path, status, size, progress_perc in self.transactions_manager.iterate_transactions():
             if only_inprogress and status in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
                 continue
-            ret_list.append(InprogressOperation(is_upload, file_path, status, size, progress_size))
+            ret_list.append(InprogressOperation(is_upload, file_path, status, size, progress_perc))
         return ret_list
 
     def has_incomlete_operations(self):
@@ -268,27 +268,30 @@ class Nibbler:
         return False
 
     def transactions_progress(self):
-        f_down_size = 0
-        p_down_size = 0
-        f_up_size = 0
-        p_up_size = 0
-        for is_upload, _, status, size, progress_size in self.transactions_manager.iterate_transactions():
+        up_perc_sum = 0
+        up_cnt = 0
+        down_perc_sum = 0
+        down_cnt = 0
+
+        for is_upload, _, status, size, progress_perc in self.transactions_manager.iterate_transactions():
             if status not in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
                 if is_upload:
-                    f_up_size += size
-                    p_up_size += progress_size
+                    up_perc_sum += progress_perc
+                    up_cnt += 1
                 else:
-                    f_down_size += size
-                    p_down_size += progress_size
+                    down_perc_sum += progress_perc
+                    down_cnt += 1
 
-        if f_up_size == 0:
+        if up_cnt == 0:
             up_perc = 100 #all data is upladed
         else:
-            up_perc = (p_up_size * 100) / f_up_size
-        if f_down_size == 0:
+            up_perc = up_perc_sum / up_cnt
+
+        if down_cnt == 0:
             down_perc = 100 #all data is downloaded
         else:
-            down_perc = (p_down_size * 100) / f_down_size
+            down_perc = down_perc_sum / down_cnt
+
         return up_perc, down_perc
 
 

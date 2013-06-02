@@ -105,6 +105,19 @@ class Transaction:
 
     @TLock
     def progress_perc(self):
+        if self.__status == self.TS_FINISHED:
+            return 100
+
+        start_perc = 0
+        max_perc = 100.
+        if self.__transaction_type == self.TT_UPLOAD:
+            if self.__status == self.TS_INIT:
+                start_perc = 0
+                max_perc = 40. # user data -> nimbus client cache 
+            else:
+                start_perc = 40
+                max_perc = 50. # nimbus client cache -> nimbus backend node
+
         p_size = 0
         t_size = 0
         for _,data_block,_,finished in self.__data_blocks_info.values():
@@ -113,9 +126,10 @@ class Transaction:
             seek, exp_s = data_block.get_progress()
             p_size += seek
             t_size += exp_s
+
         if t_size == 0:
-            return 0
-        return (p_size * 100.) / t_size
+            return start_perc
+        return start_perc + ((p_size * max_perc) / t_size)
 
     @TLock
     def progress_size(self):
@@ -233,7 +247,7 @@ class TransactionsManager:
 
             for transaction in tr_list:
                 yield transaction.is_uploading(), transaction.get_file_path(), \
-                        transaction.get_status(), transaction.total_size(), transaction.progress_size()
+                        transaction.get_status(), transaction.total_size(), transaction.progress_perc()
         finally:
             GTLock.unlock()
 

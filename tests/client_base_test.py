@@ -219,8 +219,11 @@ class BaseNibblerTest(unittest.TestCase):
         self.assertEqual(oper_info.file_path, '/my_first_dir/my_first_subdir/test_file.out')
         self.assertEqual(oper_info.status, Transaction.TS_LOCAL_SAVED, oper_info)
         self.assertEqual(oper_info.size, len(data))
-        self.assertEqual(oper_info.progress_size > 0, True)
-        self.assertEqual(oper_info.progress_size < oper_info.size, True)
+        self.assertEqual(oper_info.progress_perc > 0, True)
+        self.assertEqual(oper_info.progress_perc < 100, True, oper_info.progress_perc)
+        up_perc, down_perc = nibbler.transactions_progress()
+        self.assertTrue(up_perc < 100)
+        self.assertTrue(down_perc == 100)
 
         fs_item = nibbler.find('/my_first_dir/my_first_subdir/test_file.out')
         self.assertEqual(fs_item.name, 'test_file.out')

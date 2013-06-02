@@ -117,7 +117,6 @@ class MgmtConsoleTest(runtests.SSTTestCase):
             click_element('pr_tl')
             wait_for(assert_displayed, 'inpr_tbl')
             wait_for(assert_table_has_rows, 'inpr_tbl', len(inpr_files)+1)
-            assert_text(xpath('//*[@id="d_pr"]/span'), '0%')
             #assert_css_property('pr_tl', 'width', '100%')
             is_up_tr = None
             for i, (f_name, f_size, is_upload) in enumerate(inpr_files):
@@ -126,9 +125,11 @@ class MgmtConsoleTest(runtests.SSTTestCase):
                 assert_attribute(xpath('//*[@id="inpr_tbl"]/tbody/tr[%i]/td[1]/span[1]'%tr), 'class', icon)
                 assert_text_contains(xpath('//*[@id="inpr_tbl"]/tbody/tr[%i]/td[1]'%tr), f_name)
                 assert_text(xpath('//*[@id="inpr_tbl"]/tbody/tr[%i]/td[2]'%tr), '%s b'%f_size)
-                assert_text(xpath('//*[@id="inpr_tbl"]/tbody/tr[%i]/td[3]'%tr), '0 b')
                 if is_upload:
+                    assert_text(xpath('//*[@id="inpr_tbl"]/tbody/tr[%i]/td[3]'%tr), '40%')
                     assert_attribute(xpath('//*[@id="inpr_tbl"]/tbody/tr[%i]/td[1]/span[2]'%tr), 'class', 'icon-globe')
+                else:
+                    assert_text(xpath('//*[@id="inpr_tbl"]/tbody/tr[%i]/td[3]'%tr), '0%')
                 if is_up_tr is None:
                     is_up_tr = is_upload
                 elif is_up_tr != is_upload:
@@ -136,10 +137,14 @@ class MgmtConsoleTest(runtests.SSTTestCase):
 
             if is_up_tr==True:
                 icon = 'icon-arrow-up'
+                perc = '40%'
             elif is_up_tr==False:
                 icon = 'icon-arrow-down'
+                perc = '0%'
             else:
                 icon = 'icon-refresh'
+                perc = '20%'
+            assert_text(xpath('//*[@id="d_pr"]/span'), perc)
             assert_attribute(xpath('//*[@id="sync_status"]/span'), "class", "%s icon-white"%icon)
             click_element('pr_tl')
             wait_for(assert_css_property, 'inpr_tbl', 'display', 'none')

@@ -89,7 +89,7 @@ class GetInprogressFilesHandler(UrlHandler):
             operations = idepositbox_client.get_nibbler().inprocess_operations()
             for oper in operations:
                 ret_list.append((oper.is_upload, os.path.basename(oper.file_path), \
-                        oper.status, file_size(oper.size), file_size(oper.progress_size)))
+                        oper.status, file_size(oper.size), '{0}%'.format(int(oper.progress_perc))))
 
         return self.json_source({'inprogress_list': ret_list})
 

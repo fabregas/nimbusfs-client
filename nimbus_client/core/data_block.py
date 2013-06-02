@@ -194,9 +194,16 @@ class DataBlock:
 
     def finalize(self):
         self.write('', finalize=True)
+        self.reopen()
+
+    def reopen(self):
         self.__close()
-        self.__expected_len = self.__seek
-        self.__seek = 0
+        self.__lock.acquire()
+        try:
+            self.__seek = 0
+            self.__expected_len = self.get_actual_size()
+        finally:
+            self.__lock.release()
         self.__checksum = hashlib.sha1()
 
     def flush(self):
