@@ -179,7 +179,7 @@ class FolderResource(DAVCollection):
         self.dir_obj = dir_obj
 
         # Setting the name from the file path should fix the case on Windows
-        self.path = path
+        self.path = path.encode('utf8')
         self.name = os.path.basename(self.path)
         #self.name = self.name.encode("utf8")
 

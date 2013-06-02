@@ -11,7 +11,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 
 import os
 import sys
-from subprocess import Popen, PIPE
+from id_client.utils import Subprocess
 
 from nimbus_client.core.logger import logger
 
@@ -33,7 +33,7 @@ class WebdavMounter:
         self.nofork = nofork
 
     def __run_linux_mounter(self, cmd):
-        proc = Popen([LINUX_MOUNTER_BIN, cmd], stdout=PIPE, stderr=PIPE)
+        proc = Subprocess('%s %s'%(LINUX_MOUNTER_BIN, cmd))
         cout, cerr = proc.communicate()
         if proc.returncode:
             logger.error('webdav mounter error: %s %s'%(cout, cerr))
@@ -60,15 +60,20 @@ class WebdavMounter:
         if os.path.exists(mount_point):
             self.unmount_unix(mount_point)
         else:
-            os.mkdir(mount_point)
-        return os.system('mount.davfs2 http://%s:%s/ %s'\
-                            % (bind_host, bind_port, mount_point))
+            os.makedirs(mount_point)
+
+        p = Subprocess('mount -t davfs -o rw,user,dir_mode=0777 http://%s:%s/ %s'\
+                % (bind_host, bind_port, mount_point), with_input=True)
+        out, err = p.communicate('anonymous\nanonymous')
+        if p.returncode:
+            sys.stderr.write('%s\n'%err)
+        return p.returncode
 
     def get_mount_point(self):
         if self.cur_os == OS_MAC:
             return '/Volumes/iDepositBox'
         elif self.cur_os == OS_LINUX:
-            return '/mnt/iDepositBox'
+            return '/media/iDepositBox'
         else:
             raise Exception('unsupported OS')
 
@@ -88,7 +93,9 @@ class WebdavMounter:
 
     def unmount_unix(self, mount_point):
         if os.path.exists(mount_point):
-            os.system('umount %s'%mount_point)
+            p = Subprocess('umount %s'%mount_point)
+            p.communicate()
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:

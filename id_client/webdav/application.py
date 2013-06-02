@@ -17,6 +17,7 @@ import signal
 import sys
 import threading
 import logging
+import tempfile
 
 from wsgidav.version import __version__
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
@@ -62,8 +63,8 @@ class WebDavAPI(BaseExternalAPI):
                 pass
             logger.removeHandler(hdlr)
 
-        for hdlr in logger.handlers[:]:
-            wsgi_logger.addHandler(hdlr)
+        fileHandler = logging.FileHandler(os.path.join(tempfile.gettempdir(), 'wsgidav.log'))
+        wsgi_logger.addHandler(fileHandler)
 
         wsgi_logger.setLevel(logging.INFO)
 
@@ -74,8 +75,8 @@ class WebDavAPI(BaseExternalAPI):
         config.update({
             "provider_mapping": {"/": provider},
             "user_mapping": {},
-            "verbose": 1,
-            #"debug_methods": ['OPTIONS', 'PROPFIND'],
+            "verbose": 2,
+            #"debug_methods": ['OPTIONS', 'PROPFIND', 'GET'],
             "enable_loggers": [],
             "propsmanager": True,      # True: use property_manager.PropertyManager                    
             "locksmanager": True,      # True: use lock_manager.LockManager                   

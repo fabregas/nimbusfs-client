@@ -5,8 +5,8 @@ sys.path.append(os.path.dirname(__file__))
 from id_client.version import VERSION
 
 # Dependencies are automatically detected, but it might need fine tuning.
-build_exe_options = {"packages": ["dbhash", "dumbdbm", 'PySide.QtGui', \
-        'PySide.QtCore', 'PySide.QtWebKit', 'PySide.QtNetwork'], \
+build_exe_options = {"packages": ["dbhash", "dumbdbm", "cherrypy", "wsgidav",\
+        'PySide.QtGui', 'PySide.QtCore', 'PySide.QtWebKit', 'PySide.QtNetwork'], \
         "excludes": ["tkinter", "tk", "tcl"],
         'include_files': [('./id_client/gui/resources/loading.gif', ''),
                         ('./id_client/gui/resources/login-icon.png', ''),
@@ -18,7 +18,8 @@ build_exe_options = {"packages": ["dbhash", "dumbdbm", 'PySide.QtGui', \
                         ('./id_client/gui/resources/app-icon.ico', ''),
                         ('./id_client/web/static', ''),
                         ('./third-party/OpenSSL', ''),
-                        ('./third-party/imageformats', '')]}
+                        ('./third-party/imageformats', ''),
+                        ('./id_client/security/fat_img.zip', '')]}
 
 # GUI applications require a different base on Windows (the default is for a
 # console application).

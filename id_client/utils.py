@@ -15,9 +15,14 @@ import subprocess
 DETACHED_PROCESS = 8 #flag for win32
 
 def Subprocess(argv, **params):
+    with_input = params.get('with_input', False)
+    stdin = None
+    if with_input:
+        stdin = subprocess.PIPE
     stdout = params.get('stdout', subprocess.PIPE)
     stderr = params.get('stderr', subprocess.PIPE)
-    env = params.get('env', {})
+    shell = params.get('shell', False)
+    env = params.get('env', None)
     if sys.platform != 'win32':
         flags = 0
         if params.get('daemon', False):
@@ -25,6 +30,5 @@ def Subprocess(argv, **params):
     else:
         flags = DETACHED_PROCESS
 
-
-
-    return subprocess.Popen(argv.split(), stdout=stdout, stderr=stderr, env=env, creationflags=flags)
+    return subprocess.Popen(argv.split(), stdout=stdout, stderr=stderr, \
+            stdin=stdin, env=env, creationflags=flags, shell=shell)

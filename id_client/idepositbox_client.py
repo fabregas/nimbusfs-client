@@ -59,6 +59,7 @@ class IdepositboxClient(object):
         self.__last_ks_path = None
         self.__events = []
         events_provider.append_listener(Event.ET_CRITICAL, self.on_critical_event)
+        self.__set_log_level()
 
     def __set_log_level(self):
         log_level = self.__config.log_level.lower()
@@ -112,7 +113,6 @@ class IdepositboxClient(object):
         self.__config.refresh()
         config = self.__config
         try:
-            self.__set_log_level()
             sm_class = SM_TYPES_MAP.get(ks_type, None)
             if not sm_class:
                 raise Exception('Unsupported key chain type: "%s"'%ks_type)

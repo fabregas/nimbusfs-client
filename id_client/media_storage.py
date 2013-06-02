@@ -10,17 +10,20 @@ Copyright (C) 2013 Konstantin Andrusenko
 """
 import os
 import sys
-import subprocess
 
+from nimbus_client.core.logger import logger
 from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED, SPT_BLOCKDEV_BASED
+from id_client.utils import Subprocess
 
-KS_PATH = 'iDepositBox/key.ks'
+ALLOW_HOME_KS = False #ks in HOME is used for test purpose only
+KS_PATH = os.path.join('iDepositBox', 'key.ks')
 
-def cmd_call(cmd):
-    p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def cmd_call(cmd, err_msg=''):
+    p = Subprocess(cmd)
     cout, cerr = p.communicate()
     if p.returncode != 0:
-        raise Exception('"%s" failed! Details: %s'%(cmd, cerr))
+        cerr = ' '.join([cout, cerr])
+        raise Exception('%s "%s" failed with message "%s"'%(err_msg, cmd, cerr))
     return cout
 
 class MediaStorage:
@@ -35,8 +38,10 @@ class AbstractMediaStoragesManager:
         '''return list of available storages for saving
             key chain (objects of MediaStorage)
         '''
-        home_path = os.path.expanduser('~')
-        st_list = [MediaStorage('HOME - %s'%home_path, os.path.join(home_path, KS_PATH))]
+        st_list = []
+        if ALLOW_HOME_KS:
+            home_path = os.path.expanduser('~')
+            st_list += [MediaStorage('HOME - %s'%home_path, os.path.join(home_path, KS_PATH))]
         st_list += cls.get_removable_storages()
         return st_list
 
@@ -47,6 +52,12 @@ class AbstractMediaStoragesManager:
     @classmethod
     def is_removable(self, device):
         return False
+
+    @classmethod
+    def unmount_media_device(cls, device):
+        pass
+
+
 
 class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
     @classmethod
@@ -82,6 +93,15 @@ class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
             label = cls.get_device_label(dev)
             st_list.append(MediaStorage(label, '/dev/%s'%dev, SPT_BLOCKDEV_BASED))
         return st_list
+
+    @classmethod
+    def unmount_media_device(cls, device):
+        import glob
+        for partition in glob.glob('%s*'%device):
+            if partition == device:
+                continue
+            os.system('mount | grep -q %s && umount %s'%(partition,partition))
+
 
 class MacOsMediaStoragesManager(AbstractMediaStoragesManager):
     @classmethod
@@ -120,9 +140,71 @@ class MacOsMediaStoragesManager(AbstractMediaStoragesManager):
             st_list.append(MediaStorage(cls.get_device_label(device), device, SPT_BLOCKDEV_BASED))
         return st_list
 
+    @classmethod
+    def unmount_media_device(cls, device):
+        cmd_call('diskutil unmountDisk %s'%self.__dev_path, \
+                'Volumes at %s does not unmounted!'%device)
+
+
 class WindowsMediaStoragesManager(AbstractMediaStoragesManager):
-    #FIXME: implement me...
-    pass
+    @classmethod
+    def is_removable(cls, device):
+        rem_list = cls.get_removable_storages()
+        for media_storage in rem_list:
+            if media_storage.path == device:
+                return True
+        return False
+
+    @classmethod
+    def get_removable_storages(cls):
+        st_list = []
+        
+        import win32com.client
+        import pythoncom
+        pythoncom.CoInitialize()
+        strComputer = "."
+        objWMIService = win32com.client.Dispatch("WbemScripting.SWbemLocator")
+        objSWbemServices = objWMIService.ConnectServer(strComputer,"root\cimv2")
+        colItems = objSWbemServices.ExecQuery("Select * from Win32_DiskDrive")
+        for objItem in colItems:
+            logger.debug('detected disk drive: [%s] %s (%s)'%(str(objItem.Name), \
+                    str(objItem.Caption), str(objItem.MediaType)))
+
+            #if 'Removable' not in str(objItem.MediaType):
+            if 'Fixed hard disk media' not in str(objItem.MediaType):
+                #print('media %s is not removable, skipping it...'%objItem.Name)
+                continue
+            st_list.append(MediaStorage(objItem.Caption, objItem.DeviceID, SPT_BLOCKDEV_BASED))
+        return st_list
+
+    @classmethod
+    def unmount_media_device(cls, device):
+        logic_drives = []
+
+        #found logical drives on device
+        import win32com.client
+        import pythoncom
+        pythoncom.CoInitialize()
+        strComputer = "."
+        objWMIService = win32com.client.Dispatch("WbemScripting.SWbemLocator")
+        objSWbemServices = objWMIService.ConnectServer(strComputer,"root\cimv2")
+        logger.debug('unmounting %s ... %s'%(device, type(device)))
+        device_id = device.replace('\\', '\\\\')
+        partitions= objSWbemServices.ExecQuery('ASSOCIATORS OF {Win32_DiskDrive.DeviceID="%s"} \
+                WHERE AssocClass = Win32_DiskDriveToDiskPartition'%device_id)
+
+        for part in partitions:
+            logical_disks = objSWbemServices.ExecQuery('ASSOCIATORS OF \
+                    {Win32_DiskPartition.DeviceID="%s"} \
+                    WHERE AssocClass = Win32_LogicalDiskToPartition'%part.DeviceID)
+            for logic in logical_disks:
+                logic_drives.append(logic.DeviceID)
+
+        #unmounting all logical drives
+        for vol in logic_drives:
+            cmd_call('mountvol %s /D'%vol, 'Logical volume %s does not unmounted!'%vol)
+
+
 
 def get_media_storage_manager():
     if sys.platform.startswith('linux'):

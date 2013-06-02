@@ -172,10 +172,10 @@ class MainWind(WebViewDialog):
         self.systray.manage_act.triggered.connect(self.onManage)
         self.systray.exit_act.triggered.connect(self.onClose)
         self.setWindowIcon(QIcon(APP_ICON))
-        #self.setWindowState(Qt.WindowMaximized)
+        self.setWindowState(Qt.WindowMaximized)
         self.setVisible(False)
 
-        Subprocess(MGMT_CLI_RUNCMD+' restart', env=ENV)
+        Subprocess(MGMT_CLI_RUNCMD + ' restart', env=ENV)
 
         self.check_sync_status_thr = CheckSyncStatusThread(self)
         self.check_sync_status_thr.start()
@@ -235,6 +235,8 @@ class MainWind(WebViewDialog):
     def onManage(self):
         self.load('http://127.0.0.1:%s/'%DAEMON_PORT)
         self.setVisible(True)
+        self.show()
+        self.activateWindow()
 
     def show_error(self, message):
         QMessageBox.critical(self, 'Error', message)

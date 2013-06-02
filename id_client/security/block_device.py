@@ -12,25 +12,33 @@ import os
 import sys
 import struct
 import logging
-from subprocess import Popen, PIPE
 from zipfile import ZipFile
 
 from nimbus_client.core.utils import TempFile
 from id_client.media_storage import get_media_storage_manager
 from id_client.security.mbr import *
+from id_client.utils import Subprocess
+
 
 logger = logging.getLogger('fabnet-client')
 if not logger.handlers:
     console = logging.StreamHandler()
     logger.addHandler(console)
 
-curdir = os.path.abspath(os.path.dirname(__file__))
-SUID_BLOCKDEV_MGR = os.path.join(curdir, '../../bin/rbd_manage')
+if hasattr(sys,"frozen"):
+    curdir = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    curdir = os.path.dirname(__file__)
+
+SUID_BLOCKDEV_MGR = os.path.abspath(os.path.join(curdir, '../../bin/rbd_manage'))
+
 FAT_PART_FILE = os.path.join(curdir, 'fat_img.zip')
+
 FAT_PART_NAME = 'fat.img'
 
+BLOCK_SIZE = 512
 IDEPOSITBOX_MBR_SIG = 0x42445049 #IDPB
-DATA_START_SEEK = 2050 * 512 #start at 2050 sector 
+DATA_START_SEEK = 2050 * BLOCK_SIZE #start at 2050 sector 
                       
 
 class KSSignature:
@@ -59,22 +67,19 @@ class KSSignature:
 
 
 class BlockDevice:
-    MAC_OS = 'mac'
-    LINUX = 'linux'
-
     def __init__(self, dev_path):
         self.__dev_path = dev_path
-        self.cur_os = None
-    
-        if sys.platform.startswith('linux'):
-            self.cur_os = self.LINUX
-        elif sys.platform == 'darwin':
-            self.cur_os = self.MAC_OS
+        self.is_linux = sys.platform.startswith('linux')
 
+    def __pad_data(self, data):
+        remaining_len = BLOCK_SIZE - len(data)
+        to_pad_len = remaining_len % BLOCK_SIZE
+        return data + '\x00'*to_pad_len
+    
     def __bdm_call(self, *params):
         cmd_p = [SUID_BLOCKDEV_MGR]
         cmd_p.extend(params)
-        proc = Popen(cmd_p, shell=False, stdin=PIPE, stdout=PIPE)
+        proc = Subprocess(' '.join(cmd_p), shell=False)
         stdout_value, stderr_value = proc.communicate()
         if proc.returncode != 0:
             out = stdout_value
@@ -83,10 +88,11 @@ class BlockDevice:
             raise Exception(out)
 
     def format_device(self):
-        if self.cur_os == self.MAC_OS:
-            self.format()
-        elif self.cur_os == self.LINUX: 
+        logger.info('formatting device at %s'%self.__dev_path)
+        if self.is_linux:
             self.__bdm_call(self.__dev_path, 'format')
+        else:
+            self.format()
 
     def format(self):
         self.check_removable()
@@ -100,18 +106,8 @@ class BlockDevice:
             raise Exception('Device %s is not removable!'%self.__dev_path)
 
     def unmount_partitions(self):
-        if self.cur_os == self.MAC_OS:
-            ret = os.system('diskutil unmountDisk %s'%self.__dev_path)
-            if ret:
-                raise Exception('Volumes at %s does not unmounted!'%self.__dev_path)
-        elif self.cur_os == self.LINUX:
-            import glob
-            for partition in glob.glob('%s*'%self.__dev_path):
-                if partition == self.__dev_path:
-                    continue
-                ret = os.system('mount | grep -q %s && umount %s'%(partition,partition))
-                if ret:
-                    logger.debug('Can not unmount %s...'%partition)
+        ms = get_media_storage_manager()
+        ms.unmount_media_device(self.__dev_path)
 
     def __open_dev(self, read_only=False):
         flags = 'rb'
@@ -136,14 +132,7 @@ class BlockDevice:
             raise IOError('Device %s can not be read!'%self.__dev_path)
 
     def write(self, data, file_path=None):
-        if self.cur_os == self.MAC_OS:
-            if file_path:
-                try:
-                    data = open(file_path, 'rb').read()
-                except IOError:
-                    raise IOError('Can not read from "%s"'%file_path)
-            self.int_write(data)
-        elif self.cur_os == self.LINUX:
+        if self.is_linux:
             tmp_file = None
             if file_path is None: 
                 tmp_file = TempFile()
@@ -155,12 +144,21 @@ class BlockDevice:
             finally:
                 if tmp_file:
                     tmp_file.close()
+        else:
+            if file_path:
+                try:
+                    data = open(file_path, 'rb').read()
+                except IOError:
+                    raise IOError('Can not read from "%s"'%file_path)
+            self.int_write(data)
+
 
     def int_write(self, data):
         fd = self.__open_dev()
         try:
             fd.seek(DATA_START_SEEK)
-            fd.write(KSSignature.dump(len(data)))
+            header_data = KSSignature.dump(len(data))
+            data = self.__pad_data(header_data+data)
             fd.write(data)
         except IOError:
             raise IOError('Key chain does not write to device %s!'%self.__dev_path)
@@ -171,9 +169,7 @@ class BlockDevice:
         self.write(None, source_file)
 
     def read(self):
-        if self.cur_os == self.MAC_OS:
-            return self.int_read()
-        elif self.cur_os == self.LINUX:
+        if self.is_linux:
             tmp_file = TempFile()
             file_path = tmp_file.name
             try:
@@ -183,6 +179,8 @@ class BlockDevice:
             finally:
                 if tmp_file:
                     tmp_file.close()
+        else:
+            return self.int_read()
         
     def is_valid(self):
         try:
@@ -267,11 +265,15 @@ class BlockDevice:
         except IOError, err:
             raise Exception('Can not update MBR at block device: %s'%err)
 
+
     def restore_fat_partition(self):
         fd = open(self.__dev_path,'r+b')
         try:
             fd.seek(512)
-            fd.write(ZipFile(FAT_PART_FILE).read(FAT_PART_NAME))
+            data = ZipFile(FAT_PART_FILE).read(FAT_PART_NAME)
+            data = self.__pad_data(data)
+            logger.debug('writing %s bytes of FAT partition...'%len(data))
+            fd.write(data)
         except IOError, err:
             raise Exception('Can not restore FAT partition at block device: %s'%err)
         finally:
