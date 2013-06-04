@@ -145,10 +145,6 @@
                     'password': pwd },
                     function(data) {
                         if (data['ret_code'] == 0) {
-                            if (data['mount_point'] != '') {
-                                //show mount point
-                                $('#mount_point').html('<span class="label">Mounted locally at '+data['mount_point']+'</span>');
-                            }
                             reload_content();
                         } else {
                             show_alert(data['ret_message']);
@@ -268,6 +264,10 @@
                 update_label('#serv_status', 'label-success', 'Started');
                 update_label('#startstop', 'btn-danger', 'Stop service');
                 $('#ksPath').attr('disabled', 'disabled');
+                if (data['mount_point'] != '') {
+                    //show mount point
+                    $('#mount_point').html('<span class="label">Mounted locally at '+data['mount_point']+'</span>');
+                }
             } else {
                 update_label('#serv_status', 'label-important', 'Stopped');
                 update_label('#startstop', 'btn-success', 'Start service');

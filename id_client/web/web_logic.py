@@ -51,6 +51,7 @@ class GetServiceStatusHandler(UrlHandler):
     def on_process(self, env, *args):
         idepositbox_client = env['idepositbox_app']
         sync_stat = SS_UNKNOWN
+        mount_point = ''
         if idepositbox_client is not None:
             status = idepositbox_client.get_status()
         else:
@@ -59,6 +60,7 @@ class GetServiceStatusHandler(UrlHandler):
         events_count = idepositbox_client.get_events_count()
         up_perc = down_perc = sum_perc = 100
         if status == 'started':
+            mount_point = idepositbox_client.get_mount_point()
             up_perc, down_perc, sum_perc = idepositbox_client.get_nibbler().transactions_progress()
             if sum_perc != 100:
                 sync_stat = SS_SYNC_PROGRESS
@@ -70,7 +72,8 @@ class GetServiceStatusHandler(UrlHandler):
                                     'download_progress': down_perc,
                                     'sum_progress': sum_perc,
                                     'sync_status': sync_stat,
-                                    'events_count': events_count})
+                                    'events_count': events_count,
+                                    'mount_point': mount_point})
 
 
 def file_size(size):
@@ -201,7 +204,7 @@ class StartServiceHandler(UrlHandler):
                 raise Exception('Invalid key chain at %s'%key_storage_path)
 
             idepositbox_client.start(security_provider_type, key_storage_path, data.get('password', ''))
-            resp = {'ret_code':0, 'mount_point': idepositbox_client.get_mount_point()}
+            resp = {'ret_code':0}
         except Exception, err:
             resp = {'ret_code':1, 'ret_message': str(err)}
         return self.json_source(resp)
