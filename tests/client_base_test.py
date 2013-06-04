@@ -221,8 +221,9 @@ class BaseNibblerTest(unittest.TestCase):
         self.assertEqual(oper_info.size, len(data))
         self.assertEqual(oper_info.progress_perc > 0, True)
         self.assertEqual(oper_info.progress_perc < 100, True, oper_info.progress_perc)
-        up_perc, down_perc = nibbler.transactions_progress()
+        up_perc, down_perc, sum_perc = nibbler.transactions_progress()
         self.assertTrue(up_perc < 100)
+        self.assertTrue(sum_perc == up_perc)
         self.assertTrue(down_perc == 100)
 
         fs_item = nibbler.find('/my_first_dir/my_first_subdir/test_file.out')
@@ -385,7 +386,7 @@ class BaseNibblerTest(unittest.TestCase):
         #fail on Metadata update
         f_obj = nibbler.open_file('/my_first_dir/new_file_2.failed', for_write=True)
         f_obj.write('*'*100100)
-        def md_append_mocked(save_path, file_md):
+        def md_append_mocked(save_path, file_md, dummy=False):
             raise Exception('Oh! this is some exception from metadata ;(')
         md_append_func = nibbler.metadata.append
         nibbler.metadata.append = md_append_mocked

@@ -28,6 +28,7 @@ from cherrypy import wsgiserver, __version__ as cp_version
 from fabnet_dav_provider import FabnetProvider
 from ks_domain_controller import KSDomainController
 from id_client.base_external_api import BaseExternalAPI
+from id_client.version import VERSION
 from nimbus_client.core.logger import logger
 
 WAIT_WEBDAV_SERVER_TIMEOUT = 10
@@ -83,12 +84,12 @@ class WebDavAPI(BaseExternalAPI):
             "acceptdigest": False,     # Allow digest authentication, True or False
             "defaultdigest": False,    # True (default digest) or False (default basic)
             "domaincontroller": KSDomainController(self.nibbler.get_security_provider()),  
+            "dir_browser": {'response_trailer': "<a href='http://idepositbox.com'>"\
+                                    "iDepositBox/%s</a> ${time}"%VERSION}
             })
 
-
-        self.__init_logger()
-
         app = WsgiDAVApp(config)
+        self.__init_logger()
 
         if config["verbose"] >= 1:
             print("Running %s, listening on %s://%s:%s" % (wsgiserver.CherryPyWSGIServer.version, 'http', self.host, self.port))

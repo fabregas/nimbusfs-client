@@ -42,8 +42,11 @@ class EmptyFileObject:
     def close(self):
         pass
 
-
     
+def to_str(val):
+    if type(val) == unicode:
+        return val.encode('utf8')
+    return val
 
 #===============================================================================
 # FileResource
@@ -61,7 +64,7 @@ class FileResource(DAVNonCollection):
         # Setting the name from the file path should fix the case on Windows
         self.virtual_res = virtual
         self.name = os.path.basename(file_obj.name)
-        self.name = self.name
+        self.name = to_str(self.name)
 
         self._file_obj = None
 
@@ -179,10 +182,9 @@ class FolderResource(DAVCollection):
         self.dir_obj = dir_obj
 
         # Setting the name from the file path should fix the case on Windows
-        self.path = path.encode('utf8')
+        self.path = to_str(path)
         self.name = os.path.basename(self.path)
-        #self.name = self.name.encode("utf8")
-
+        self.name = to_str(self.name)
 
     # Getter methods for standard live properties     
     def _to_unix_time(self, date):
@@ -218,12 +220,12 @@ class FolderResource(DAVCollection):
         nameList = []
 
         for item in self.nibbler.listdir(self.path):
-            name = item.name
+            name = to_str(item.name)
             nameList.append(name)
 
         for item in self.provider.cache_fs.get_dir_content(self.path):
             if item not in nameList:
-                nameList.append(item)
+                nameList.append(to_str(item))
 
         #this magic does not allow load the whole content for crazy Finder on MacOS
         magic_files = ['.ql_disablecache', '.ql_disablethumbnails']

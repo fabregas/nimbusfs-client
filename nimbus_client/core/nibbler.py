@@ -268,30 +268,35 @@ class Nibbler:
         return False
 
     def transactions_progress(self):
-        up_perc_sum = 0
-        up_cnt = 0
-        down_perc_sum = 0
-        down_cnt = 0
+        up_data_sum = 0
+        up_data_all = 0
+        down_data_sum = 0
+        down_data_all = 0
 
         for is_upload, _, status, size, progress_perc in self.transactions_manager.iterate_transactions():
             if status not in (Transaction.TS_FINISHED, Transaction.TS_FAILED):
                 if is_upload:
-                    up_perc_sum += progress_perc
-                    up_cnt += 1
+                    up_data_sum += (size * progress_perc)/100.
+                    up_data_all += size
                 else:
-                    down_perc_sum += progress_perc
-                    down_cnt += 1
+                    down_data_sum += (size * progress_perc)/100. 
+                    down_data_all += size
 
-        if up_cnt == 0:
+        if up_data_all == 0:
             up_perc = 100 #all data is upladed
         else:
-            up_perc = up_perc_sum / up_cnt
+            up_perc = (100 * up_data_sum) / up_data_all
 
-        if down_cnt == 0:
+        if down_data_all == 0:
             down_perc = 100 #all data is downloaded
         else:
-            down_perc = down_perc_sum / down_cnt
+            down_perc = (100 * down_data_sum) / down_data_all
 
-        return up_perc, down_perc
+        if up_data_all == down_data_all == 0:
+            sum_perc = 100
+        else:
+            sum_perc = (100 * (up_data_sum + down_data_sum)) / (up_data_all + down_data_all)
+
+        return up_perc, down_perc, sum_perc
 
 

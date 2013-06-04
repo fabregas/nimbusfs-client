@@ -175,7 +175,6 @@
         $.post("/stop_service",
                 function(data) {
                     if (data['ret_code'] == 0) {
-                        $('#mount_point').html(''); //remove mount point
                         reload_content();
                     } else {
                         show_alert(data['ret_message']);
@@ -273,6 +272,7 @@
                 update_label('#serv_status', 'label-important', 'Stopped');
                 update_label('#startstop', 'btn-success', 'Start service');
                 $('#ksPath').removeAttr('disabled');
+                $('#mount_point').html(''); //remove mount point
             }
 
             if (data['sync_status'] == SS_ALL_SYNC) {
@@ -286,26 +286,24 @@
             } else if (data['sync_status'] == SS_SYNC_PENDING) {
                 reload_inp_files();
 
-                var icn, perc;
+                var icn;
+                var perc = data['sum_progress'];
                 if (data['download_progress'] != 100) {
                     icn = 'icon-arrow-down';
-                    perc = data['download_progress'];
                     $('#sync_status').attr('title', 'download files...');
                 } 
                 if (data['upload_progress'] != 100) {
                     if (icn) {
-                        perc = (perc + data['upload_progress'])/2;
                         icn = 'icon-refresh';
                         $('#sync_status').attr('title', 'upload and download files...');
                     } else {
                         icn = 'icon-arrow-up'
-                        perc = data['upload_progress'];
                         $('#sync_status').attr('title', 'upload files...');
                     }
                 }
                 update_label('#sync_status', 'label-warning', 'In progress', icn);
                 $('#pr_tl .bar').css('width', Math.round(perc)+'%');
-                $('#pr_tl span').html(perc+'%');
+                $('#pr_tl span').html(Math.round(perc)+'%');
 
                 if ($('#pr_tl').css('display') == 'none') {
                     $('#pr_tl').css('display', 'block');

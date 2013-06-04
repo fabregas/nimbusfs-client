@@ -57,10 +57,10 @@ class GetServiceStatusHandler(UrlHandler):
             status = 'stopped'
 
         events_count = idepositbox_client.get_events_count()
-        up_perc = down_perc = 100
+        up_perc = down_perc = sum_perc = 100
         if status == 'started':
-            up_perc, down_perc = idepositbox_client.get_nibbler().transactions_progress()
-            if up_perc != 100 or down_perc != 100:
+            up_perc, down_perc, sum_perc = idepositbox_client.get_nibbler().transactions_progress()
+            if sum_perc != 100:
                 sync_stat = SS_SYNC_PROGRESS
             else:
                 sync_stat = SS_ALL_SYNC
@@ -68,6 +68,7 @@ class GetServiceStatusHandler(UrlHandler):
         return self.json_source({'service_status': status,
                                     'upload_progress': up_perc,
                                     'download_progress': down_perc,
+                                    'sum_progress': sum_perc,
                                     'sync_status': sync_stat,
                                     'events_count': events_count})
 

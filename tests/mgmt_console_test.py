@@ -143,7 +143,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
                 perc = '0%'
             else:
                 icon = 'icon-refresh'
-                perc = '20%'
+                perc = '16%'
             assert_text(xpath('//*[@id="d_pr"]/span'), perc)
             assert_attribute(xpath('//*[@id="sync_status"]/span'), "class", "%s icon-white"%icon)
             click_element('pr_tl')
