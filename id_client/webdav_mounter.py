@@ -11,14 +11,21 @@ Copyright (C) 2013 Konstantin Andrusenko
 
 import os
 import sys
+import string
 from id_client.utils import Subprocess
 
 from nimbus_client.core.logger import logger
 
 LINUX_MOUNTER_BIN = os.path.abspath(os.path.join(os.path.dirname(__file__), '../bin/webdav_mount'))
 
+#-------- for win32 ----------
+ALL_DRIVES_LIST = list(string.ascii_uppercase)
+ALL_DRIVES_LIST.reverse() #for win32
+#-----------------------------
+
 OS_MAC = 'mac'
 OS_LINUX = 'linux'
+OS_WINDOWS = 'windows'
 OS_UNKNOWN = 'unknown'
 
 class WebdavMounter:
@@ -28,9 +35,15 @@ class WebdavMounter:
             self.cur_os = OS_LINUX
         elif system == 'darwin':
             self.cur_os = OS_MAC
+        elif system == 'win32':
+            self.cur_os = OS_WINDOWS
         else:
             self.cur_os = OS_UNKNOWN
         self.nofork = nofork
+        self.__mountpoint = ''
+
+    def get_mount_point(self):
+        return self.__mountpoint
 
     def __run_linux_mounter(self, cmd):
         proc = Subprocess('%s %s'%(LINUX_MOUNTER_BIN, cmd))
@@ -43,20 +56,39 @@ class WebdavMounter:
         if self.cur_os == OS_MAC:
             return self.mount_mac(host, port)
         elif self.cur_os == OS_LINUX:
-            if not self.nofork:
-                return self.__run_linux_mounter('mount')
-            return self.mount_linux(host, port)
+            try:
+                if not self.nofork:
+                    return self.__run_linux_mounter('mount')
+                return self.mount_linux(host, port)
+            finally:
+                self.__update_linux_mountpoint('%s:%s'%(host, port))
+        elif self.cur_os == OS_WINDOWS:
+            self.mount_windows(host, port)
 
     def unmount(self):
-        if self.cur_os == OS_LINUX:
-            if not self.nofork:
-                return self.__run_linux_mounter('umount')
+        try:
+            if self.cur_os == OS_LINUX:
+                if not self.nofork:
+                    return self.__run_linux_mounter('umount')
 
-        if self.cur_os in (OS_MAC, OS_LINUX):
-            self.unmount_unix(self.get_mount_point())
+            if self.cur_os in (OS_MAC, OS_LINUX):
+                self.unmount_unix(self.get_mount_point())
+            elif self.cur_os == OS_WINDOWS:
+                self.umount_windows()
+        finally:
+            self.__mountpoint = ''
+
+
+    def __update_linux_mountpoint(self, url):
+        p = Subprocess('df') 
+        out, err = p.communicate()
+        for line in out.splitlines():
+            if url in line:
+                self.__mountpoint = line.split()[-1]
+                return
 
     def mount_linux(self, bind_host, bind_port):
-        mount_point = self.get_mount_point()
+        mount_point = '/media/iDepositBox'
         if os.path.exists(mount_point):
             self.unmount_unix(mount_point)
         else:
@@ -69,17 +101,8 @@ class WebdavMounter:
             sys.stderr.write('%s\n'%err)
         return p.returncode
 
-    def get_mount_point(self):
-        if self.cur_os == OS_MAC:
-            return '/Volumes/iDepositBox'
-        elif self.cur_os == OS_LINUX:
-            return '/media/iDepositBox'
-        else:
-            raise Exception('unsupported OS')
-
-
     def mount_mac(self, bind_host, bind_port):
-        mount_point = self.get_mount_point()
+        self.__mountpoint = mount_point = '/Volumes/iDepositBox'
         if os.path.exists(mount_point):
             os.system('umount %s'%mount_point)
         else:
@@ -89,6 +112,54 @@ class WebdavMounter:
             bind_host = 'localhost'
         return os.system('mount_webdav -v iDepositBox http://%s:%s/ %s'\
                             % (bind_host, bind_port, mount_point))
+
+
+    def __get_win_unused_drive(self):
+        import win32api
+        drives = win32api.GetLogicalDriveStrings()
+        drives = drives.split('\000')
+        a_drives = []
+        for s in drives:
+            s = s.strip()
+            if s: a_drives.append(s[0])
+        for drive in ALL_DRIVES_LIST:
+            if drive in a_drives:
+                continue
+            return '%s:'%drive
+
+    def mount_windows(self, host, port):
+        self.umount_windows()
+        drive = self.__get_win_unused_drive()
+        self.__mountpoint = 'drive %s'%drive
+        p = Subprocess(['sc', 'create', 'iDepositBoxMount', 'binPath=', 'cmd /b /c net use %s http://%s:%s/'%\
+                (drive, host, port), 'type=', 'share'])
+
+        p = Subprocess(['sc', 'create', 'iDepositBoxUnmount', 'binPath=', 'cmd /b /c net use /delete %s /Y'%\
+                drive, 'type=', 'share'])
+        out, err = p.communicate()
+        logger.debug('sc create iDepositBoxUnmount: [%s] %s %s'%(p.returncode, out, err))
+        
+        p = Subprocess('net start iDepositBoxMount')
+        p.communicate()    
+        return 0
+
+    def umount_windows(self):
+        p = Subprocess('sc query iDepositBoxUnmount')
+        out, err = p.communicate()
+        if p.returncode:
+            logger.debug('no iDepositBoxUnmount service found...')
+            return
+
+        p = Subprocess('net start iDepositBoxUnmount')
+        p.communicate()
+
+        p = Subprocess('sc delete iDepositBoxMount')
+        out, err = p.communicate()
+        logger.debug('sc delete iDepositBoxMount: %s %s'%(out, err))
+
+        p = Subprocess('sc delete iDepositBoxUnmount')
+        out, err = p.communicate()
+        logger.debug('sc delete iDepositBoxUnmount: %s %s'%(out, err))
 
 
     def unmount_unix(self, mount_point):

@@ -12,13 +12,12 @@ This module contains the implementation of security manager
 """
 import os
 import re
-from subprocess import Popen, PIPE, STDOUT
 
 from nimbus_client.core.encdec_provider import EncDecProvider
 from nimbus_client.core import pycrypto_enc_engine
 from nimbus_client.core.exceptions import InvalidPasswordException, NoCertFound
 from nimbus_client.core.logger import logger
-from nimbus_client.core.utils import TempFile
+from nimbus_client.core.utils import TempFile, Subprocess
 
 Cipher = pycrypto_enc_engine.PythonCryptoEngine
 
@@ -50,6 +49,10 @@ class AbstractSecurityManager:
         if not self._client_cert:
             raise NoCertFound('No client certificate found in key chain!')
         return self._client_cert
+
+    def get_client_cert_hr(self):
+        '''get human readable certificate'''
+        pass
 
     def get_client_cert_key(self):
         pass
@@ -127,7 +130,7 @@ class FileBasedSecurityManager(AbstractSecurityManager):
         c.extend(command)
 
         try:
-            proc = Popen(c, shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT, cwd=cwd)
+            proc = Subprocess(c, with_input=True) 
             stdout_value, stderr_value = proc.communicate(stdin)
 
             out = stdout_value
@@ -234,6 +237,19 @@ class FileBasedSecurityManager(AbstractSecurityManager):
             pkey_file.close()
             cert_req_file.close()
         return cert_req
+
+    def get_client_cert_hr(self):
+        cert = self.get_client_cert()
+        tmp_file = TempFile()
+        tmp_file.write(cert)
+        tmp_file.flush()
+        try:
+            retcode, out = self.exec_openssl(['x509', '-in', tmp_file.name, '-noout', '-text'])
+            if retcode:
+                raise Exception('No certificate opened!\n%s'%out)
+        finally:
+            tmp_file.close()
+        return out
 
     def append_certificate(self, ks_path, ks_pwd, cert):
         pkey_file = TempFile()

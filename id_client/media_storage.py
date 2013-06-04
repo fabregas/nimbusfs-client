@@ -54,7 +54,7 @@ class AbstractMediaStoragesManager:
         return False
 
     @classmethod
-    def unmount_media_device(cls, device):
+    def unmount_media_device(cls, device, force=False):
         pass
 
 
@@ -95,7 +95,7 @@ class LinuxMediaStoragesManager(AbstractMediaStoragesManager):
         return st_list
 
     @classmethod
-    def unmount_media_device(cls, device):
+    def unmount_media_device(cls, device, force=False):
         import glob
         for partition in glob.glob('%s*'%device):
             if partition == device:
@@ -141,7 +141,7 @@ class MacOsMediaStoragesManager(AbstractMediaStoragesManager):
         return st_list
 
     @classmethod
-    def unmount_media_device(cls, device):
+    def unmount_media_device(cls, device, force=False):
         cmd_call('diskutil unmountDisk %s'%self.__dev_path, \
                 'Volumes at %s does not unmounted!'%device)
 
@@ -167,8 +167,8 @@ class WindowsMediaStoragesManager(AbstractMediaStoragesManager):
         objSWbemServices = objWMIService.ConnectServer(strComputer,"root\cimv2")
         colItems = objSWbemServices.ExecQuery("Select * from Win32_DiskDrive")
         for objItem in colItems:
-            logger.debug('detected disk drive: [%s] %s (%s)'%(str(objItem.Name), \
-                    str(objItem.Caption), str(objItem.MediaType)))
+            #logger.debug('detected disk drive: [%s] %s (%s)'%(str(objItem.Name), \
+            #        str(objItem.Caption), str(objItem.MediaType)))
 
             #if 'Removable' not in str(objItem.MediaType):
             if 'Fixed hard disk media' not in str(objItem.MediaType):
@@ -178,12 +178,15 @@ class WindowsMediaStoragesManager(AbstractMediaStoragesManager):
         return st_list
 
     @classmethod
-    def unmount_media_device(cls, device):
+    def unmount_media_device(cls, device, force=False):
         logic_drives = []
 
         #found logical drives on device
         import win32com.client
         import pythoncom
+        import win32file
+        import win32con
+        import win32api
         pythoncom.CoInitialize()
         strComputer = "."
         objWMIService = win32com.client.Dispatch("WbemScripting.SWbemLocator")
@@ -201,8 +204,33 @@ class WindowsMediaStoragesManager(AbstractMediaStoragesManager):
                 logic_drives.append(logic.DeviceID)
 
         #unmounting all logical drives
+        FSCTL_DISMOUNT_VOLUME = 0x00090020
         for vol in logic_drives:
-            cmd_call('mountvol %s /D'%vol, 'Logical volume %s does not unmounted!'%vol)
+            if force:
+                p = Subprocess('mountvol %s /d'%vol)
+                out, err = p.communicate()
+                if p.returncode:
+                    logger.warning('"mountvol %s /d" failed with message: %s %s'%(vol, out, err))
+                continue
+
+            try:
+                hh = win32file.CreateFile('\\\\.\\%s'%str(vol),  
+                                     win32con.GENERIC_READ,
+                                     win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE,
+                                     None,
+                                     win32file.OPEN_EXISTING,
+                                     win32file.FILE_ATTRIBUTE_NORMAL,
+                                     None)
+            except Exception, err:
+                raise Exception('Volume %s does not opened: %s'%(vol, err))
+
+            try:
+                ret = win32file.DeviceIoControl(hh, FSCTL_DISMOUNT_VOLUME, None, None)
+                if ret:
+                    raise Exception('Volume %s does not unmounted! Error code: %s'%(str(vol), win32api.GetLastError()))
+            finally:
+                win32file.CloseHandle(hh)
+
 
 
 

@@ -74,8 +74,18 @@ def stop_daemon():
         sys.stderr.write('No pid file %s found. Please, kill client_daemon process manually\n'%pid_file)
         sys.exit(1)
 
-    pid = open(pid_file, 'r').read()
-    os.kill(int(pid), signal.SIGINT)
+    if hasattr(sys,"frozen") and sys.frozen:
+        import win32file
+        fileHandle = win32file.CreateFile("\\\\.\\pipe\\idepositbox_daemon_pipe",
+                                  win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+                                  0, None,
+                                  win32file.OPEN_EXISTING,
+                                  0, None)
+        win32file.WriteFile(fileHandle, 'STOP')
+        win32file.CloseHandle(fileHandle)
+    else:
+        pid = open(pid_file, 'r').read()
+        os.kill(int(pid), signal.SIGINT)
     os.unlink(pid_file)
     print('iDepositBox management console is stopped!')
 

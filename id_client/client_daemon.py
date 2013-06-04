@@ -14,6 +14,7 @@ This daemon is used in CLI user interface
 import os
 import sys
 import signal
+import threading
 
 DAEMON_PORT = 8880
 
@@ -38,13 +39,43 @@ from nimbus_client.core.logger import logger
 from id_client.web.web_server import MgmtServer
 from id_client.idepositbox_client import IdepositboxClient
 
+class Win32StopThread(threading.Thread):
+    def __init__(self, stop_hdlr):
+        threading.Thread.__init__(self)
+        self.stop_hdlr = stop_hdlr
+
+    def run(self):
+        try:
+            import win32pipe, win32file
+            import win32file
+
+            fileHandle = win32pipe.CreateNamedPipe(r'\\.\pipe\idepositbox_daemon_pipe',
+                win32pipe.PIPE_ACCESS_DUPLEX,
+                win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_WAIT,
+                1, 65536, 65536,300,None)
+
+
+            win32pipe.ConnectNamedPipe(fileHandle, None)
+
+            data = win32file.ReadFile(fileHandle, 4096)
+            if data == (0, 'STOP'):
+                self.stop_hdlr()
+            win32pipe.DisconnectNamedPipe(fileHandle)
+            win32file.CloseHandle(fileHandle)
+        except Exception, err:
+            logger.error('Win32StopThread error: %s'%err)
+
+
 class IDClientDaemon:
     def __init__(self):
         signal.signal(signal.SIGINT, self.stop)
         if hasattr(sys,"frozen"):
             static_path = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'static')
+
+            Win32StopThread(self.stop).start()
         else:
             static_path = None #default static path will be used
+            signal.signal(signal.SIGINT, self.stop)
         self.server = MgmtServer('0.0.0.0', DAEMON_PORT, IdepositboxClient(), static_path)
 
     def start(self):
@@ -54,7 +85,7 @@ class IDClientDaemon:
             logger.error('IDClientDaemon error: %s'%err)
             logger.traceback_info()            
 
-    def stop(self, s, p):
+    def stop(self, s=None, p=None):
         logger.info('Stopping IDClientDaemon...')
         try:
             self.server.stop()

@@ -20,8 +20,6 @@ class FileOnBlockDevice:
         self.__dev = BlockDevice(path)
 
     def exists(self):
-        if not os.path.exists(self.__path):
-            return False
         if self.__dev.is_valid():
             return True
         return False

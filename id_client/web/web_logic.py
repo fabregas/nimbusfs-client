@@ -200,7 +200,7 @@ class StartServiceHandler(UrlHandler):
                 raise Exception('Invalid key chain at %s'%key_storage_path)
 
             idepositbox_client.start(security_provider_type, key_storage_path, data.get('password', ''))
-            resp = {'ret_code':0}
+            resp = {'ret_code':0, 'mount_point': idepositbox_client.get_mount_point()}
         except Exception, err:
             resp = {'ret_code':1, 'ret_message': str(err)}
         return self.json_source(resp)

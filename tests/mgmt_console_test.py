@@ -363,7 +363,7 @@ class MgmtConsoleTest(runtests.SSTTestCase):
             write_textfield('act_key', 'DGDSFGASGFGFDSAA')
             click_element('generate_btn')
             wait_for(get_element_by_xpath, '//*[@id="gen_alert_field"]/div/span')
-            assert_text_contains(xpath('//*[@id="gen_alert_field"]/div/span'), 'Details: Can not update key chain! No certificate matches private key')
+            assert_text_contains(xpath('//*[@id="gen_alert_field"]/div/span'), 'Details: Can not update key chain!\nNo certificate matches private key')
             click_element(xpath('//*[@id="gen_alert_field"]/div/button'))
 
             os.system('cp ./tests/cert/test_pri_only.ks /tmp/test.keystorage')

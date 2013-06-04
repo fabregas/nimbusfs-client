@@ -11,6 +11,9 @@ Copyright (C) 2013 Konstantin Andrusenko
 import os
 import sys
 import tempfile
+import subprocess
+
+DETACHED_PROCESS = 8 #flag for win32
 
 def to_str(val):
     if type(val) == unicode:
@@ -65,3 +68,28 @@ else:
     def get_free_space(folder):
         st = os.statvfs(folder)
         return st.f_bavail * st.f_frsize
+
+
+def Subprocess(argv, **params):
+    if type(argv) in (str, unicode):
+        argv = argv.split()
+    else:
+        argv = list(argv)
+
+    with_input = params.get('with_input', False)
+    stdin = None
+    if with_input:
+        stdin = subprocess.PIPE
+    stdout = params.get('stdout', subprocess.PIPE)
+    stderr = params.get('stderr', subprocess.PIPE)
+    shell = params.get('shell', False)
+    env = params.get('env', None)
+    if is_windows_os():
+        flags = DETACHED_PROCESS
+    else:
+        flags = 0
+        if params.get('daemon', False):
+            argv = ['nohup'] + argv +['&']
+
+    return subprocess.Popen(argv, stdout=stdout, stderr=stderr, \
+            stdin=stdin, env=env, creationflags=flags, shell=shell)

@@ -17,7 +17,7 @@ from zipfile import ZipFile
 from nimbus_client.core.utils import TempFile
 from id_client.media_storage import get_media_storage_manager
 from id_client.security.mbr import *
-from id_client.utils import Subprocess
+from nimbus_client.core.utils import Subprocess
 
 
 logger = logging.getLogger('fabnet-client')
@@ -44,11 +44,11 @@ DATA_START_SEEK = 2050 * BLOCK_SIZE #start at 2050 sector
 class KSSignature:
     SIGN_STRUCT = '<6sI'
     SIGN_LEN = struct.calcsize(SIGN_STRUCT)
-    SING_ID = 'OIFS01' #one item file system...
+    SIGN_ID = 'OIFS01' #one item file system...
 
     @classmethod
     def dump(cls, ks_len):
-        return struct.pack(cls.SIGN_STRUCT, cls.SING_ID, ks_len)
+        return struct.pack(cls.SIGN_STRUCT, cls.SIGN_ID, ks_len)
 
     def __init__(self, dumped=None):
         self.sign_id = None
@@ -60,7 +60,7 @@ class KSSignature:
         self.sign_id, self.ks_len = struct.unpack(self.SIGN_STRUCT, dumped)
 
     def is_valid(self):
-        if self.sign_id == self.SING_ID and self.ks_len > 0:
+        if self.sign_id == self.SIGN_ID and self.ks_len > 0:
             return True
         return False
 
@@ -99,15 +99,16 @@ class BlockDevice:
         self.unmount_partitions()
         self.change_mbr()
         self.restore_fat_partition()
+        self.unmount_partitions(force=True)
 
     def check_removable(self):
         ms = get_media_storage_manager()
         if not ms.is_removable(self.__dev_path):
             raise Exception('Device %s is not removable!'%self.__dev_path)
 
-    def unmount_partitions(self):
+    def unmount_partitions(self, force=False):
         ms = get_media_storage_manager()
-        ms.unmount_media_device(self.__dev_path)
+        ms.unmount_media_device(self.__dev_path, force=force)
 
     def __open_dev(self, read_only=False):
         flags = 'rb'
@@ -128,7 +129,8 @@ class BlockDevice:
             if not sign.is_valid():
                 raise Exception('Key chain does not found at %s'%self.__dev_path)
             return fd.read(sign.ks_len)
-        except IOError:
+        except IOError, err:
+            logger.warning('KS device open error: %s'%err)
             raise IOError('Device %s can not be read!'%self.__dev_path)
 
     def write(self, data, file_path=None):

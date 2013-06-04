@@ -21,6 +21,14 @@ build_exe_options = {"packages": ["dbhash", "dumbdbm", "cherrypy", "wsgidav",\
                         ('./third-party/imageformats', ''),
                         ('./id_client/security/fat_img.zip', '')]}
 
+
+
+registry_table = [('IDEP_RUNAS', 1, r'SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers', \
+        '[TARGETDIR]iDepositBox.exe', 'RUNASADMIN', 'TARGETDIR')]
+msi_data = {'Registry': registry_table}
+
+
+
 # GUI applications require a different base on Windows (the default is for a
 # console application).
 base = None
@@ -34,7 +42,8 @@ setup(  name = "iDepositBox",
         url = 'http://idepositbox.com',
         description = "iDepositBox service client",
         options = {"build_exe": build_exe_options,\
-                    'bdist_msi': {'upgrade_code': '{87654321-ACDC-EF12-1234-123456789012}'}},
+                    'bdist_msi': {'upgrade_code': '{87654321-ACDC-EF12-1234-123456789012}',
+                    'data': msi_data}},
         executables = [Executable("./id_client/gui/main_window.py", base=base, \
                         targetName='iDepositBox.exe', icon='./id_client/gui/resources/app-icon.ico', \
                         shortcutName='iDepositBox', shortcutDir='DesktopFolder'),

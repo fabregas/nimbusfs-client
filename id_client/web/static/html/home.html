@@ -24,6 +24,7 @@
           <label class="control-label" for="serv_status">Service status:</label>
             <div class="controls">
                 <div id="serv_status"></div>
+                <span id="mount_point"></span>
             </div>
       </div>
 
@@ -144,6 +145,10 @@
                     'password': pwd },
                     function(data) {
                         if (data['ret_code'] == 0) {
+                            if (data['mount_point'] != '') {
+                                //show mount point
+                                $('#mount_point').html('<span class="label">Mounted locally at '+data['mount_point']+'</span>');
+                            }
                             reload_content();
                         } else {
                             show_alert(data['ret_message']);
@@ -170,6 +175,7 @@
         $.post("/stop_service",
                 function(data) {
                     if (data['ret_code'] == 0) {
+                        $('#mount_point').html(''); //remove mount point
                         reload_content();
                     } else {
                         show_alert(data['ret_message']);
@@ -298,7 +304,7 @@
                     }
                 }
                 update_label('#sync_status', 'label-warning', 'In progress', icn);
-                $('#pr_tl .bar').css('width', perc+'%');
+                $('#pr_tl .bar').css('width', Math.round(perc)+'%');
                 $('#pr_tl span').html(perc+'%');
 
                 if ($('#pr_tl').css('display') == 'none') {

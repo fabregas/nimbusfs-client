@@ -157,6 +157,7 @@ class CheckSyncStatusThread(QThread):
                 logger.error('CheckSyncStatusThread: %s'%err)
             finally:
                 time.sleep(2)
+            logger.debug('finished CheckSyncStatusThread')
 
     def stop(self):
         self.stopped = True
@@ -261,6 +262,8 @@ class MainWind(WebViewDialog):
 
             self.check_sync_status_thr.stop()
             self.check_sync_status_thr.wait()
+        except Exception, err:
+            self.show_error('Unexpected error: %s'%err)
         finally:
             qApp.exit()
 

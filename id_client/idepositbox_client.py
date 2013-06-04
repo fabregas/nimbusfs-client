@@ -37,6 +37,7 @@ from id_client.media_storage import get_media_storage_manager
 from id_client.security.block_device_based_ks import BlockDeviceBasedSecurityManager
 from id_client.webdav_mounter import WebdavMounter
 from id_client.version import VERSION
+from id_client.utils import Subprocess
 
 SM_TYPES_MAP = {SPT_TOKEN_BASED: None,
                 SPT_BLOCKDEV_BASED: BlockDeviceBasedSecurityManager,
@@ -58,6 +59,7 @@ class IdepositboxClient(object):
         self.__last_ks_type = None
         self.__last_ks_path = None
         self.__events = []
+        self.__webdav_mount = WebdavMounter()
         events_provider.append_listener(Event.ET_CRITICAL, self.on_critical_event)
         self.__set_log_level()
 
@@ -96,6 +98,10 @@ class IdepositboxClient(object):
     @IDLock
     def get_status(self):
         return self.__status
+
+    @IDLock
+    def get_mount_point(self):
+        return self.__webdav_mount.get_mount_point()
 
     @IDLock
     def get_last_key_storage_type(self):
@@ -164,9 +170,11 @@ class IdepositboxClient(object):
                 logger.info('%s is started!'%api_instance.get_name())
 
             if config.mount_type == MOUNT_LOCAL:
-                webdav_mount = WebdavMounter()
-                ret_code = webdav_mount.mount(ext_host, config.webdav_bind_port)
-                mount_point = webdav_mount.get_mount_point()
+                time.sleep(1)
+                ret_code = self.__webdav_mount.mount(ext_host, config.webdav_bind_port)
+                mount_point = self.__webdav_mount.get_mount_point()
+                if not mount_point:
+                    mount_point = 'UnknownMountPoint'
                 if ret_code:
                     logger.error('WebDav resource does not mounted at %s!'%mount_point)
                 else:
@@ -224,17 +232,9 @@ class IdepositboxClient(object):
         if not sm_class:
             raise Exception('Unsupported key chain type: "%s"'%ks_type)
 
-        cert = sm_class(ks_path, ks_pwd).get_client_cert()
-        tmp_file = TempFile()
-        tmp_file.write(cert)
-        tmp_file.flush()
-        cmd = 'openssl x509 -in %s -noout -text'%tmp_file.name
-        p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        cout, cerr = p.communicate()
-        tmp_file.close()
-        if p.returncode != 0:
-            raise Exception(cerr)
-        return cout
+        sm = sm_class(ks_path, ks_pwd)
+        cert = sm.get_client_cert_hr()
+        return cert
 
     def __validate_password(self, password):
         if (len(password) < 4):
@@ -314,8 +314,7 @@ class IdepositboxClient(object):
                 self.__check_kss_thrd = None
 
             if self.__config.mount_type == MOUNT_LOCAL:
-                webdav_mount = WebdavMounter()
-                ret_code = webdav_mount.unmount()
+                ret_code = self.__webdav_mount.unmount()
 
             for api_instance in self.__api_list:
                 try:
