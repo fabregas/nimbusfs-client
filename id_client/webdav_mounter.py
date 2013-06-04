@@ -61,7 +61,7 @@ class WebdavMounter:
                     return self.__run_linux_mounter('mount')
                 return self.mount_linux(host, port)
             finally:
-                self.__update_linux_mountpoint('%s:%s'%(host, port))
+                self.update_linux_mountpoint('%s:%s'%(host, port))
         elif self.cur_os == OS_WINDOWS:
             self.mount_windows(host, port)
 
@@ -79,7 +79,7 @@ class WebdavMounter:
             self.__mountpoint = ''
 
 
-    def __update_linux_mountpoint(self, url):
+    def update_linux_mountpoint(self, url):
         p = Subprocess('df') 
         out, err = p.communicate()
         for line in out.splitlines():
@@ -165,7 +165,10 @@ class WebdavMounter:
     def unmount_unix(self, mount_point):
         if os.path.exists(mount_point):
             p = Subprocess('umount %s'%mount_point)
-            p.communicate()
+            out, err = p.communicate()
+            if p.returncode:
+                logger.debug('"umount %s" output: %s %s'%(mount_point, out, err))
+
 
 
 if __name__ == '__main__':
@@ -187,6 +190,7 @@ if __name__ == '__main__':
             sys.stderr.write('Webdav does not mounted locally! %s\n'%err)
             sys.exit(1)
     elif cmd == 'umount':
+        wdm.update_linux_mountpoint( '127.0.0.1:%s'%config.webdav_bind_port)
         wdm.unmount()
     else:
         sys.stderr.write('unknown command "%s"!\n'%cmd)
