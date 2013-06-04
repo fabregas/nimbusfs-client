@@ -52,6 +52,7 @@ SYNCDATA_ICON = os.path.join(RESOURCES_DIR, "sync-icon.png")
 APP_ICON = os.path.join(RESOURCES_DIR, "app-icon.png")
 
 MENU_MANAGE_ICON = os.path.join(RESOURCES_DIR, "menu-manage-icon.png")
+MENU_STATUS_ICON = os.path.join(RESOURCES_DIR, "menu-status-icon.png")
 MENU_EXIT_ICON = os.path.join(RESOURCES_DIR, "menu-exit-icon.png")
 
 LOADING_IMG = os.path.join(RESOURCES_DIR, "loading.gif")
@@ -80,33 +81,40 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.logout_icon = QIcon(self.__get_icon_src(LOGOUT_ICON))
         self.syncdata_icon = QIcon(self.__get_icon_src(SYNCDATA_ICON))
 
+        self.status_act = QAction(QIcon(MENU_STATUS_ICON), '', parent)
+        self.status_act.setEnabled(False)
         self.manage_act = QAction(QIcon(MENU_MANAGE_ICON), LM_MANAGE, parent)
         self.exit_act = QAction(QIcon(MENU_EXIT_ICON), LM_EXIT, parent)
 
         self.tray_menu = QMenu(parent)
+        self.tray_menu.addAction(self.status_act)
+        self.tray_menu.addSeparator()
         self.tray_menu.addAction(self.manage_act)
         self.tray_menu.addSeparator()
         self.tray_menu.addAction(self.exit_act)
 
-        self.setIcon(self.logout_icon)
+        self.on_changed_service_status(STATUS_STOPPED)
         self.setContextMenu(self.tray_menu)
         self.setToolTip('iDepositBox service client')
         
     def __get_icon_src(self, icon_path):
-        if sys.platform != 'darwin':
-            ic = QImage(icon_path)
-            #ic = ic.scaled(16, 16)
-            ic.invertPixels()
-            return QPixmap.fromImage(ic)
+        #if sys.platform != 'darwin':
+        #    ic = QImage(icon_path)
+        #    #ic = ic.scaled(16, 16)
+        #    ic.invertPixels()
+        #    return QPixmap.fromImage(ic)
         return icon_path
 
-    def on_changed_service_status(self, status):
+    def on_changed_service_status(self, status, data=None):
         if status == STATUS_STOPPED:
             self.setIcon(self.logout_icon)
+            self.status_act.setText('Logged out')
         elif status == STATUS_STARTED:
             self.setIcon(self.login_icon)
+            self.status_act.setText('Logged in')
         elif status == STATUS_SYNCING:
             self.setIcon(self.syncdata_icon)
+            self.status_act.setText('In progress %s'%data)
         else:
             raise Exception('Unexpected service status "%s"'%status)
 
@@ -142,16 +150,17 @@ class CheckSyncStatusThread(QThread):
                     conn.close()
 
                 data = json.loads(data)
+                progress = None
                 if data.get('service_status', CS_FAILED) != CS_STARTED:
                     status = STATUS_STOPPED
                 else:
                     if data.get('sync_status', SS_SYNC_PROGRESS):
                         status = STATUS_SYNCING
+                        progress = '%i%s'%(int(data.get('sum_progress', 0)), '%')
                     else:
                         status = STATUS_STARTED
-
-                if status != old_status:
-                    self.wind.changed_service_status.emit(status)
+                if status == STATUS_SYNCING or status != old_status:
+                    self.wind.changed_service_status.emit(status, progress)
                 old_status = status
             except Exception, err:
                 logger.error('CheckSyncStatusThread: %s'%err)
@@ -163,7 +172,7 @@ class CheckSyncStatusThread(QThread):
         self.stopped = True
 
 class MainWind(WebViewDialog):
-    changed_service_status = Signal(str)
+    changed_service_status = Signal(str, str)
 
     def __init__(self, parent=None):
         super(MainWind, self).__init__(parent)
@@ -216,7 +225,7 @@ class MainWind(WebViewDialog):
                 self.show_error('Management console does not started! See log file for details...')
                 qApp.exit()
 
-    def on_changed_service_status(self, status):
+    def on_changed_service_status(self, status, data=None):
         if self.__first_event:
             self.__first_event = False
             if self.systray.isSystemTrayAvailable():
@@ -227,7 +236,7 @@ class MainWind(WebViewDialog):
                 self.onManage()
 
         if self.systray.isVisible():
-            self.systray.on_changed_service_status(status)
+            self.systray.on_changed_service_status(status, data)
 
     def on_icon_activated(self, reason):
         if reason in (self.systray.ActivationReason.Trigger, self.systray.ActivationReason.DoubleClick):

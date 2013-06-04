@@ -14,6 +14,7 @@ build_exe_options = {"packages": ["dbhash", "dumbdbm", "cherrypy", "wsgidav",\
                         ('./id_client/gui/resources/sync-icon.png', ''),
                         ('./id_client/gui/resources/menu-exit-icon.png', ''),
                         ('./id_client/gui/resources/menu-manage-icon.png', ''),
+                        ('./id_client/gui/resources/menu-status-icon.png', ''),
                         ('./id_client/gui/resources/app-icon.png', ''),
                         ('./id_client/gui/resources/app-icon.ico', ''),
                         ('./id_client/web/static', ''),
