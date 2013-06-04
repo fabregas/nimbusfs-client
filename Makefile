@@ -33,8 +33,8 @@ make_suid_app:
 	sed -e 's/{RELPATH}/id_client\/webdav_mounter.py/g' suid_template.c > suid_mounter.c
 	${CC} ${CFLAGS} -o ./bin/${ARCH}/rbd_manage suid_disk_manage.c
 	${CC} ${CFLAGS} -o ./bin/${ARCH}/webdav_mount suid_mounter.c
-	strip ./bin/${ARCH}/rbd_manage
-	strip ./bin/${ARCH}/webdav_mount
+	${STRIP} ./bin/${ARCH}/rbd_manage
+	${STRIP} ./bin/${ARCH}/webdav_mount
 	rm suid_mounter.c
 	rm suid_disk_manage.c
 
