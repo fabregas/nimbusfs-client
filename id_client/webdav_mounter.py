@@ -12,9 +12,8 @@ Copyright (C) 2013 Konstantin Andrusenko
 import os
 import sys
 import string
-from id_client.utils import Subprocess
+from id_client.utils import Subprocess, logger
 
-from nimbus_client.core.logger import logger
 
 LINUX_MOUNTER_BIN = os.path.abspath(os.path.join(os.path.dirname(__file__), '../bin/webdav_mount'))
 

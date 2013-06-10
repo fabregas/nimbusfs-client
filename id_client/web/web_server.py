@@ -24,8 +24,8 @@ from wsgidav.fs_dav_provider import FilesystemProvider
 from wsgidav.util import BASE_LOGGER_NAME
 from cherrypy import wsgiserver, __version__ as cp_version
 
+from id_client.utils import logger
 from id_client.web.web_logic import WSGIApplication, HANDLERS_MAP
-from nimbus_client.core.logger import logger
 
 
 class MgmtServer(threading.Thread):

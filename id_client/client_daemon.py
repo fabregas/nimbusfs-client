@@ -36,8 +36,7 @@ else:
 if sys.platform == 'win32' and 'OPENSSL_EXEC' not in os.environ:
     os.environ['OPENSSL_EXEC'] = os.path.join(third_party, 'OpenSSL/bin/openssl.exe')
 
-from nimbus_client.core.logger import logger
-
+from id_client.utils import logger
 from id_client.web.web_server import MgmtServer
 from id_client.idepositbox_client import IdepositboxClient
 

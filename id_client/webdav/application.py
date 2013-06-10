@@ -21,25 +21,26 @@ import tempfile
 
 from wsgidav.version import __version__
 from wsgidav.wsgidav_app import DEFAULT_CONFIG, WsgiDAVApp
-from wsgidav.fs_dav_provider import FilesystemProvider
 from wsgidav.util import BASE_LOGGER_NAME
 from cherrypy import wsgiserver, __version__ as cp_version
 
+from nimbus_client.core.logger import init_logger
 from fabnet_dav_provider import FabnetProvider
 from ks_domain_controller import KSDomainController
 from id_client.base_external_api import BaseExternalAPI
 from id_client.version import VERSION
-from nimbus_client.core.logger import logger
+from id_client.config import Config
 
 WAIT_WEBDAV_SERVER_TIMEOUT = 10
 
 wsgiserver.CherryPyWSGIServer.version = "WsgiDAV/%s %s" % (__version__, wsgiserver.CherryPyWSGIServer.version)
 
 class WebDavAPI(BaseExternalAPI):
-    def __init__(self, nibbler, host, port):
+    def __init__(self, nibbler, host, port, log_level=logging.INFO):
         BaseExternalAPI.__init__(self, nibbler)
         self.host = host
         self.port = int(port)
+        self.log_level = log_level
         self.server = None
 
     def get_name(self):
@@ -54,20 +55,10 @@ class WebDavAPI(BaseExternalAPI):
         return False
 
     def __init_logger(self):
-        wsgi_logger = logging.getLogger(BASE_LOGGER_NAME)
-
-        for hdlr in wsgi_logger.handlers[:]:
-            try:
-                hdlr.flush()
-                hdlr.close()
-            except:
-                pass
-            logger.removeHandler(hdlr)
-
-        fileHandler = logging.FileHandler(os.path.join(tempfile.gettempdir(), 'wsgidav.log'))
-        wsgi_logger.addHandler(fileHandler)
-
-        wsgi_logger.setLevel(logging.INFO)
+        config = Config()
+        wsgi_logger = init_logger(os.path.join(config.data_dir, 'logs', 'webdav.log'),\
+                                    BASE_LOGGER_NAME)
+        wsgi_logger.setLevel(self.log_level)
 
     def main_loop(self):
         provider = FabnetProvider(self.nibbler)
@@ -76,7 +67,7 @@ class WebDavAPI(BaseExternalAPI):
         config.update({
             "provider_mapping": {"/": provider},
             "user_mapping": {},
-            "verbose": 2,
+            "verbose": 1,
             #"debug_methods": ['OPTIONS', 'PROPFIND', 'GET'],
             "enable_loggers": [],
             "propsmanager": True,      # True: use property_manager.PropertyManager                    

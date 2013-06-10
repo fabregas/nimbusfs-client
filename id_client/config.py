@@ -44,7 +44,7 @@ class Config(dict):
             self.__get_conf_val('FABNET', 'fabnet_url', 'fabnet_hostname')
             self.__get_conf_val('FABNET', 'parallel_put_count', 'parallel_put_count', int)
             self.__get_conf_val('FABNET', 'parallel_get_count', 'parallel_get_count', int)
-            self.__get_conf_val('CACHE', 'cache_dir', 'cache_dir')
+            self.__get_conf_val('CACHE', 'data_dir', 'data_dir')
             self.__get_conf_val('CACHE', 'cache_size', 'cache_size', int)
             self.__get_conf_val('WEBDAV', 'bind_hostname', 'webdav_bind_host')
             self.__get_conf_val('WEBDAV', 'bind_port', 'webdav_bind_port')
@@ -57,7 +57,7 @@ class Config(dict):
         return os.path.join(os.path.expanduser('~'), '.idepositbox_client.conf')
 
     def __get_default_cache_dir(self):
-        cache_dir = os.path.join(os.path.expanduser('~'), '.idepositbox_cache') 
+        cache_dir = os.path.join(os.path.expanduser('~'), '.idepositbox_data') 
         if not os.path.exists(cache_dir):
             os.mkdir(cache_dir)
         return cache_dir
@@ -70,7 +70,7 @@ class Config(dict):
                 'webdav_bind_host': '127.0.0.1',
                 'webdav_bind_port': '8080',
                 'mount_type': MOUNT_LOCAL,
-                'cache_dir': self.__get_default_cache_dir(),
+                'data_dir': self.__get_default_cache_dir(),
                 'cache_size': 0,
                 'ca_address': 'ca.idepositbox.com'}
 
@@ -100,7 +100,7 @@ class Config(dict):
         config.set('CA', 'ca_address', self['ca_address'])
         config.set('FABNET', 'parallel_put_count', self['parallel_put_count'])
         config.set('FABNET', 'parallel_get_count', self['parallel_get_count'])
-        config.set('CACHE', 'cache_dir', self['cache_dir'])
+        config.set('CACHE', 'data_dir', self['data_dir'])
         config.set('CACHE', 'cache_size', self['cache_size'])
         config.set('WEBDAV', 'bind_hostname', self['webdav_bind_host'])
         config.set('WEBDAV', 'bind_port', self['webdav_bind_port'])

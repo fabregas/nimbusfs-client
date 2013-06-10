@@ -25,7 +25,7 @@ from PySide.QtGui import *
 import PySide
 
 import id_client
-from id_client.idepositbox_client import logger
+from id_client.utils import logger
 from id_client.constants import *
 from id_client.gui.webview_dialog import WebViewDialog
 from id_client.utils import Subprocess

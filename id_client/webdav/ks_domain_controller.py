@@ -10,7 +10,7 @@ Copyright (C) 2013 Konstantin Andrusenko
 """
 
 from wsgidav.http_authenticator import SimpleDomainController
-from nimbus_client.core.logger import logger
+
 
 class KSDomainController(SimpleDomainController):
     def __init__(self, key_storage):

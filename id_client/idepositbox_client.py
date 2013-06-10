@@ -23,12 +23,15 @@ import subprocess
 import threading
 import string
 
+from id_client.utils import logger
+
 from nimbus_client.core.security_manager import FileBasedSecurityManager, AbstractSecurityManager
 from nimbus_client.core.base_safe_object import LockObject
 from nimbus_client.core.nibbler import Nibbler
-from nimbus_client.core.logger import logger
 from nimbus_client.core.events import Event, events_provider
 from nimbus_client.core.utils import TempFile
+from nimbus_client.core.logger import logger as nimbus_logger
+from nimbus_client.core.exceptions import NimbusException
 
 from id_client.webdav.application import WebDavAPI
 from id_client.config import Config
@@ -65,14 +68,14 @@ class IdepositboxClient(object):
 
     def __set_log_level(self):
         log_level = self.__config.log_level.lower()
-        if log_level == 'info':
-            logger.setLevel(logging.INFO)
-        elif log_level == 'debug':
-            logger.setLevel(logging.DEBUG)
-        elif log_level == 'warning':
-            logger.setLevel(logging.WARNING)
-        elif log_level == 'error':
-            logger.setLevel(logging.ERROR)
+        ll_map = {'debug': logging.DEBUG, 'info': logging.INFO,
+                    'warning': logging.WARNING, 'error': logging.ERROR}
+        l_level = ll_map.get(log_level, None)
+        if l_level == None:
+            logger.error('Unknown log level "%s"'%log_level)
+
+        logger.setLevel(l_level)
+        nimbus_logger.setLevel(l_level)
 
     @IDEventLock
     def on_critical_event(self, event):
@@ -128,7 +131,7 @@ class IdepositboxClient(object):
             
             self.__nibbler = Nibbler(config.fabnet_hostname, security_provider, \
                                 config.parallel_put_count, config.parallel_get_count, \
-                                config.cache_dir, config.cache_size)
+                                config.data_dir, config.cache_size)
 
 
             try:
@@ -153,7 +156,8 @@ class IdepositboxClient(object):
                 ext_host = '127.0.0.1'
             else:
                 ext_host = config.webdav_bind_host
-            webdav_server = WebDavAPI(self.__nibbler, ext_host, config.webdav_bind_port)
+            log_level = logger.getEffectiveLevel()
+            webdav_server = WebDavAPI(self.__nibbler, ext_host, config.webdav_bind_port, log_level)
             self.__api_list.append(webdav_server)
 
             for api_instance in self.__api_list:
@@ -184,8 +188,9 @@ class IdepositboxClient(object):
             self.__check_kss_thrd.start()
             logger.info('IdepositboxClient is started')
         except Exception, err:
-            logger.error('init fabnet provider error: %s'%err)
-            logger.traceback_info()
+            logger.error('init nimbusfs client error: %s'%err)
+            if not isinstance(err, NimbusException):
+                logger.traceback_info()
             self.__status = CS_FAILED
             self.stop()
             raise err

@@ -11,9 +11,8 @@ Copyright (C) 2013 Konstantin Andrusenko
 import os
 import sys
 
-from nimbus_client.core.logger import logger
 from id_client.constants import SPT_TOKEN_BASED, SPT_FILE_BASED, SPT_BLOCKDEV_BASED
-from id_client.utils import Subprocess
+from id_client.utils import Subprocess, logger
 
 ALLOW_HOME_KS = False #ks in HOME is used for test purpose only
 KS_PATH = os.path.join('iDepositBox', 'key.ks')

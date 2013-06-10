@@ -14,16 +14,12 @@ import struct
 import logging
 from zipfile import ZipFile
 
-from nimbus_client.core.utils import TempFile
+from id_client.utils import logger
 from id_client.media_storage import get_media_storage_manager
 from id_client.security.mbr import *
 from nimbus_client.core.utils import Subprocess
+from nimbus_client.core.utils import TempFile
 
-
-logger = logging.getLogger('fabnet-client')
-if not logger.handlers:
-    console = logging.StreamHandler()
-    logger.addHandler(console)
 
 if hasattr(sys,"frozen") and sys.platform == 'win32':
     curdir = os.path.dirname(os.path.abspath(sys.executable))

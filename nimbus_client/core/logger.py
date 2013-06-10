@@ -17,24 +17,34 @@ import traceback
 import StringIO
 import logging, logging.handlers
 
+LOGGER_NAME = 'nimbusfs'
 
-def init_logger():
-    logger = logging.getLogger('fabnet-client')
+def init_logger(log_file=None, logger_name=LOGGER_NAME):
+    logger = logging.getLogger(logger_name)
+    for hdlr in logger.handlers[:]:
+        try:
+            hdlr.flush()
+            hdlr.close()
+        except:
+            pass
+        logger.removeHandler(hdlr)
 
     logger.setLevel(logging.INFO)
-
-    if sys.platform.startswith('win'):
-        hdlr = logging.FileHandler(os.path.join(tempfile.gettempdir(), 'nimbusfs.log'))
+    if log_file:
+        hdlr = logging.FileHandler(log_file)
     else:
-        if sys.platform == 'darwin':
-            log_path = '/var/run/syslog'
+        if sys.platform.startswith('win'):
+            hdlr = logging.FileHandler(os.path.join(tempfile.gettempdir(), 'nimbusfs.log'))
         else:
-            log_path = '/dev/log'
+            if sys.platform == 'darwin':
+                log_path = '/var/run/syslog'
+            else:
+                log_path = '/dev/log'
 
-        hdlr = logging.handlers.SysLogHandler(address=log_path,
-                  facility=logging.handlers.SysLogHandler.LOG_DAEMON)
+            hdlr = logging.handlers.SysLogHandler(address=log_path,
+                      facility=logging.handlers.SysLogHandler.LOG_DAEMON)
 
-    formatter = logging.Formatter('fabnet-client %(levelname)s [%(threadName)s] %(message)s')
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s [%(threadName)s] %(message)s')
     hdlr.setFormatter(formatter)
     logger.addHandler(hdlr)
 
@@ -60,4 +70,7 @@ class lazy_traceback_log(object):
         finally:
             buf.close()
 
-logger = init_logger()
+__log_file = os.environ.get('LOG_FILE', None)
+
+logger = init_logger(__log_file)
+
