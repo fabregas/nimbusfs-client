@@ -23,26 +23,26 @@ CHECK_CAPACITY_TIME = 5
 MIN_FREE_CAPACITY = 10
 
 class DataBlockCache:
-    def __init__(self, cache_dir, allow_capacity=None):
+    def __init__(self, cache_dir, allow_capacity=None, user_id=''):
         if not os.path.exists(cache_dir):
             raise Exception('No cache dir found at %s'%cache_dir)
 
         self.__cache_dir = os.path.abspath(cache_dir)
-        self.__dyn_cache = os.path.join(self.__cache_dir, 'dynamic_cache')
+        self.__dyn_cache = os.path.join(self.__cache_dir, 'dynamic_cache', user_id)
         self.__stat_cache = os.path.join(self.__cache_dir, 'static_cache')
         self.__allow_capacity = allow_capacity
         self.__lock = threading.RLock()
         self.__check_capacity_thrd = CheckCapacityThrd(self)
 
         if not os.path.exists(self.__dyn_cache):
-            os.mkdir(self.__dyn_cache)
+            os.makedirs(self.__dyn_cache)
         if not os.path.exists(self.__stat_cache):
             os.mkdir(self.__stat_cache)
         self.__check_capacity_thrd.start()
 
     def stop(self):
         self.__check_capacity_thrd.stop()
-    
+
     def __calculate_busy_size(self, dir_path):
         busy_size = 0
         self.__lock.acquire()
@@ -81,6 +81,14 @@ class DataBlockCache:
             return True
         finally:
             self.__lock.release()
+
+    def clear_all(self):
+        for item in os.listdir(self.__dyn_cache):
+            path = os.path.join(self.__dyn_cache, item) 
+            os.remove(path)
+
+    def get_dynamic_cache_dir(self):
+        return self.__dyn_cache
 
     def clear_old(self):
         self.__lock.acquire()

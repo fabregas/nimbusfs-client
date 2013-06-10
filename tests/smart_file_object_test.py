@@ -11,6 +11,7 @@ import signal
 import string
 import hashlib
 import logging
+from hashlib import sha1
 from Queue import Queue, Empty
 
 from nimbus_client.core import transactions_manager
@@ -53,7 +54,7 @@ class TestSmartFileObject(unittest.TestCase):
         os.makedirs(tmp('smart_file_test/dynamic_cache'))
         os.makedirs(tmp('smart_file_test/static_cache'))
 
-        db_cache = DataBlockCache(tmp('smart_file_test'))
+        db_cache = DataBlockCache(tmp('smart_file_test'), user_id=sha1('test').hexdigest())
         md = MetadataFile(db_cache.get_static_cache_path('test_md.bin'))
         tr_manager = None
         try:
@@ -107,8 +108,7 @@ class TestSmartFileObject(unittest.TestCase):
             self.assertEqual(data, 'this is test message for one data block!')
             test_file.close()
 
-            remove_dir(tmp('smart_file_test/dynamic_cache'))
-            os.makedirs(tmp('smart_file_test/dynamic_cache'))
+            db_cache.clear_all()
 
             test_file = SmartFileObject('/test.file')
             data = test_file.read()
@@ -125,11 +125,10 @@ class TestSmartFileObject(unittest.TestCase):
 
 
     def test01_trans_manager(self):
-        db_cache = DataBlockCache(tmp('smart_file_test'))
+        db_cache = DataBlockCache(tmp('smart_file_test'), user_id=sha1('test').hexdigest())
         open(db_cache.get_static_cache_path('transactions-share.log'), 'w').close()
         try:
-            remove_dir(tmp('smart_file_test/dynamic_cache'))
-            os.makedirs(tmp('smart_file_test/dynamic_cache'))
+            db_cache.clear_all()
 
             md = MetadataFile(db_cache.get_static_cache_path('test_md.bin'))
             tr_manager = TransactionsManager(md, db_cache, 2)

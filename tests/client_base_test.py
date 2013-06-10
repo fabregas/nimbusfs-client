@@ -264,8 +264,7 @@ class BaseNibblerTest(unittest.TestCase):
         self.assertEqual(data, 'test data for local save')
 
         #clear cached data blocks...
-        remove_dir(tmp('client_base_test/dynamic_cache'))
-        os.makedirs(tmp('client_base_test/dynamic_cache'))
+        nibbler.db_cache.clear_all()
 
         f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
         data = ''
@@ -331,9 +330,8 @@ class BaseNibblerTest(unittest.TestCase):
             nibbler.listdir('/some/imagine/path')
 
     def test07_failed_read_transactions(self):
-        remove_dir(tmp('client_base_test/dynamic_cache'))
-        os.makedirs(tmp('client_base_test/dynamic_cache'))
         nibbler = BaseNibblerTest.NIBBLER_INST
+        nibbler.db_cache.clear_all()
         cur_fri_client = nibbler.fabnet_gateway.fri_client
         try:
             nibbler.fabnet_gateway.fri_client = MockedFriClient(genfail=True)
@@ -342,15 +340,14 @@ class BaseNibblerTest(unittest.TestCase):
                 data = f_obj.read()
             f_obj.close()
             time.sleep(0.5)
-            data_blocks = os.listdir(tmp('client_base_test/dynamic_cache/'))
+            data_blocks = os.listdir(nibbler.db_cache.get_dynamic_cache_dir())
             self.assertEqual(len(data_blocks), 0)
         finally:
             nibbler.fabnet_gateway.fri_client = cur_fri_client
 
     def test07_failed_write_transactions(self):
-        remove_dir(tmp('client_base_test/dynamic_cache'))
-        os.makedirs(tmp('client_base_test/dynamic_cache'))
         nibbler = BaseNibblerTest.NIBBLER_INST
+        nibbler.db_cache.clear_all()
         cur_fri_client = nibbler.fabnet_gateway.fri_client
         try:
             nibbler.fabnet_gateway.fri_client = MockedFriClient(genfail=True)
@@ -365,8 +362,7 @@ class BaseNibblerTest(unittest.TestCase):
         self.__wait_oper_status('/my_first_dir/new_file_with_up_fails', Transaction.TS_FINISHED)
 
         #fail on DB saving into local cache
-        remove_dir(tmp('client_base_test/dynamic_cache'))
-        os.makedirs(tmp('client_base_test/dynamic_cache'))
+        nibbler.db_cache.clear_all()
         f_obj = nibbler.open_file('/my_first_dir/new_file.failed', for_write=True)
         f_obj.write('*'*100100)
         def mocked_write(data, finalize):
@@ -379,7 +375,7 @@ class BaseNibblerTest(unittest.TestCase):
 
         self.__wait_oper_status('/my_first_dir/new_file.failed', Transaction.TS_FAILED)
 
-        data_blocks = os.listdir(tmp('client_base_test/dynamic_cache'))
+        data_blocks = os.listdir(nibbler.db_cache.get_dynamic_cache_dir())
         self.assertEqual(len(data_blocks), 0, data_blocks)
         f_obj._SmartFileObject__cur_data_block.write = db_write_routine
 
@@ -392,7 +388,7 @@ class BaseNibblerTest(unittest.TestCase):
         nibbler.metadata.append = md_append_mocked
         f_obj.close()
         self.__wait_oper_status('/my_first_dir/new_file_2.failed', Transaction.TS_FAILED)
-        data_blocks = os.listdir(tmp('client_base_test/dynamic_cache/'))
+        data_blocks = os.listdir(nibbler.db_cache.get_dynamic_cache_dir())
         self.assertEqual(len(data_blocks), 0, data_blocks)
         nibbler.metadata.append = md_append_func
 

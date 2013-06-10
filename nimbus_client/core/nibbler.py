@@ -79,11 +79,11 @@ class Nibbler:
         self.__parallel_get_count = parallel_get_count
         self.security_provider = security_provider
         self.fabnet_gateway = FabnetGateway(fabnet_host, security_provider)
-        self.db_cache = DataBlockCache(cache_dir, cache_size)
 
         prikey = self.security_provider.get_prikey()
         self.metadata_key = hashlib.sha1(str(prikey)).hexdigest()
         self.metadata_f_name = 'md-%s.bin'%self.metadata_key
+        self.db_cache = DataBlockCache(cache_dir, cache_size, self.metadata_key)
 
         self.journal = None
         self.metadata = None
