@@ -248,6 +248,8 @@ class MetadataFile:
                             self.remove(item_md)
                         except NotFoundException, err:
                             logger.warning('Can not remove item with ID=%s, bcs it does not found!'%item_md)
+                        except NotEmptyException, err:
+                            logger.warning('Can not remove item with ID=%s, bcs it has children!'%item_md)
                 except AlreadyExistsException, err:
                     logger.warning('Can not append/update item %s, bcs it is already exists!'%item_md)
 

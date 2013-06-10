@@ -105,7 +105,7 @@ class Nibbler:
             raise NoJournalFoundException('No journal for key = %s'%self.metadata_key)
 
         self.metadata = MetadataFile(self.db_cache.get_static_cache_path(self.metadata_f_name), self.journal)
-        self.transactions_manager = TransactionsManager(self.metadata, self.db_cache)
+        self.transactions_manager = TransactionsManager(self.metadata, self.db_cache, user_id=self.metadata_key)
 
         SmartFileObject.setup_transaction_manager(self.transactions_manager)
 

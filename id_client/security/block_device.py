@@ -25,7 +25,7 @@ if not logger.handlers:
     console = logging.StreamHandler()
     logger.addHandler(console)
 
-if hasattr(sys,"frozen"):
+if hasattr(sys,"frozen") and sys.platform == 'win32':
     curdir = os.path.dirname(os.path.abspath(sys.executable))
 else:
     curdir = os.path.dirname(__file__)
@@ -39,7 +39,7 @@ FAT_PART_NAME = 'fat.img'
 BLOCK_SIZE = 512
 IDEPOSITBOX_MBR_SIG = 0x42445049 #IDPB
 DATA_START_SEEK = 2050 * BLOCK_SIZE #start at 2050 sector 
-                      
+
 
 class KSSignature:
     SIGN_STRUCT = '<6sI'

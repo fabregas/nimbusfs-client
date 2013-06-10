@@ -18,7 +18,9 @@ import threading
 
 DAEMON_PORT = 8880
 
-if hasattr(sys,"frozen") and sys.frozen:
+WIN32_FROZEN = hasattr(sys,"frozen") and sys.platform == 'win32'
+
+if WIN32_FROZEN:
     third_party = os.path.dirname(os.path.abspath(sys.executable))
 else:
     client_dir = os.environ.get('IDB_LIB_PATH', None)
@@ -69,7 +71,7 @@ class Win32StopThread(threading.Thread):
 class IDClientDaemon:
     def __init__(self):
         signal.signal(signal.SIGINT, self.stop)
-        if hasattr(sys,"frozen"):
+        if WIN32_FROZEN:
             static_path = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), 'static')
 
             Win32StopThread(self.stop).start()

@@ -42,7 +42,8 @@ class Transaction:
 
     TS_MAP = {0: 'INIT', 1: 'LOCAL_SAVED', 2: 'FINISHED', 3: 'FAILED'}
 
-    def __init__(self, transaction_type, file_path, replica_count, transaction_id=None):
+    def __init__(self, transaction_type, file_path, replica_count, \
+            transaction_id=None, is_local=False):
         if transaction_type not in (self.TT_UPLOAD, self.TT_DOWNLOAD):
             raise RuntimeError('Unknown transaction type: %s'%transaction_type)
         self.__start_dt = datetime.now()
@@ -51,6 +52,7 @@ class Transaction:
         self.__status = Transaction.TS_INIT
         self.__file_path = file_path
         self.__data_blocks_info = {}
+        self.__is_local = is_local
         if transaction_id:
             self.__transaction_id = transaction_id
         else:
@@ -95,6 +97,11 @@ class Transaction:
     @TLock
     def get_status(self):
         return self.__status
+
+    @TLock
+    def is_local(self):
+        return self.__is_local
+
 
     @TLock
     def total_size(self):
@@ -207,12 +214,12 @@ class Transaction:
 
 
 class TransactionsManager:
-    def __init__(self, metadata, db_cache, transactions_window_len=10):
+    def __init__(self, metadata, db_cache, transactions_window_len=10, user_id='share'):
         self.__metadata = metadata
         self.__db_cache = db_cache
         self.__put_queue = Queue()
         self.__get_queue = Queue()
-        self.__trlog_path = db_cache.get_static_cache_path('transactions.log')
+        self.__trlog_path = db_cache.get_static_cache_path('transactions-%s.log'%user_id)
         self.__transactions = {}
         self.__tr_log = open(self.__trlog_path, 'a+')
         self.__tr_log_items_count = 0
@@ -331,24 +338,25 @@ class TransactionsManager:
                         data_block.remove()
 
                 if file_md.is_local:
-                    raise NoLocalFileFound('No local chunk found for key=%s'%chunk.key)
+                    raise NoLocalFileFound('No local chunk found for file %s (%s.%s)'%\
+                        (file_md.name, item_id, chunk.seek))
 
                 if not stored_transaction:
                     self.__transactions[transaction_id] = transaction
                     self.__tr_log_start_transaction(transaction)
                     stored_transaction = True
-                
+
                 data_block = self.new_data_block(item_id, chunk.seek, chunk.size)
                 self.transfer_data_block(transaction_id, chunk.seek, chunk.size, data_block, chunk.key)
         except Exception, err:
-            logger.traceback_debug()            
+            logger.traceback_debug()
             if stored_transaction:
                 self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
             raise err
 
         return transaction
 
-    def __create_upload_transaction(self, file_path):
+    def __create_upload_transaction(self, file_path, is_local=False):
         save_path, file_name = os.path.split(file_path)
         parent_dir = self.__metadata.find(save_path)
         if not parent_dir.is_dir():
@@ -356,12 +364,13 @@ class TransactionsManager:
 
         replica_count = 2 #FIXME ... replica_count = parent_dir.replica_count
         item_id = self.__metadata.generate_item_id()
-        transaction = Transaction(Transaction.TT_UPLOAD, file_path, replica_count, transaction_id=item_id)
+        transaction = Transaction(Transaction.TT_UPLOAD, file_path, replica_count, \
+                transaction_id=item_id, is_local=is_local)
         return transaction
 
     @GTLock
-    def start_upload_transaction(self, file_path):
-        transaction = self.__create_upload_transaction(file_path)
+    def start_upload_transaction(self, file_path, is_local=False):
+        transaction = self.__create_upload_transaction(file_path, is_local)
         transaction_id = transaction.get_id()
         self.__transactions[transaction_id] = transaction
         self.__tr_log_start_transaction(transaction)
@@ -443,6 +452,8 @@ class TransactionsManager:
     def transfer_data_block(self, transaction_id, seek, size, data_block, foreign_name=None):
         transaction = self.__get_transaction(transaction_id)
         transaction.append_data_block(seek, size, data_block, foreign_name)
+        if transaction.is_local():
+            return
 
         self.__tr_log_update(transaction_id, seek, size, data_block.get_name(), foreign_name)
 
@@ -451,13 +462,6 @@ class TransactionsManager:
         else:
             self.__get_queue.put((transaction, seek))
 
-    @GTLock
-    def save_data_block_locally(self, transaction_id, seek, file_size, data_block, last_block=False):
-        transaction = self.__get_transaction(transaction_id)
-        transaction.append_data_block(seek, file_size, data_block)
-        self.__save_metadata(transaction, local_only=True)
-        if last_block:
-            transaction.change_status(Transaction.TS_FINISHED)
 
     @GTLock
     def __get_transaction(self, transaction_id):
@@ -472,9 +476,10 @@ class TransactionsManager:
             #FIXME REMOVE_FROM_BACKEND(foreign_name)
             pass
 
-    def __save_metadata(self, transaction, local_only=False):
+    def __save_metadata(self, transaction):
         file_path = transaction.get_file_path()
         save_path, file_name = os.path.split(file_path)
+        local_only = transaction.is_local()
 
         file_md = self.__find_file(file_path)
 
@@ -580,6 +585,7 @@ class TransactionsManager:
             if not line:
                 break
 
+            logger.debug('processing "%s"'%line.strip())
             parts = line.split()
             transaction_id = parts[0]
             r_type = parts[1]
@@ -592,7 +598,10 @@ class TransactionsManager:
                 seek = int(parts[2])
                 size = parse_int(parts[3])
                 local_name = parse_str(parts[4])
-                foreign_name = parse_str(parts[5])
+                try:
+                    foreign_name = parse_str(parts[5])
+                except IndexError:
+                    foreign_name = None
                 cur_vals = transactions[transaction_id][1].get(seek, [None, None, None])
                 if size:
                     cur_vals[0] = size

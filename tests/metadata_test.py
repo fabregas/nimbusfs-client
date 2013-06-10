@@ -261,7 +261,8 @@ class TestMetadata(unittest.TestCase):
         ks = FileBasedSecurityManager(CLIENT_KS_PATH, PASSWD)
         DataBlock.SECURITY_MANAGER = ks
         tmp_journal = tmp('test_nimbusfs_journal')
-        os.remove(tmp_journal)
+        if os.path.exists(tmp_journal):
+            os.remove(tmp_journal)
         journal = Journal('%040x'%23453, tmp_journal, MockedFabnetGateway())
         try:
             dir_name = 'Test directory'

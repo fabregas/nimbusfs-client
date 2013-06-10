@@ -126,7 +126,7 @@ class TestSmartFileObject(unittest.TestCase):
 
     def test01_trans_manager(self):
         db_cache = DataBlockCache(tmp('smart_file_test'))
-        open(db_cache.get_static_cache_path('transactions.log'), 'w').close()
+        open(db_cache.get_static_cache_path('transactions-share.log'), 'w').close()
         try:
             remove_dir(tmp('smart_file_test/dynamic_cache'))
             os.makedirs(tmp('smart_file_test/dynamic_cache'))
@@ -167,7 +167,7 @@ class TestSmartFileObject(unittest.TestCase):
             md.close()
             tr_manager.close()
 
-            open(db_cache.get_static_cache_path('transactions.log'), 'w').close()
+            open(db_cache.get_static_cache_path('transactions-share.log'), 'w').close()
 
             md = MetadataFile(db_cache.get_static_cache_path('test_md.bin'))
             tr_manager = TransactionsManager(md, db_cache, 5)

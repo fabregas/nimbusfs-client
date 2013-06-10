@@ -31,7 +31,7 @@ from id_client.gui.webview_dialog import WebViewDialog
 from id_client.utils import Subprocess
 
 
-if hasattr(sys,"frozen"):
+if hasattr(sys, "frozen") and sys.platform == 'win32':
     CUR_DIR = os.path.dirname(os.path.abspath(sys.executable))
     MGMT_CLI_RUNCMD = os.path.join(CUR_DIR, 'idepositbox_cli.exe')
 else:
@@ -96,7 +96,7 @@ class SystemTrayIcon(QSystemTrayIcon):
         self.on_changed_service_status(STATUS_STOPPED)
         self.setContextMenu(self.tray_menu)
         self.setToolTip('iDepositBox service client')
-        
+
     def __get_icon_src(self, icon_path):
         #if sys.platform != 'darwin':
         #    ic = QImage(icon_path)
@@ -190,7 +190,8 @@ class MainWind(WebViewDialog):
         self.check_sync_status_thr = CheckSyncStatusThread(self)
         self.check_sync_status_thr.start()
 
-        self.systray.activated.connect(self.on_icon_activated)
+        if sys.platform != 'darwin':
+            self.systray.activated.connect(self.on_icon_activated)
 
         self.__show_splash_screen()
 

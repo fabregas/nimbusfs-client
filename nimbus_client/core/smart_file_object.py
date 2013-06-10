@@ -62,7 +62,8 @@ class SmartFileObject:
 
         try:
             if not self.__transaction_id:
-                self.__transaction_id = self.TRANSACTIONS_MANAGER.start_upload_transaction(self.__file_path)
+                self.__transaction_id = self.TRANSACTIONS_MANAGER.start_upload_transaction(self.__file_path, \
+                        is_local=self.__is_tmp_file)
 
             if self.__cur_data_block is None:
                 self.__cur_data_block = self.TRANSACTIONS_MANAGER.new_data_block(self.__transaction_id, self.__seek)
@@ -159,13 +160,22 @@ class SmartFileObject:
             if self.__for_write:
                 try:
                     if self.__unsync and self.__cur_data_block:
-                        self.__send_data_block(last_block=True)
+                        self.__send_data_block()
                     elif not self.__transaction_id:
                         self.TRANSACTIONS_MANAGER.save_empty_file(self.__file_path)
+                        return
                 except Exception, err: 
                     self.__failed_transaction(err)
                     logger.traceback_debug()            
                     raise err
+
+                if self.__is_tmp_file:
+                    status = Transaction.TS_FINISHED
+                else:
+                    status = Transaction.TS_LOCAL_SAVED
+
+                if self.__transaction_id:
+                    self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, status)
             else:
                 if self.__cur_data_block:
                     self.__cur_data_block.close()
@@ -173,20 +183,11 @@ class SmartFileObject:
             self.__closed = True
             logger.debug('file %s is closed!'%self.__file_path)
             
-    def __send_data_block(self, last_block=False):
+    def __send_data_block(self):
         self.__cur_data_block.finalize()
-        if self.__is_tmp_file:
-            self.__cur_data_block.close()
-            self.TRANSACTIONS_MANAGER.save_data_block_locally(self.__transaction_id, \
-                    self.__seek, self.__cur_db_seek, self.__cur_data_block, last_block)
-        else:
-            if self.__cur_data_block.get_actual_size():
-                self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, \
-                        self.__seek, self.__cur_db_seek, self.__cur_data_block)
-
-            if last_block:
-                self.TRANSACTIONS_MANAGER.update_transaction_state(self.__transaction_id, \
-                        Transaction.TS_LOCAL_SAVED)
+        if self.__cur_data_block.get_actual_size():
+            self.TRANSACTIONS_MANAGER.transfer_data_block(self.__transaction_id, \
+                    self.__seek, self.__cur_db_seek, self.__cur_data_block)
 
         self.__seek += self.__cur_db_seek
         self.__cur_db_seek = 0

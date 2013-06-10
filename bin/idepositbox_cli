@@ -21,9 +21,11 @@ from datetime import datetime
 
 PID_FILE_NAME = 'idepositbox_client_daemon.pid'
 
-if hasattr(sys,"frozen") and sys.frozen:
+WIN32_FROZEN = hasattr(sys,"frozen") and sys.platform == 'win32'
+
+if WIN32_FROZEN:
     CUR_DIR = os.path.dirname(os.path.abspath(sys.executable))
-    CLIENT_EXEC = os.path.join(CUR_DIR, 'client_daemon.exe') 
+    CLIENT_EXEC = os.path.join(CUR_DIR, 'client_daemon.exe')
 else:
     CUR_DIR = os.path.abspath(os.path.dirname(__file__))
     client_dir = os.environ.get('IDB_LIB_PATH', None)
@@ -74,7 +76,7 @@ def stop_daemon():
         sys.stderr.write('No pid file %s found. Please, kill client_daemon process manually\n'%pid_file)
         sys.exit(1)
 
-    if hasattr(sys,"frozen") and sys.frozen:
+    if WIN32_FROZEN:
         import win32file
         fileHandle = win32file.CreateFile("\\\\.\\pipe\\idepositbox_daemon_pipe",
                                   win32file.GENERIC_READ | win32file.GENERIC_WRITE,

@@ -142,7 +142,7 @@ class MacOsMediaStoragesManager(AbstractMediaStoragesManager):
 
     @classmethod
     def unmount_media_device(cls, device, force=False):
-        cmd_call('diskutil unmountDisk %s'%self.__dev_path, \
+        cmd_call('diskutil unmountDisk %s'%device, \
                 'Volumes at %s does not unmounted!'%device)
 
 
