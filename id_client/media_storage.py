@@ -169,8 +169,8 @@ class WindowsMediaStoragesManager(AbstractMediaStoragesManager):
             #logger.debug('detected disk drive: [%s] %s (%s)'%(str(objItem.Name), \
             #        str(objItem.Caption), str(objItem.MediaType)))
 
-            #if 'Removable' not in str(objItem.MediaType):
-            if 'Fixed hard disk media' not in str(objItem.MediaType):
+            if 'Removable' not in str(objItem.MediaType):
+            #if 'Fixed hard disk media' not in str(objItem.MediaType):
                 #print('media %s is not removable, skipping it...'%objItem.Name)
                 continue
             st_list.append(MediaStorage(objItem.Caption, objItem.DeviceID, SPT_BLOCKDEV_BASED))
