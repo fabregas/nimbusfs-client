@@ -78,12 +78,12 @@ class GetServiceStatusHandler(UrlHandler):
 
 def file_size(size):
     if size < KB:
-        return '%i b'%size
+        return '%i B'%size
     if size < MB:
-        return '%i Kb'%(size/KB)
+        return '%i KB'%(size/KB)
     if size < GB:
-        return '%.1f Mb'%(size/MB)
-    return '%.2f Gb'%(size/GB)
+        return '%.1f MB'%(size/MB)
+    return '%.2f GB'%(size/GB)
 
 class GetInprogressFilesHandler(UrlHandler):
     def on_process(self, env, *args):
