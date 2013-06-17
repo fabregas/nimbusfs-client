@@ -12,9 +12,9 @@ This module contains the implementation of SocketBasedChunks and  SocketProcesso
 """
 import socket
 
-from constants import BUF_SIZE, RC_REQ_CERTIFICATE, FRI_PACKET_INFO_LEN
-from fri_base import FriBinaryProcessor, FabnetPacketRequest, FriException,\
-                        FriBinaryData, RamBasedBinaryData, FabnetPacket
+from constants import BUF_SIZE, RC_REQ_CERTIFICATE, FRI_PACKET_INFO_LEN, RC_REQ_BINARY_CHUNK
+from fri_base import FriBinaryProcessor, FabnetPacketRequest, FabnetPacketResponse, \
+            FriException, FriBinaryData, RamBasedBinaryData, FabnetPacket
 
 
 class SocketBasedChunks(FriBinaryData):
@@ -31,6 +31,7 @@ class SocketBasedChunks(FriBinaryData):
             return None
 
         try:
+            self.__sock_proc.send_packet(FabnetPacketResponse(ret_code=RC_REQ_BINARY_CHUNK))
             packet, bin_data = self.__sock_proc.read_next_packet()
             self.__last_idx += 1
 
@@ -45,6 +46,10 @@ class SocketBasedChunks(FriBinaryData):
             self.__sock_proc.allow_close_socket()
             raise err
 
+    def close(self):
+        if self.__sock_proc:
+            self.__sock_proc.allow_close_socket()
+
 
 class SocketProcessor:
     def __init__(self, sock, cert=None):
@@ -53,6 +58,7 @@ class SocketProcessor:
         self.__cert = cert
         self.__can_close_socket = False #socket can be closed (no pending chunks)
         self.__need_sock_close = False #socket should be closed (after all chunks received)
+        self.__send_on_close = None #packet that should be send before close socket (ignore if None)
 
     def read_next_packet(self):
         data = ''
@@ -105,6 +111,7 @@ class SocketProcessor:
 
         if cnt > 0:
             packet.binary_data = SocketBasedChunks(self, cnt)
+            self.__can_close_socket = False
             return packet
 
         if bin_data:
@@ -115,7 +122,7 @@ class SocketProcessor:
 
         return packet
 
-    def send_packet(self, packet):
+    def send_packet(self, packet, wait_response=False):
         if packet.binary_data and packet.binary_data.chunks_count() > 1:
             packet.binary_chunk_cnt = packet.binary_data.chunks_count()
 
@@ -127,6 +134,10 @@ class SocketProcessor:
                     self.__send_cert()
 
             for i in xrange(packet.binary_chunk_cnt):
+                resp_packet = self.recv_packet()
+                if resp_packet.ret_code != RC_REQ_BINARY_CHUNK:
+                    return resp_packet
+
                 packet.binary_chunk_idx = i+1
                 dumped_chunk = packet.dump_next_chunk()
                 self.__sock.sendall(dumped_chunk)
@@ -136,6 +147,9 @@ class SocketProcessor:
         else:
             self.__sock.sendall(packet.dump())
 
+        if wait_response:
+            return self.recv_packet()
+
 
     def allow_close_socket(self):
         """This method trying close socket from SocketBasedChunks"""
@@ -143,8 +157,9 @@ class SocketProcessor:
         if self.__need_sock_close and self.__sock:
             self.__close_sock()
 
-    def close_socket(self, force=False):
+    def close_socket(self, force=False, send_on_close=None):
         self.__need_sock_close = True
+        self.__send_on_close = send_on_close
         if force:
             self.__can_close_socket = True
         if self.__can_close_socket and self.__sock:
@@ -154,7 +169,12 @@ class SocketProcessor:
         return self.__sock == None
 
     def __close_sock(self):
+        if not self.__sock:
+            return
         try:
+            if self.__send_on_close:
+                self.send_packet(self.__send_on_close)
+
             self.__sock.shutdown(socket.SHUT_RDWR)
             self.__sock.close()
         except socket.error, err:

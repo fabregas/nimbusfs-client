@@ -21,7 +21,7 @@ from nimbus_client.core.events import events_provider
 QUIT_JOB = None
 
 class PutWorker(threading.Thread):
-    def __init__(self, queue, fabnet_gateway, transactions_manager):
+    def __init__(self, fabnet_gateway, transactions_manager):
         threading.Thread.__init__(self)
         self.fabnet_gateway = fabnet_gateway
         self.transactions_manager = transactions_manager
@@ -77,7 +77,7 @@ class PutWorker(threading.Thread):
                 self.queue.task_done()
 
 class GetWorker(threading.Thread):
-    def __init__(self, queue, fabnet_gateway, transactions_manager):
+    def __init__(self, fabnet_gateway, transactions_manager):
         threading.Thread.__init__(self)
         self.fabnet_gateway = fabnet_gateway
         self.transactions_manager = transactions_manager
@@ -129,13 +129,38 @@ class GetWorker(threading.Thread):
                 self.queue.task_done()
 
 
+class DeleteWorker(threading.Thread):
+    def __init__(self, fabnet_gateway, transactions_manager):
+        threading.Thread.__init__(self)
+        self.fabnet_gateway = fabnet_gateway
+        self.queue = transactions_manager.get_delete_queue()
+
+    def stop(self):
+        self.queue.put(QUIT_JOB)
+
+    def run(self):
+        while True:
+            job = self.queue.get()
+            try:
+                if job == QUIT_JOB:
+                    break
+
+                db_key, replica_count = job
+
+                self.fabnet_gateway.remove(db_key, replica_count)
+            except Exception, err:
+                logger.error('DeleteWorker error: %s'%err)
+                logger.traceback_debug()            
+            finally:
+                self.queue.task_done()
+
+
 class WorkersManager:
     def __init__(self, worker_class, fabnet_gateway, transactions_manager, workers_count):
         self.__workers = []
-        self.__queue = Queue()
 
         for i in xrange(workers_count):
-            worker = worker_class(self.__queue, fabnet_gateway, transactions_manager)
+            worker = worker_class(fabnet_gateway, transactions_manager)
             worker.setName('%s#%i'%(worker_class.__name__, i))
             self.__workers.append(worker)
 

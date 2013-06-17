@@ -30,6 +30,7 @@ from nimbus_client.core.transactions_manager import Transaction
 from nimbus_client.core.security_manager import FileBasedSecurityManager
 from nimbus_client.core.exceptions import *
 from util_init_test_env import *
+from util_mocked_id_client import MockedFriClient, FAIL, OK
 
 DEBUG=False
 
@@ -83,52 +84,6 @@ class PutGetWorker(threading.Thread):
                 self.errors_q.put('PutGetWorker FAILED: %s' % err)
             finally:
                 self.queue.task_done()
-
-
-class MockedFriClient:
-    def __init__(self, is_ssl=None, cert=None, session_id=None, genfail=False):
-        self.data_map = {}
-        self.genfail = genfail
-
-    def call_sync(self, node_addr, packet, FRI_CLIENT_TIMEOUT):
-        if self.genfail:
-            return FabnetPacketResponse(ret_code=1, ret_message='test exception from backend')
-
-        if packet.method == 'GetKeysInfo':
-            ret_keys = []
-            key = packet.parameters.get('key', None)
-            ret_keys.append((key, False, 'some_mode_addr'))
-            return FabnetPacketResponse(ret_parameters={'keys_info': ret_keys})
-
-        elif packet.method == 'PutKeysInfo':
-            primary_key = packet.parameters.get('key', None)
-            if not primary_key:
-                primary_key = hashlib.sha1(datetime.utcnow().isoformat()+str(random.randint(0,1000000))).hexdigest()
-            return FabnetPacketResponse(ret_parameters={'key_info': (primary_key, 'some_mode_addr')})
-
-        elif packet.method == 'ClientPutData':
-            key = packet.parameters.get('key', None)
-            if key:
-                primary_key = key
-            else:
-                primary_key = hashlib.sha1(datetime.utcnow().isoformat()+str(random.randint(0,1000000))).hexdigest()
-
-            data = packet.binary_data.data()
-            source_checksum = hashlib.sha1(data).hexdigest()
-
-            self.data_map[primary_key] = data
-
-            time.sleep(.1)
-            return FabnetPacketResponse(ret_parameters={'key': primary_key, 'checksum': source_checksum})
-
-        elif packet.method == 'GetDataBlock':
-            time.sleep(0.1)
-
-            raw_data = self.data_map.get(packet.parameters['key'], None)
-            if raw_data is None:
-                return FabnetPacketResponse(ret_code=324, ret_message='No data found!')
-
-            return FabnetPacketResponse(binary_data=raw_data, ret_parameters={'checksum': hashlib.sha1(raw_data).hexdigest()})
 
 
 
@@ -332,9 +287,8 @@ class BaseNibblerTest(unittest.TestCase):
     def test07_failed_read_transactions(self):
         nibbler = BaseNibblerTest.NIBBLER_INST
         nibbler.db_cache.clear_all()
-        cur_fri_client = nibbler.fabnet_gateway.fri_client
         try:
-            nibbler.fabnet_gateway.fri_client = MockedFriClient(genfail=True)
+            nibbler.fabnet_gateway.fri_client.change_mode(FAIL)
             f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/test_file.out')
             with self.assertRaises(IOException):
                 data = f_obj.read()
@@ -343,21 +297,20 @@ class BaseNibblerTest(unittest.TestCase):
             data_blocks = os.listdir(nibbler.db_cache.get_dynamic_cache_dir())
             self.assertEqual(len(data_blocks), 0)
         finally:
-            nibbler.fabnet_gateway.fri_client = cur_fri_client
+            nibbler.fabnet_gateway.fri_client.change_mode(OK)
 
     def test07_failed_write_transactions(self):
         nibbler = BaseNibblerTest.NIBBLER_INST
         nibbler.db_cache.clear_all()
-        cur_fri_client = nibbler.fabnet_gateway.fri_client
         try:
-            nibbler.fabnet_gateway.fri_client = MockedFriClient(genfail=True)
+            nibbler.fabnet_gateway.fri_client.change_mode(FAIL)
             f_obj = nibbler.open_file('/my_first_dir/new_file_with_up_fails', for_write=True)
             f_obj.write('test data block')
             f_obj.close()
 
             time.sleep(0.2)
         finally:
-            nibbler.fabnet_gateway.fri_client = cur_fri_client
+            nibbler.fabnet_gateway.fri_client.change_mode(OK)
 
         self.__wait_oper_status('/my_first_dir/new_file_with_up_fails', Transaction.TS_FINISHED)
 

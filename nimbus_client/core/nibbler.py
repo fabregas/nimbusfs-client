@@ -24,7 +24,7 @@ from nimbus_client.core.journal import Journal
 from nimbus_client.core.metadata import DirectoryMD, FileMD
 from nimbus_client.core.metadata_file import MetadataFile 
 from nimbus_client.core.transactions_manager import TransactionsManager, Transaction
-from nimbus_client.core.workers_manager import WorkersManager, PutWorker, GetWorker 
+from nimbus_client.core.workers_manager import WorkersManager, PutWorker, GetWorker, DeleteWorker 
 from nimbus_client.core.smart_file_object import SmartFileObject
 from nimbus_client.core.data_block import DataBlock, DBLocksManager
 from nimbus_client.core.utils import to_nimbus_path
@@ -90,6 +90,7 @@ class Nibbler:
         self.transactions_manager = None
         self.put_manager = None
         self.get_manager = None
+        self.delete_manager = None
 
         DataBlock.SECURITY_MANAGER = self.security_provider
         DataBlock.LOCK_MANAGER = DBLocksManager()
@@ -113,9 +114,12 @@ class Nibbler:
                 self.transactions_manager, self.__parallel_put_count)  
         self.get_manager = WorkersManager(GetWorker, self.fabnet_gateway, \
                 self.transactions_manager, self.__parallel_get_count)  
+        self.delete_manager = WorkersManager(DeleteWorker, self.fabnet_gateway, \
+                self.transactions_manager, 2)  
 
         self.put_manager.start()
         self.get_manager.start()
+        self.delete_manager.start()
 
     def is_registered(self):
         return self.journal.foreign_exists()
@@ -134,6 +138,8 @@ class Nibbler:
             self.put_manager.stop()
         if self.get_manager:
             self.get_manager.stop()
+        if self.delete_manager:
+            self.delete_manager.stop()
         if self.metadata:
             self.metadata.close()
         if self.journal:

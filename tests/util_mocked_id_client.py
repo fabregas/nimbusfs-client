@@ -41,15 +41,14 @@ class MockedFriClient:
             cls._LOCK.release()
 
     def __init__(self, is_ssl=None, cert=None, session_id=None):
-        if not is_ssl:
-            raise Exception('[MockedFriClient] NimbusFS backend accept SSL based transport only!')
-        if not cert:
-            raise Exception('[MockedFriClient] No client certificate found!')
-
-        try:
-            int(session_id)
-        except ValueError:
-            raise Exception('[MockedFriClient] Invalid session_id "%s"'%session_id)
+        #if not is_ssl:
+        #    raise Exception('[MockedFriClient] NimbusFS backend accept SSL based transport only!')
+        #if not cert:
+        #    raise Exception('[MockedFriClient] No client certificate found!')
+        #try:
+        #    int(session_id)
+        #except ValueError:
+        #    raise Exception('[MockedFriClient] Invalid session_id "%s"'%session_id)
 
         self.data_map = {}
 
@@ -101,6 +100,21 @@ class MockedFriClient:
 
             return FabnetPacketResponse(binary_data=raw_data, ret_parameters={'checksum': hashlib.sha1(raw_data).hexdigest()})
 
+        elif packet.method == 'ClientDeleteData':
+            key = packet.parameters.get('key', None)
+            if not key:
+                return FabnetPacketResponse(ret_code=1, ret_message='no key found')
+            replica_count = packet.parameters.get('replica_count', None)
+            if not replica_count:
+                return FabnetPacketResponse(ret_code=1, ret_message='no replica_count found')
+
+            if key not in self.data_map:
+                return FabnetPacketResponse(ret_code=1, ret_message='no data block found for delete!')
+
+            del self.data_map[key]
+            return FabnetPacketResponse()
+        else:
+            raise Exception('Unexpected method "%s" at mocked FRIClient'%packet.method)
 
 class MockedIdepositboxClient(IdepositboxClient):
     MODE = OK

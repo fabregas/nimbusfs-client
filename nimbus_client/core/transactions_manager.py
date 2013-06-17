@@ -219,6 +219,7 @@ class TransactionsManager:
         self.__db_cache = db_cache
         self.__put_queue = Queue()
         self.__get_queue = Queue()
+        self.__delete_queue = Queue()
         self.__trlog_path = db_cache.get_static_cache_path('transactions-%s.log'%user_id)
         self.__transactions = {}
         self.__tr_log = open(self.__trlog_path, 'a+')
@@ -239,6 +240,9 @@ class TransactionsManager:
 
     def get_download_queue(self):
         return self.__get_queue
+
+    def get_delete_queue(self):
+        return self.__delete_queue
 
     def new_data_block(self, item_id, seek, size=None):
         path = self.__db_cache.get_cache_path('%s.%s'%(item_id, seek))
@@ -397,7 +401,10 @@ class TransactionsManager:
 
             for chunk in file_md.chunks:
                 self.__db_cache.remove_data_block('%s.%s'%(item_id, chunk.seek))
-            #TODO: remove file from NimbusFS should be implemented!
+
+                #remove chunk from NimbusFS!
+                if chunk.key:
+                    self.__delete_queue.put((chunk.key, file_md.replica_count))
         except PathException:
             return
 
@@ -416,9 +423,11 @@ class TransactionsManager:
                 if transaction.get_status() != Transaction.TS_FAILED:
                     events_provider.critical("Transaction", "File %s was not uploaded to NimbusFS backend!"%\
                             transaction.get_file_path())
+
                 #should be removed data block from backend
+                replica_count = transaction.get_replica_count()
                 for _,_,data_block, foreign_name in transaction.iter_data_blocks():
-                    self.__cancel_data_block_upload(foreign_name, data_block)
+                    self.__cancel_data_block_upload(foreign_name, data_block, replica_count)
                 try:
                     self.__metadata.cancel_item_id_reserve(transaction_id)
                 except Exception, err:
@@ -470,11 +479,10 @@ class TransactionsManager:
             raise Exception('No transaction found with ID=%s'%transaction_id)
         return tr
 
-    def __cancel_data_block_upload(self, foreign_name, data_block):
+    def __cancel_data_block_upload(self, foreign_name, data_block, replica_count):
         data_block.remove()
         if foreign_name:
-            #FIXME REMOVE_FROM_BACKEND(foreign_name)
-            pass
+            self.__delete_queue.put((foreign_name, replica_count))
 
     def __save_metadata(self, transaction):
         file_path = transaction.get_file_path()

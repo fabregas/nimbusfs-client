@@ -102,10 +102,10 @@ class FabnetGateway:
 
     def remove(self, key, replica_count=DEFAULT_REPLICA_COUNT):
         params = {'key':key, 'replica_count':replica_count}
-        packet = FabnetPacketRequest(method='ClientRemoveData', parameters=params, sync=True)
+        packet = FabnetPacketRequest(method='ClientDeleteData', parameters=params, sync=True)
         resp = self.fri_client.call_sync(self.fabnet_hostname, packet, FRI_CLIENT_TIMEOUT)
         if resp.ret_code != 0:
-            logger.error('ClientRemoveData error: %s'%resp.ret_message)
+            logger.error('ClientDeleteData error: %s'%resp.ret_message)
             return False
         return True
 
