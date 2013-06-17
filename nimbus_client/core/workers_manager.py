@@ -26,9 +26,11 @@ class PutWorker(threading.Thread):
         self.fabnet_gateway = fabnet_gateway
         self.transactions_manager = transactions_manager
         self.queue = transactions_manager.get_upload_queue()
+        self.stop_flag = threading.Event()
 
     def stop(self):
         self.queue.put(QUIT_JOB)
+        self.stop_flag.set()
 
     def run(self):
         while True:
@@ -37,7 +39,7 @@ class PutWorker(threading.Thread):
             data_block = None
             key = None
             try:
-                if job == QUIT_JOB:
+                if job == QUIT_JOB or self.stop_flag.is_set():
                     break
                 
                 transaction, seek = job
@@ -76,15 +78,18 @@ class PutWorker(threading.Thread):
                     data_block.close()
                 self.queue.task_done()
 
+
 class GetWorker(threading.Thread):
     def __init__(self, fabnet_gateway, transactions_manager):
         threading.Thread.__init__(self)
         self.fabnet_gateway = fabnet_gateway
         self.transactions_manager = transactions_manager
         self.queue = transactions_manager.get_download_queue()
+        self.stop_flag = threading.Event()
 
     def stop(self):
         self.queue.put(QUIT_JOB)
+        self.stop_flag.set()
 
     def run(self):
         while True:
@@ -94,7 +99,7 @@ class GetWorker(threading.Thread):
             transaction = None
             seek = None
             try:
-                if job == QUIT_JOB:
+                if job == QUIT_JOB or self.stop_flag.is_set():
                     break
 
                 transaction, seek = job
@@ -134,15 +139,17 @@ class DeleteWorker(threading.Thread):
         threading.Thread.__init__(self)
         self.fabnet_gateway = fabnet_gateway
         self.queue = transactions_manager.get_delete_queue()
+        self.stop_flag = threading.Event()
 
     def stop(self):
         self.queue.put(QUIT_JOB)
+        self.stop_flag.set()
 
     def run(self):
         while True:
             job = self.queue.get()
             try:
-                if job == QUIT_JOB:
+                if job == QUIT_JOB or self.stop_flag.is_set():
                     break
 
                 db_key, replica_count = job

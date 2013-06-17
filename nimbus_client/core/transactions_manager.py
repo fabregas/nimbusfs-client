@@ -129,8 +129,9 @@ class Transaction:
         t_size = 0
         for _,data_block,_,finished in self.__data_blocks_info.values():
             if finished is None: #no data block transfer
-                continue
-            seek, exp_s = data_block.get_progress()
+                seek = exp_s = data_block.get_actual_size()
+            else:
+                seek, exp_s = data_block.get_progress()
             p_size += seek
             t_size += exp_s
 
@@ -142,7 +143,10 @@ class Transaction:
     def progress_size(self):
         p_size = 0
         for _,data_block,_,finished in self.__data_blocks_info.values():
-            seek, exp_s = data_block.get_progress()
+            if finished is None: #already finished
+                seek = data_block.get_actual_size()
+            else:
+                seek, exp_s = data_block.get_progress()
             p_size += seek
         return p_size
 
@@ -180,7 +184,7 @@ class Transaction:
             return False
 
         for _,_,_, is_finished in self.__data_blocks_info.values():
-            if not is_finished:
+            if is_finished == False:
                 return False
         return True
 
@@ -427,7 +431,7 @@ class TransactionsManager:
                     self.__save_metadata(transaction)
                 except Exception, err:
                     events_provider.critical("Metadata", "Can't update metadata! Details: %s"%err)
-                    logger.traceback_debug()            
+                    logger.traceback_info()            
                     return self.update_transaction_state(transaction_id, Transaction.TS_FAILED)
             elif status == Transaction.TS_FAILED:
                 if transaction.get_status() != Transaction.TS_FAILED:
@@ -442,7 +446,7 @@ class TransactionsManager:
                     self.__metadata.cancel_item_id_reserve(transaction_id)
                 except Exception, err:
                     logger.warning("Can't cancel item_id=%s reserve"%transaction_id)
-                    logger.traceback_debug()            
+                    logger.traceback_info()            
 
         if transaction.get_status() != status: 
             transaction.change_status(status)
@@ -581,11 +585,11 @@ class TransactionsManager:
             for seek, (size, local_name, foreign_name) in progress_info.items():
                 if foreign_name and foreign_name != 'None':
                     db = self.new_data_block(transaction_id, seek, size)
-                    transaction.append_data_block(seek, size, db, foreign_name)
+                    transaction.append_data_block(seek, size, db, foreign_name, no_transfer=True)
+                    self.__tr_log_update(transaction_id, seek, size, db.get_name(), foreign_name)
                 else:
                     self.transfer_data_block(transaction_id, seek, size, \
                             self.new_data_block(transaction_id, seek, size))
-
 
     def __parse_tr_log(self):
         def parse_int(val):
@@ -606,7 +610,7 @@ class TransactionsManager:
 
             logger.debug('processing "%s"'%line.strip())
             parts = line.split()
-            transaction_id = parts[0]
+            transaction_id = int(parts[0])
             r_type = parts[1]
             if r_type == 'ST':
                 transaction = Transaction(int(parts[2]), base64.b64decode(parts[3]), int(parts[4]), transaction_id)

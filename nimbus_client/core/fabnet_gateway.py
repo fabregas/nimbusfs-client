@@ -13,6 +13,7 @@ This module contains the implementation of gateway API for talking with fabnet
 import hashlib
 from nimbus_client.core.fri.fri_base import FabnetPacketRequest, RamBasedBinaryData, FriBinaryData
 from nimbus_client.core.fri.fri_client import FriClient
+from nimbus_client.core.fri.socket_processor import SocketProcessor
 from nimbus_client.core.fri.constants import FRI_CLIENT_TIMEOUT
 
 from nimbus_client.core.data_block import DataBlock
@@ -47,6 +48,14 @@ class ChunkedBinaryData(FriBinaryData):
 
 
 class FabnetGateway:
+    @classmethod
+    def force_close_all_connections(cls):
+        SocketProcessor.force_close_flag.set()
+
+    @classmethod
+    def init_socket_processor(cls):
+        SocketProcessor.force_close_flag.clear()
+
     def __init__(self, fabnet_hostname, security_manager):
         if ':' not in fabnet_hostname:
             fabnet_hostname += ':%s'%FRI_PORT

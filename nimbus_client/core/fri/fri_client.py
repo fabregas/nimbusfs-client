@@ -57,8 +57,7 @@ class FriClient:
 
             proc = SocketProcessor(sock, self.certificate)
 
-            if read_timeout:
-                sock.settimeout(read_timeout)
+            sock.settimeout(read_timeout)
 
             resp = proc.send_packet(packet, wait_response=True)
 

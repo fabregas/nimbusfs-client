@@ -102,6 +102,7 @@ class Nibbler:
         return self.security_provider
         
     def start(self):
+        self.fabnet_gateway.init_socket_processor()
         if not self.journal.foreign_exists():
             raise NoJournalFoundException('No journal for key = %s'%self.metadata_key)
 
@@ -122,9 +123,11 @@ class Nibbler:
         self.delete_manager.start()
 
     def is_registered(self):
+        self.fabnet_gateway.init_socket_processor()
         return self.journal.foreign_exists()
 
     def register_user(self):
+        self.fabnet_gateway.init_socket_processor()
         self.journal.init()
         if self.metadata:
             self.metadata.close()
@@ -134,6 +137,7 @@ class Nibbler:
         pass
 
     def stop(self):
+        self.fabnet_gateway.force_close_all_connections()
         if self.put_manager:
             self.put_manager.stop()
         if self.get_manager:

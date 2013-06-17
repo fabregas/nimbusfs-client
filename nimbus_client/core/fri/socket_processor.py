@@ -11,6 +11,7 @@ Copyright (C) 2012 Konstantin Andrusenko
 This module contains the implementation of SocketBasedChunks and  SocketProcessor classes.
 """
 import socket
+import threading
 
 from constants import BUF_SIZE, RC_REQ_CERTIFICATE, FRI_PACKET_INFO_LEN, RC_REQ_BINARY_CHUNK
 from fri_base import FriBinaryProcessor, FabnetPacketRequest, FabnetPacketResponse, \
@@ -52,6 +53,8 @@ class SocketBasedChunks(FriBinaryData):
 
 
 class SocketProcessor:
+    force_close_flag = threading.Event()
+
     def __init__(self, sock, cert=None):
         self.__sock = sock
         self.__rest_data = ''
@@ -66,6 +69,9 @@ class SocketProcessor:
         header_len = 0
         has_rest = len(self.__rest_data) > 0
         while True:
+            if self.force_close_flag.is_set():
+                raise FriException('forcing socket close!')
+
             if self.__rest_data:
                 data = self.__rest_data
                 self.__rest_data = ''
