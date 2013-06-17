@@ -158,6 +158,10 @@ class BaseNibblerTest(unittest.TestCase):
 
         #tmp files saved locally only
         f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/._temp_file.tmp', for_write=True)
+        f_obj.write('some data')
+        f_obj.close()
+
+        f_obj = nibbler.open_file('/my_first_dir/my_first_subdir/._temp_file.tmp', for_write=True)
         f_obj.write('test data')
         f_obj.write(' for local save')
         f_obj.close()

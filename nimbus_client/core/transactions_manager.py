@@ -246,6 +246,10 @@ class TransactionsManager:
 
     def new_data_block(self, item_id, seek, size=None):
         path = self.__db_cache.get_cache_path('%s.%s'%(item_id, seek))
+        if size is None:
+            #open DB for write
+            #FIXME data block seek should be implemented in future
+            open(path, 'w').close()
         data_block = DataBlock(path, size, force_create=True)
         return data_block
 
@@ -367,7 +371,13 @@ class TransactionsManager:
             raise NotDirectoryException('Directory "%s" does not found!'%save_path)
 
         replica_count = 2 #FIXME ... replica_count = parent_dir.replica_count
-        item_id = self.__metadata.generate_item_id()
+        file_md = self.__find_file(file_path)
+        if file_md:
+            if not file_md.item_id:
+                raise Exception('File %s does not uploaded yet!'%file_path)
+            item_id = file_md.item_id
+        else:
+            item_id = self.__metadata.generate_item_id()
         transaction = Transaction(Transaction.TT_UPLOAD, file_path, replica_count, \
                 transaction_id=item_id, is_local=is_local)
         return transaction
@@ -459,6 +469,7 @@ class TransactionsManager:
 
     @GTLock
     def transfer_data_block(self, transaction_id, seek, size, data_block, foreign_name=None):
+        logger.debug('data block %s (seek=%s, size=%s) is ready for transfer'%(data_block.get_name(), seek, size))
         transaction = self.__get_transaction(transaction_id)
         transaction.append_data_block(seek, size, data_block, foreign_name)
         if transaction.is_local():
