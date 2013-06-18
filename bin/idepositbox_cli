@@ -43,7 +43,7 @@ from id_client.utils import Subprocess
 
 def check_daemon():
     try:
-        conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT)
+        conn = httplib.HTTPConnection("127.0.0.1", DAEMON_PORT, timeout=10)
         conn.request('GET', '/')
         response = conn.getresponse()
         conn.close()

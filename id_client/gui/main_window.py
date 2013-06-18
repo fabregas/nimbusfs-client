@@ -137,7 +137,7 @@ class CheckSyncStatusThread(QThread):
 
         while not self.stopped:
             try:
-                conn = httplib.HTTPConnection(mgmt_addr)
+                conn = httplib.HTTPConnection(mgmt_addr, timeout=10)
                 try:
                     conn.request('GET', '/get_service_status')
                     response = conn.getresponse()
