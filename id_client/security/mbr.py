@@ -55,7 +55,7 @@ class PartitionEntry:
         self.end_cylinder = (((tmp & 0xC0)>>6)<<8) + read_ub(data[7])
         self.LBA = read_ui(data[8:12])
         self.num_sectors = read_ui(data[12:16])    
-    
+
     def print_partition(self):
         self.check_status()
         print "CHS of first sector: %d %d %d" % \

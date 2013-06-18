@@ -215,6 +215,7 @@ class BlockDevice:
         master_br.disk_sig = IDEPOSITBOX_MBR_SIG
         part = master_br.partition_table.partitions[0]
 
+        part.status = 0x00
         part.start_head = 0
         part.start_sector = 2
         part.start_cylinder = 0
@@ -226,6 +227,7 @@ class BlockDevice:
         part.num_sectors = 2049
 
         part = master_br.partition_table.partitions[1]
+        part.status = 0x00
         part.start_head = 35
         part.start_sector = 63
         part.start_cylinder = 0
@@ -272,6 +274,9 @@ class BlockDevice:
             data = self.__pad_data(data)
             logger.debug('writing %s bytes of FAT partition...'%len(data))
             fd.write(data)
+
+            fd.seek(-512, os.SEEK_END)
+            fd.write('\x00'*512)
         except IOError, err:
             raise Exception('Can not restore FAT partition at block device: %s'%err)
         finally:
