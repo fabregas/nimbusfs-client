@@ -15,6 +15,7 @@ import time
 import wsgidav.util as util
 import os
 import threading
+import hashlib
 
 from wsgidav.dav_error import DAVError, HTTP_FORBIDDEN
 from wsgidav.dav_provider import DAVProvider, DAVCollection, DAVNonCollection
@@ -85,7 +86,8 @@ class FileResource(DAVNonCollection):
         return self.name
 
     def getEtag(self):
-        return util.getETag(self.file_obj.name)
+        tag = '%s-%s'%(self.name.encode('utf8'), self.getContentLength())
+        return hashlib.md5(tag).hexdigest()   
 
     def getLastModified(self):
         return self._to_unix_time(self.file_obj.create_dt)

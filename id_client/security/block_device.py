@@ -174,6 +174,8 @@ class BlockDevice:
                 self.__bdm_call(self.__dev_path, 'read', file_path)
                 data = open(file_path, 'rb').read()
                 return data
+            except Exception, err:
+                logger.error('read key chain failed: %s'%err)
             finally:
                 if tmp_file:
                     tmp_file.close()
