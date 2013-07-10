@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import unittest
 import time
 import os
@@ -30,6 +31,8 @@ CLIENT_KS_PATH = './tests/cert/test_cl_1024.ks'
 PASSWD = 'qwerty123'
 
 TEST_FILE = tmp('test_file.out')
+
+FILE_PATH = '/foo/test_с_русскими_буквами.out'
 
 class TestIdepositbox(unittest.TestCase):
     CLIENT = None
@@ -82,14 +85,14 @@ class TestIdepositbox(unittest.TestCase):
 
         print '** PUT file content to 127.0.0.1:8080!'
         with open(TEST_FILE) as fd:
-            response = client.put('/foo/test.out', fd, "text/plain")
+            response = client.put(FILE_PATH, fd, "text/plain")
             self.assertEqual(response.statusline, 'HTTP/1.1 201 Created')
 
         response = client.propfind("/foo", depth=1)
-        self.assertTrue('displayname>test.out<' in response.content)
+        self.assertTrue('displayname>test_с_русскими_буквами.out<' in response.content)
 
         print '** waiting while file is synchronized!'
-        wait_oper_status(TestIdepositbox.CLIENT.get_nibbler().inprocess_operations, '/foo/test.out', Transaction.TS_FINISHED)
+        wait_oper_status(TestIdepositbox.CLIENT.get_nibbler().inprocess_operations, FILE_PATH, Transaction.TS_FINISHED)
         print '** file is synchronized!'
 
 
@@ -99,18 +102,18 @@ class TestIdepositbox(unittest.TestCase):
         response = client.get('/foo')
         self.assertEqual(response.statusline, 'HTTP/1.1 200 OK')
 
-        response = client.get('/foo/test.out')
+        response = client.get(FILE_PATH)
         self.assertEqual(response.statusline, 'HTTP/1.1 200 OK')
 
         self.assertEqual(TestIdepositbox.CHECKSUM, hashlib.sha1(response.content).hexdigest())
 
     def test05_delete(self):
         client = WebDAVClient("127.0.0.1", 8080)
-        response = client.delete('/foo/test.out')
+        response = client.delete(FILE_PATH)
         self.assertEqual(response.statusline, 'HTTP/1.1 204 No Content')
 
         with self.assertRaises(HTTPUserError):
-            response = client.delete('/foo/test.out')
+            response = client.delete(FILE_PATH)
 
         response = client.delete('/foo/')
         self.assertEqual(response.statusline, 'HTTP/1.1 204 No Content')

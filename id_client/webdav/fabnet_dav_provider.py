@@ -86,7 +86,7 @@ class FileResource(DAVNonCollection):
         return self.name
 
     def getEtag(self):
-        tag = '%s-%s'%(self.name.encode('utf8'), self.getContentLength())
+        tag = '%s-%s'%(to_str(self.path), self.getContentLength())
         return hashlib.md5(tag).hexdigest()   
 
     def getLastModified(self):
